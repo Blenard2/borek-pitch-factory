@@ -32,6 +32,7 @@ from app.services.deck_assets import (
 from app.services.framework_status import require_reviewable_framework
 from app.services.framework_stub_template import load_framework_stub_template
 from services.framework.stage1_intake import apply_persisted_intake_to_framework
+from services.transcript.ingestion import transcript_mime_allowed
 
 logger = logging.getLogger(__name__)
 _HTTP_CLIENT: httpx.Client | None = None
@@ -3356,11 +3357,10 @@ def validate_transcript_upload(file_name: str, mime_type: str | None) -> None:
             "INVALID_TRANSCRIPT_FORMAT",
             f"Unsupported transcript extension {extension or '(none)'}",
         )
-    if mime_type and mime_type not in {
-        "text/plain",
-        "text/vtt",
-        "application/x-subrip",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/octet-stream",
-    }:
-        raise bad_request("INVALID_TRANSCRIPT_FORMAT", f"Unsupported transcript mime type {mime_type}")
+    # Browsers label the same file differently (charset parameters, text/srt, application/zip for
+    # .docx, ...). The type only has to fit the extension; the content itself is validated on ingestion.
+    if not transcript_mime_allowed(extension, mime_type):
+        raise bad_request(
+            "INVALID_TRANSCRIPT_FORMAT",
+            f"The file type {mime_type} does not match a {extension} transcript. Upload a .txt, .vtt, .srt, or .docx file.",
+        )

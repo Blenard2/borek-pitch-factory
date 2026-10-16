@@ -5,7 +5,7 @@ import {
   blockerText, confirmMeetingReview, excludedFromConfirmation, extractionIsCurrent, FINDING_SOURCE_LABEL, findingsState, isStaleReviewError,
   loadMeetingInputs, loadPostMeetingReview, loadPostMeetingWorkflow, MeetingNotesConflict, parseMeetingExtraction,
   parsePostMeetingReview, prepareMeetingEvidence, reviewHeadline, savePersonalNotesChecked, staleReasonText,
-  validateTranscript, workflowCompleted, type MeetingExtraction, type PersonalNotes, type PostMeetingReview,
+  MAX_TRANSCRIPT_BYTES, validateTranscript, workflowCompleted, type MeetingExtraction, type PersonalNotes, type PostMeetingReview,
 } from "./postMeeting";
 // Sources are compared as text below. A Windows checkout may hold them with CRLF line ends.
 const readFileSync = (path: URL | string, encoding: "utf8"): string => readFileFromDisk(path, encoding).replace(/\r\n/g, "\n");
@@ -36,6 +36,11 @@ test("transcript validation accepts backend text formats and rejects empty or un
   for (const name of ["call.txt", "call.VTT", "call.srt", "call.docx"]) assert.equal(validateTranscript({ name, size: 1 }), null);
   assert.match(validateTranscript({ name: "call.pdf", size: 1 })!, /TXT/);
   assert.match(validateTranscript({ name: "call.txt", size: 0 })!, /empty/);
+  // BAP-6: uppercase extensions and any length up to the API's technical limit are accepted.
+  for (const name of ["CALL.TXT", "Call.Srt", "MEETING.DOCX"]) assert.equal(validateTranscript({ name, size: 1 }), null);
+  assert.equal(validateTranscript({ name: "long.txt", size: MAX_TRANSCRIPT_BYTES }), null);
+  assert.match(validateTranscript({ name: "huge.txt", size: MAX_TRANSCRIPT_BYTES + 1 })!, /larger than 10 MB/);
+  assert.match(validateTranscript({ name: "call.doc", size: 1 })!, /TXT, VTT, SRT, or DOCX/);
 });
 
 test("meeting reload reads only transcripts, notes and processing state, not use-case resources", async () => {

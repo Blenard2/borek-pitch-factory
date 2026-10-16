@@ -13,8 +13,7 @@ from app.config import settings
 from app.services.api_errors import bad_request
 from services.meeting.extraction import (
     MeetingExtractionError,
-    classify_item_sources,
-    extract_meeting_categories,
+    extract_meeting_findings,
     validate_meeting_extraction,
 )
 
@@ -126,13 +125,12 @@ def generate_meeting_extraction(
     notes_view = personal_notes_view(opportunity)
     notes = notes_view["text"]
     try:
-        categories = extract_meeting_categories(
+        categories, item_sources = extract_meeting_findings(
             sections=sections,
             personal_notes=notes,
             live=execution_mode() == "live",
             opportunity_id=str(opportunity_id),
         )
-        item_sources = classify_item_sources(categories, sections=sections, personal_notes=notes)
     except MeetingExtractionError as exc:
         raise bad_request("MEETING_EXTRACTION_FAILED", exc.user_message) from exc
     payload = {
