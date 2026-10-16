@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { PostMeetingPhaseNav, usePostMeeting } from "@/components/PostMeetingShell";
 import { generateMeetingExtraction, listAvailableUseCases, saveSelectedUseCases, uploadTranscript, type AvailableUseCase } from "@/lib/api";
+import { needsDiscovery2 } from "@/lib/postMeetingDiscovery";
 import { isMasterJourney } from "@/lib/discoveryFirst";
 import { awaitRunningMasterV2, generateAndAwaitMasterV2, loadMasterV2Status, masterV2Error, masterV2StageText, type MasterV2Status } from "@/lib/masterPresentationV2";
 import { generateAndAwaitPostMeetingPresentation } from "@/lib/ppt2Generation";
@@ -292,6 +293,14 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
   // "optional": nothing is missing. Personal notes are never required, so without notes the row is
   // neither done nor open, and it is not counted as a step.
   type Mark = "done" | "todo" | "attention" | "optional";
+  // BAP-7: Discovery 2 is generated and approved from the confirmed meeting before V2.
+  const discovery2 = review?.discovery2;
+  const discovery2Pending = Boolean(review && needsDiscovery2(review.readiness.blockers));
+  const discovery2Label = !confirmedCurrent ? "After confirmation" : !discovery2 ? "Checking..."
+    : discovery2.status === "approved" ? `Approved · version ${discovery2.latest_version?.version_number ?? ""}`.trim()
+    : { not_generated: "Not generated", generating: "Generating", failed: "Generation failed", draft: "Draft · approve it", stale: "Out of date" }[discovery2.status];
+  const discovery2Mark: Mark = confirmedCurrent && discovery2?.status === "approved" && !discovery2Pending ? "done"
+    : discovery2?.status === "stale" || discovery2?.status === "failed" ? "attention" : "todo";
   const readiness: { key: string; label: string; value: string; mark: Mark; optional?: boolean; testid?: string }[] = review ? [
     { key: "discovery", label: "Approved Discovery", value: review.approved_discovery.status === "available" ? `Version ${review.approved_discovery.version_number}` : "Missing", mark: review.approved_discovery.status === "available" ? "done" : "attention" },
     { key: "v1", label: "Master Presentation V1", value: review.master_presentation.status === "ready" ? "Ready" : review.master_presentation.status === "legacy" ? "Earlier deck format" : "Missing", mark: review.master_presentation.status === "ready" ? "done" : "attention" },
@@ -299,7 +308,8 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
     { key: "notes", label: "Personal notes", value: notesDirty ? "Unsaved" : baseline.text ? "Saved" : "Optional · none", mark: notesDirty ? "attention" : baseline.text ? "done" : "optional", optional: true, testid: "notes-row" },
     { key: "findings", label: "Meeting findings", value: { "no-transcript": "Not analysed", "not-analysed": "Not analysed", "other-transcript": "Other transcript", "notes-unsaved": "Out of date", stale: "Out of date", current: review.extraction.item_count === 0 ? "None found" : `${review.extraction.item_count} found` }[state], mark: state === "current" && review.extraction.item_count > 0 ? "done" : analysed ? "attention" : "todo" },
     { key: "confirmation", label: "Meeting findings confirmed", value: confirmedCurrent ? `Yes · ${review.confirmation.confirmed_count} included` : review.confirmation.status === "none" ? "Not yet" : "Out of date", mark: confirmedCurrent ? "done" : review.confirmation.status === "none" ? "todo" : "attention", testid: "findings-confirmation" },
-    { key: "v2", label: "Master Presentation V2", value: confirmedCurrent && review.readiness.ready_for_v2 ? v2Label : "After confirmation", mark: v2?.state === "ready" ? "done" : v2?.state === "failed" || v2?.state === "outdated" ? "attention" : "todo", testid: "v2-status" },
+    { key: "discovery2", label: "Discovery 2", value: discovery2Label, mark: discovery2Mark, testid: "discovery2-row" },
+    { key: "v2", label: "Master Presentation V2", value: confirmedCurrent && review.readiness.ready_for_v2 ? v2Label : confirmedCurrent && discovery2Pending ? "After Discovery 2" : "After confirmation", mark: v2?.state === "ready" ? "done" : v2?.state === "failed" || v2?.state === "outdated" ? "attention" : "todo", testid: "v2-status" },
     { key: "owner", label: "Presentation owner review", value: workflowCompleted(workflow, "owner_review") ? "Completed" : v2?.state === "ready" ? "Pending · review V2" : "Pending · after V2", mark: workflowCompleted(workflow, "owner_review") ? "done" : "todo", testid: "presentation-owner-review" },
   ] : [];
   const requiredSteps = readiness.filter((row) => !row.optional);
@@ -468,6 +478,7 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
               : found === 0 ? <button className="btn btn-primary" data-testid="no-findings-action" disabled={editingDisabled} onClick={() => { setInputTab("transcript"); fileInput.current?.click(); }}>Upload another transcript</button>
               : !confirmedCurrent && found === excludedNow ? <button className="btn btn-primary" data-testid="confirm-blocked" disabled>Confirm meeting information</button>
               : !confirmedCurrent ? <button className="btn btn-primary" disabled={editingDisabled} onClick={() => void confirm()}>{busy === "Confirming findings" ? "Confirming..." : "Confirm meeting information"}</button>
+              : discovery2Pending ? <Link className="btn btn-primary" data-testid="open-discovery2" href={`${root}/post-meeting-discovery`}>{discovery2?.status === "draft" ? "Review and approve Discovery 2" : discovery2?.status === "stale" ? "Generate Discovery 2 again" : "Continue to Discovery 2"}</Link>
               : v2?.state === "ready" ? <Link className="btn btn-primary" data-testid="open-v2" href={`${root}/post-meeting-presentation`}>Open Master Presentation V2</Link>
               : canGenerateV2 && v2 ? <button className="btn btn-primary" data-testid="generate-v2" disabled={editingDisabled || !v2.can_generate} onClick={() => void generateV2()}>
                 {v2.state === "failed" ? "Retry Master Presentation V2" : v2.state === "outdated" ? "Generate a new V2 revision" : "Generate Master Presentation V2"}</button>

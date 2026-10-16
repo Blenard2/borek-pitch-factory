@@ -196,10 +196,11 @@ def test_live_analysis_reads_natural_conversation_and_the_flow_continues(client:
     assert categories["decisions"] == categories["discussed_solutions"] == []
     assert view["extraction"]["execution_mode"] == "live" and view["extraction"]["item_count"] == 5
 
-    # The owner still reviews and confirms; afterwards Master Presentation V2 can be generated.
+    # The owner still reviews and confirms; afterwards Discovery 2 (BAP-7) and then V2 follow.
     assert view["readiness"]["blockers"] == ["MEETING_REVIEW_NOT_CONFIRMED"]
     ok(confirm(client, opportunity_id, view))
-    assert review(client, opportunity_id)["readiness"] == {"ready_for_v2": True, "blockers": []}
+    after = review(client, opportunity_id)
+    assert after["readiness"]["blockers"] == ["DISCOVERY2_MISSING"] and after["discovery2"]["can_generate"] is True
 
 
 def test_live_analysis_that_finds_nothing_stays_empty_and_cannot_be_confirmed(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

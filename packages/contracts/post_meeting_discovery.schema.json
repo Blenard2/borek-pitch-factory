@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://borek.ai/contracts/post_meeting_discovery.schema.json",
+  "title": "PostMeetingDiscovery",
+  "description": "BAP-7 Discovery 2: the post-meeting Discovery document of one opportunity. A separate document from the pre-meeting Discovery (discovery_analysis 2.0), which it never replaces. It carries forward what the approved Discovery 1 already established and adds what the first meeting changed, every item labelled with its origin: carried forward from Discovery 1, new or updated from the meeting (with the transcript or notes quote that supports it), or written by the owner. sources names the exact source revisions it was generated from.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "opportunity_id", "document_id", "status", "generated_at", "error", "generation", "title", "client_name", "sources", "summary", "sections"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "kind": { "const": "post_meeting_discovery" },
+    "opportunity_id": { "type": "string", "format": "uuid" },
+    "document_id": { "type": ["string", "null"], "format": "uuid" },
+    "status": { "enum": ["not_generated", "generating", "ready", "failed"] },
+    "generated_at": { "type": ["string", "null"], "format": "date-time" },
+    "error": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message"],
+          "properties": { "code": { "type": "string", "minLength": 1 }, "message": { "type": "string", "minLength": 1 } }
+        }
+      ]
+    },
+    "generation": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "generator_version"],
+          "properties": {
+            "mode": { "enum": ["fixture", "live"], "description": "fixture: the deterministic generator for tests and environments without a model. live: generated with the configured AI model." },
+            "generator_version": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "title": { "type": "string" },
+    "client_name": { "type": "string" },
+    "sources": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/Sources" }] },
+    "summary": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["previous", "meeting"],
+          "properties": {
+            "previous": { "type": "string", "description": "What Discovery 1 established before the meeting." },
+            "meeting": { "type": "string", "description": "What the meeting added, counted from the items below." }
+          }
+        }
+      ]
+    },
+    "sections": { "type": "array", "items": { "$ref": "#/$defs/Section" } }
+  },
+  "$defs": {
+    "Sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["discovery1", "transcript", "personal_notes", "meeting_extraction", "meeting_review", "basis_hash"],
+      "properties": {
+        "discovery1": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version_id", "document_id", "version_number", "approved_at", "content_hash"],
+          "properties": {
+            "version_id": { "type": "string", "format": "uuid" },
+            "document_id": { "type": "string" },
+            "version_number": { "type": ["integer", "null"] },
+            "approved_at": { "type": ["string", "null"] },
+            "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        },
+        "transcript": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["transcript_id", "revision", "file_name"],
+          "properties": {
+            "transcript_id": { "type": "string", "format": "uuid" },
+            "revision": { "type": "string" },
+            "file_name": { "type": ["string", "null"] }
+          }
+        },
+        "personal_notes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["updated_at", "sha256"],
+          "properties": {
+            "updated_at": { "type": ["string", "null"] },
+            "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" }
+          }
+        },
+        "meeting_extraction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["generated_at", "execution_mode"],
+          "properties": {
+            "generated_at": { "type": ["string", "null"] },
+            "execution_mode": { "type": ["string", "null"] }
+          }
+        },
+        "meeting_review": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["confirmed_at", "confirmed_finding_count"],
+          "properties": {
+            "confirmed_at": { "type": ["string", "null"] },
+            "confirmed_finding_count": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "basis_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Content identity of the meeting basis: approved Discovery 1 version, transcript revision, notes text, selected use cases and the confirmed and excluded findings. A different basis makes the document stale."
+        }
+      }
+    },
+    "Section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "title", "items"],
+      "properties": {
+        "key": { "enum": ["context", "requirements", "challenges", "priorities", "opportunities", "discussed_solutions", "decisions", "follow_ups", "open_questions"] },
+        "title": { "type": "string", "minLength": 1 },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/Item" } }
+      }
+    },
+    "Item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "origin", "status", "source", "evidence", "discovery1_ref", "edited"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "origin": { "enum": ["discovery1", "meeting", "owner"], "description": "discovery1: carried forward from the approved Discovery 1. meeting: from the first meeting. owner: added by the owner while editing." },
+        "status": { "enum": ["carried_forward", "new", "updated"] },
+        "source": { "enum": ["discovery1", "transcript", "personal_notes", "both", "owner"] },
+        "evidence": { "type": ["string", "null"], "description": "The verbatim transcript or notes quote a meeting item rests on." },
+        "discovery1_ref": { "type": ["string", "null"], "description": "The Discovery 1 element a carried-forward or updated item refers to." },
+        "edited": { "type": "boolean", "description": "The owner changed the generated wording." }
+      }
+    }
+  }
+}

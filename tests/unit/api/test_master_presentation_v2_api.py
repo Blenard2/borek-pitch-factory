@@ -17,6 +17,7 @@ from app.main import create_app
 from app.services import presentation_generation
 from app.services.data.memory_store import get_memory_store, reset_memory_store
 from services.presentation.master_deck import assembly, office, registry
+from tests.unit.api.discovery2_helpers import ensure_discovery2_approved
 
 OWNER = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 OTHER = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
@@ -73,9 +74,10 @@ def review(client: TestClient, opportunity_id: str) -> dict:
     return ok(get(client, f"/opportunities/{opportunity_id}/post-meeting-review"))
 
 
-def confirm(client: TestClient, opportunity_id: str, excluded: dict | None = None) -> dict:
+def confirm(client: TestClient, opportunity_id: str, excluded: dict | None = None, *, discovery2: bool = True) -> dict:
+    """Confirm the findings and - BAP-7 - approve Discovery 2 from them unless ``discovery2`` is False."""
     view = review(client, opportunity_id)
-    return ok(
+    confirmed = ok(
         post(
             client,
             f"/opportunities/{opportunity_id}/post-meeting-review/confirm",
@@ -87,6 +89,7 @@ def confirm(client: TestClient, opportunity_id: str, excluded: dict | None = Non
             },
         )
     )
+    return ensure_discovery2_approved(client, opportunity_id, headers()) if discovery2 else confirmed
 
 
 def analyse(client: TestClient, opportunity_id: str, transcript_id: str) -> None:
@@ -591,7 +594,13 @@ def test_v2_never_contains_another_opportunitys_meeting(client: TestClient) -> N
             OTHER,
         )
     )
+    ensure_discovery2_approved(client, second["opportunity"], headers(OTHER))
     confirm(client, first["opportunity"])
+    # BAP-7: Discovery 2 stays with its opportunity and owner.
+    my_discovery2 = ok(get(client, f"/opportunities/{first['opportunity']}/post-meeting-discovery"))
+    assert get(client, f"/opportunities/{first['opportunity']}/post-meeting-discovery", OTHER).status_code in (403, 404)
+    assert get(client, f"/opportunities/{second['opportunity']}/post-meeting-discovery/versions/{my_discovery2['current_version']['id']}", OTHER).status_code == 404
+    assert "Warehouse scans" not in json.dumps(my_discovery2["document"])
     mine = ok(generate_v2(client, first["opportunity"]))
     theirs = ok(generate_v2(client, second["opportunity"], OTHER))
     assert mine["presentation_id"] != theirs["presentation_id"]

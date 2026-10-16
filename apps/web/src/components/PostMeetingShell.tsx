@@ -16,17 +16,19 @@ const PostMeetingContext = createContext<{
 
 export const usePostMeeting = () => useContext(PostMeetingContext);
 
-export function PostMeetingPhaseNav({ opportunityId, active }: { opportunityId: string; active: "meeting" | "review" }) {
+export function PostMeetingPhaseNav({ opportunityId, active }: { opportunityId: string; active: "meeting" | "discovery2" | "review" }) {
   const { workflow } = usePostMeeting();
   const root = `/opportunities/${encodeURIComponent(opportunityId)}`;
-  // Master journey: the second step is the presentation itself (V2) with its owner review.
+  // Master journey: Discovery 2 (BAP-7) is generated and approved from the confirmed meeting,
+  // then the presentation itself (V2) with its owner review, then the follow-up email.
   // Earlier pitches keep the document and follow-up step they were built with.
   const master = isMasterJourney(workflow?.documents);
-  return <nav className={`${styles.phaseNav} ${master ? styles.phaseNavThree : ""}`} aria-label="Post-meeting workspace">
+  return <nav className={`${styles.phaseNav} ${master ? styles.phaseNavFour : ""}`} aria-label="Post-meeting workspace">
     <Link href={`${root}/meeting`} aria-current={active === "meeting" ? "page" : undefined}><span>1</span><div><small>Meeting input</small><strong>{master ? "Confirm the meeting findings" : "Capture what changed"}</strong></div></Link>
     {master
-      ? <><Link href={`${root}/post-meeting-presentation`}><span>2</span><div><small>Master Presentation V2</small><strong>Presentation &amp; owner review</strong></div></Link>
-        <Link href={`${root}/follow-up`} aria-current={active === "review" ? "page" : undefined}><span>3</span><div><small>Follow-up email</small><strong>Review, confirm &amp; export</strong></div></Link></>
+      ? <><Link href={`${root}/post-meeting-discovery`} aria-current={active === "discovery2" ? "page" : undefined}><span>2</span><div><small>Discovery 2</small><strong>Review, edit &amp; approve</strong></div></Link>
+        <Link href={`${root}/post-meeting-presentation`}><span>3</span><div><small>Master Presentation V2</small><strong>Presentation &amp; owner review</strong></div></Link>
+        <Link href={`${root}/follow-up`} aria-current={active === "review" ? "page" : undefined}><span>4</span><div><small>Follow-up email</small><strong>Review, confirm &amp; export</strong></div></Link></>
       : <Link href={`${root}/follow-up`} aria-current={active === "review" ? "page" : undefined}><span>2</span><div><small>Generate</small><strong>Documents &amp; review</strong></div></Link>}
   </nav>;
 }

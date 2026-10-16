@@ -32,11 +32,15 @@ from app.services.meeting_extraction import (
 )
 from app.services.ppt2_context import build_ppt2_context
 from app.services.workflow_status import build_workflow_status
+from services.meeting.discovery2 import basis_hash as discovery2_basis_hash
 from services.meeting.extraction import MeetingExtractionError, classify_item_sources
 
 CONTRACTS = Path(__file__).resolve().parents[5] / "packages" / "contracts"
 SCHEMA_VERSION = "1.0"
 _FORMAT_CHECKER = FormatChecker()
+# A Discovery 2 generation runs inside one request; a "generating" state older than this was
+# interrupted (the process ended) and no longer blocks a new generation.
+DISCOVERY2_GENERATION_TIMEOUT_SECONDS = 15 * 60
 
 
 def build_post_meeting_review(store: Any, *, opportunity_id: UUID, user_id: UUID) -> dict[str, Any]:
@@ -81,13 +85,27 @@ def build_post_meeting_review(store: Any, *, opportunity_id: UUID, user_id: UUID
         extraction=extraction,
         confirmation=confirmation,
     )
+    # BAP-7: the meeting basis Discovery 2 is generated from exists once the findings are confirmed
+    # against current sources; Discovery 2 is then the last step before V2.
+    meeting_ready = not blockers
+    basis = (
+        _meeting_basis(discovery=discovery, extraction=extraction, notes=notes, use_cases=use_cases, confirmation=confirmation)
+        if meeting_ready
+        else None
+    )
+    finalized = workflow.get("finalization") is not None
+    discovery2 = _discovery2_view(
+        store, opportunity=opportunity, opportunity_id=opportunity_id, user_id=user_id, basis=basis, meeting_ready=meeting_ready, finalized=finalized
+    )
+    if meeting_ready:
+        blockers.extend(_discovery2_blockers(discovery2))
     view = {
         "schema_version": SCHEMA_VERSION,
         "opportunity_id": str(opportunity_id),
         "assembled_at": _now(),
         "execution_mode": execution_mode(),
         "first_meeting_completed": first_meeting,
-        "finalized": workflow.get("finalization") is not None,
+        "finalized": finalized,
         "transcripts": transcripts,
         "personal_notes": {"status": notes["status"], "text": notes["text"], "updated_at": notes["updated_at"]},
         "extraction": extraction,
@@ -95,12 +113,13 @@ def build_post_meeting_review(store: Any, *, opportunity_id: UUID, user_id: UUID
         "approved_discovery": discovery,
         "master_presentation": master,
         "confirmation": confirmation,
+        "discovery2": {key: value for key, value in discovery2.items() if not key.startswith("_")},
         "readiness": {"ready_for_v2": not blockers, "blockers": blockers},
         "v2_sources": None,
     }
     view["review_fingerprint"] = _review_fingerprint(view)
     if not blockers:
-        view["v2_sources"] = _v2_sources(view)
+        view["v2_sources"] = _v2_sources(view, discovery2=discovery2["_latest_row"])
     return _validate(view, "PostMeetingReview")
 
 
@@ -426,8 +445,12 @@ def _review_fingerprint(view: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _v2_sources(view: dict[str, Any]) -> dict[str, Any]:
-    """Identities and revisions a V2 generation would freeze. Identifiers only, no content."""
+def _v2_sources(view: dict[str, Any], *, discovery2: dict[str, Any]) -> dict[str, Any]:
+    """Identities and revisions a V2 generation would freeze. Identifiers only, no content.
+
+    ``discovery2`` is the approved, current Discovery 2 version: the authoritative post-meeting
+    Discovery source of the V2.
+    """
     confirmation = view["confirmation"]
     snapshot = {
         "presentation_id": view["master_presentation"]["presentation_id"],
@@ -442,6 +465,8 @@ def _v2_sources(view: dict[str, Any]) -> dict[str, Any]:
         "personal_notes_updated_at": view["extraction"]["personal_notes_updated_at"],
         "selected_use_case_ids": list(view["selected_use_cases"]["use_case_ids"]),
         "meeting_review_confirmed_at": confirmation["confirmed_at"],
+        "discovery2_version_id": str(discovery2["id"]),
+        "discovery2_content_hash": str(discovery2["content_hash"]),
     }
     confirmed_items = {
         category: [entry["text"] for entry in confirmation["items"][category] if entry["status"] == "confirmed"]
@@ -449,6 +474,118 @@ def _v2_sources(view: dict[str, Any]) -> dict[str, Any]:
     }
     canonical = json.dumps({**snapshot, "confirmed_items": confirmed_items}, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return {**snapshot, "source_hash": hashlib.sha256(canonical.encode("utf-8")).hexdigest()}
+
+
+# ------------------------------------------------------------------------------------- Discovery 2
+
+
+def _meeting_basis(
+    *,
+    discovery: dict[str, Any],
+    extraction: dict[str, Any],
+    notes: dict[str, Any],
+    use_cases: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> str:
+    """Content identity of what Discovery 2 is generated from (see ``discovery2.basis_hash``)."""
+    return discovery2_basis_hash(
+        discovery1_version_id=str(discovery["version_id"]),
+        transcript_id=str(extraction["transcript_id"]),
+        transcript_revision=str(extraction["transcript_revision"]),
+        personal_notes_text=notes["text"] if notes["status"] == "available" else None,
+        selected_use_case_ids=list(use_cases["use_case_ids"]),
+        reviewed_items=confirmation["items"] or {},
+    )
+
+
+def _discovery2_version_ref(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    document = row.get("document_json") if isinstance(row.get("document_json"), dict) else {}
+    return {
+        "version_id": str(row["id"]),
+        "version_number": int(row["version_number"]),
+        "status": str(row["status"]),
+        "content_hash": str(row["content_hash"]),
+        "basis_hash": str(row["basis_hash"]),
+        "created_at": _iso(row.get("created_at")) or "",
+        "approved_at": _iso(row.get("approved_at")),
+        "generation_mode": ((document.get("generation") or {}).get("mode")) or "fixture",
+    }
+
+
+def _discovery2_view(
+    store: Any,
+    *,
+    opportunity: dict[str, Any],
+    opportunity_id: UUID,
+    user_id: UUID,
+    basis: str | None,
+    meeting_ready: bool,
+    finalized: bool,
+) -> dict[str, Any]:
+    """Discovery 2 lifecycle: the working state and the versions, and whether the latest is current."""
+    working = opportunity.get("post_meeting_discovery")
+    working = working if isinstance(working, dict) else {}
+    working_status = str(working.get("status") or "not_generated")
+    error = working.get("error") if isinstance(working.get("error"), dict) else None
+    if working_status == "generating" and _older_than(working.get("generated_at"), DISCOVERY2_GENERATION_TIMEOUT_SECONDS):
+        working_status = "failed"
+        error = {"code": "DISCOVERY2_GENERATION_INTERRUPTED", "message": "The last Discovery 2 generation did not finish. Generate it again."}
+    versions = store.list_discovery2_versions(opportunity_id=opportunity_id, user_id=user_id)
+    latest = versions[-1] if versions else None
+    approved = next((row for row in reversed(versions) if row["status"] == "approved"), None)
+    reasons: list[str] = []
+    if working_status == "generating":
+        status = "generating"
+    elif latest is None:
+        status = "failed" if working_status == "failed" else "not_generated"
+    elif latest["status"] == "draft":
+        status = "draft"
+        if approved is not None:
+            reasons.append("NEWER_DRAFT")
+    else:
+        status = "approved"
+    if latest is not None and basis is not None and latest["basis_hash"] != basis:
+        reasons.append("BASIS_CHANGED")
+        if status in {"draft", "approved"}:
+            status = "stale"
+    return {
+        "status": status,
+        "working_status": working_status if working_status in {"not_generated", "generating", "ready", "failed"} else "not_generated",
+        "error": {"code": str(error.get("code") or ""), "message": str(error.get("message") or "")} if error else None,
+        "basis_hash": basis,
+        "can_generate": meeting_ready and not finalized and status != "generating",
+        "latest_version": _discovery2_version_ref(latest),
+        "approved_version": _discovery2_version_ref(approved),
+        "stale_reasons": reasons,
+        "_latest_row": latest,
+    }
+
+
+def _discovery2_blockers(discovery2: dict[str, Any]) -> list[str]:
+    """Only the latest Discovery 2 version, approved and generated from the current basis, admits V2."""
+    latest = discovery2["latest_version"]
+    if latest is None:
+        return ["DISCOVERY2_MISSING"]
+    if "BASIS_CHANGED" in discovery2["stale_reasons"]:
+        return ["DISCOVERY2_STALE"]
+    if latest["status"] != "approved" or discovery2["status"] == "generating":
+        return ["DISCOVERY2_NOT_APPROVED"]
+    return []
+
+
+def _older_than(value: Any, seconds: int) -> bool:
+    text = _iso(value)
+    if not text:
+        return True
+    try:
+        started = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - started).total_seconds() > seconds
 
 
 # ------------------------------------------------------------------------------------- helpers

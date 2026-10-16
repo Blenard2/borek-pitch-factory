@@ -12,6 +12,8 @@ import jsonschema
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.unit.api.discovery2_helpers import ensure_discovery2_approved
+
 from app.auth import create_test_access_token
 from app.config import settings
 from app.main import create_app
@@ -394,7 +396,11 @@ def test_ready_for_v2_needs_every_source_and_names_the_same_presentation(client:
     analyse(client, opportunity_id, transcript_id)
     reviewed = review(client, opportunity_id)
     assert reviewed["readiness"]["blockers"] == ["MEETING_REVIEW_NOT_CONFIRMED"] and reviewed["v2_sources"] is None
-    ready = ok(confirm(client, opportunity_id, reviewed, {"follow_ups": ["Send the pricing export by Friday."]}))
+    confirmed = ok(confirm(client, opportunity_id, reviewed, {"follow_ups": ["Send the pricing export by Friday."]}))
+    # BAP-7: the confirmed meeting basis is ready; Discovery 2 is the last step before V2.
+    assert confirmed["readiness"] == {"ready_for_v2": False, "blockers": ["DISCOVERY2_MISSING"]} and confirmed["v2_sources"] is None
+    assert confirmed["discovery2"]["can_generate"] and confirmed["discovery2"]["basis_hash"]
+    ready = ensure_discovery2_approved(client, opportunity_id, headers())
     assert ready["readiness"] == {"ready_for_v2": True, "blockers": []}
 
     sources = ready["v2_sources"]
@@ -422,7 +428,11 @@ def test_ready_for_v2_needs_every_source_and_names_the_same_presentation(client:
 
     # A different confirmation is a different snapshot.
     other = ok(confirm(client, opportunity_id, ready))
+    # BAP-7: a different confirmation is a different meeting basis, so the approved Discovery 2 is stale.
+    assert other["readiness"]["blockers"] == ["DISCOVERY2_STALE"] and other["discovery2"]["stale_reasons"] == ["BASIS_CHANGED"]
+    other = ensure_discovery2_approved(client, opportunity_id, headers())
     assert other["v2_sources"]["source_hash"] != sources["source_hash"]
+    assert other["v2_sources"]["discovery2_version_id"] != sources["discovery2_version_id"]
 
 
 def test_a_draft_discovery_never_replaces_the_approved_source_and_a_new_approval_needs_a_new_confirmation(client: TestClient) -> None:
@@ -430,7 +440,8 @@ def test_a_draft_discovery_never_replaces_the_approved_source_and_a_new_approval
     base = master_v1_and_meeting(client, opportunity_id)
     transcript_id = upload(client, opportunity_id)
     analyse(client, opportunity_id, transcript_id)
-    ready = ok(confirm(client, opportunity_id, review(client, opportunity_id)))
+    ok(confirm(client, opportunity_id, review(client, opportunity_id)))
+    ready = ensure_discovery2_approved(client, opportunity_id, headers())
     assert ready["readiness"]["ready_for_v2"]
 
     edited = client.patch(
@@ -451,6 +462,9 @@ def test_a_draft_discovery_never_replaces_the_approved_source_and_a_new_approval
     assert changed["readiness"]["blockers"] == ["MEETING_REVIEW_STALE"] and changed["v2_sources"] is None
     assert changed["extraction"]["status"] == "current", "the meeting analysis itself is still valid"
     renewed = ok(confirm(client, opportunity_id, changed))
+    # BAP-7: Discovery 2 was generated from the earlier Discovery 1 and must be generated again.
+    assert renewed["readiness"]["blockers"] == ["DISCOVERY2_STALE"]
+    renewed = ensure_discovery2_approved(client, opportunity_id, headers())
     assert renewed["v2_sources"]["approved_discovery_version_id"] == second["id"]
     assert renewed["v2_sources"]["presentation_id"] == base["presentation_id"]
 
@@ -506,7 +520,7 @@ def test_a_source_changed_between_loading_the_review_and_confirming_is_refused(c
     assert refreshed["extraction"]["generated_at"] == review(client, opportunity_id)["extraction"]["generated_at"]
     confirmed = ok(confirm(client, opportunity_id, refreshed))
     assert confirmed["confirmation"]["sources"]["selected_use_case_ids"] == [fact_id]
-    assert confirmed["readiness"]["ready_for_v2"]
+    assert ensure_discovery2_approved(client, opportunity_id, headers())["readiness"]["ready_for_v2"]
 
     # 2. A different Discovery version is approved.
     def approve_new_discovery() -> None:
@@ -546,7 +560,8 @@ def test_a_source_changed_between_loading_the_review_and_confirming_is_refused(c
 
     # 6. Another transcript is uploaded while the review is open: the owner has not seen it.
     refreshed = refused_then_accepted(lambda: upload(client, opportunity_id, "Dana: Requirement: A later call.\n", name="second.txt"), "transcripts")
-    final = ok(confirm(client, opportunity_id, refreshed))
+    ok(confirm(client, opportunity_id, refreshed))
+    final = ensure_discovery2_approved(client, opportunity_id, headers())
     assert final["readiness"]["ready_for_v2"] and final["v2_sources"]["presentation_id"] == base["presentation_id"]
 
 

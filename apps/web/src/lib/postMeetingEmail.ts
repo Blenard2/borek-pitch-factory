@@ -10,9 +10,21 @@ export const EMAIL_LENGTH_LABEL: Record<EmailLength, string> = { short: "Short",
 export interface EmailText { subject: string; body: string; wordCount: number; edited: boolean }
 export interface EmailPerson { name: string | null; email: string }
 export interface EmailRecipients { to: EmailPerson[]; cc: EmailPerson[]; sender: { name: string; role: string | null; email: string } }
+/**
+ * BAP-7: the four generated documents of the finalized package, each pinned to the version the
+ * finalized V2 was built from. ``key`` is the stable selection key; "pptx" and "pdf" are the V2 files.
+ */
+export const ATTACHMENT_KEYS = ["pptx", "pdf", "v1_pptx", "v1_pdf", "discovery1_docx", "discovery2_docx"] as const;
+export type AttachmentKey = (typeof ATTACHMENT_KEYS)[number];
+export type AttachmentArtifact = "master_presentation_v2" | "master_presentation_v1" | "discovery_1" | "discovery_2";
+export const ATTACHMENT_ARTIFACT_LABEL: Record<AttachmentArtifact, string> = {
+  discovery_1: "Discovery 1", discovery_2: "Discovery 2", master_presentation_v1: "Master Presentation 1", master_presentation_v2: "Master Presentation 2",
+};
 export interface EmailAttachment {
-  format: "pptx" | "pdf"; fileName: string; selected: boolean; available: boolean; sizeBytes: number | null;
-  presentationId: string; presentationVersionId: string; versionNumber: number | null;
+  key: AttachmentKey; artifact: AttachmentArtifact;
+  format: "pptx" | "pdf" | "docx"; fileName: string; selected: boolean; available: boolean; sizeBytes: number | null;
+  presentationId: string | null; presentationVersionId: string | null; artifactVersionId: string | null;
+  versionNumber: number | null; downloadPath: string | null;
 }
 export interface EmailSource {
   presentationId: string; presentationVersionId: string; versionNumber: number; finalizedAt: string;
@@ -184,12 +196,19 @@ export function parsePostMeetingEmail(value: unknown, opportunityId: string): Po
       : null,
     attachments: (Array.isArray(draft.attachments) ? draft.attachments : []).flatMap((item): EmailAttachment[] => {
       const file = item as Record<string, unknown>;
-      if ((file.format !== "pptx" && file.format !== "pdf") || !isString(file.file_name) || !isString(file.presentation_id) || !isString(file.presentation_version_id)) return [];
+      if ((file.format !== "pptx" && file.format !== "pdf" && file.format !== "docx") || !isString(file.file_name)) return [];
+      // An envelope from before BAP-7 names the V2 files by format only.
+      const key = (ATTACHMENT_KEYS as readonly string[]).includes(String(file.key)) ? file.key as AttachmentKey : file.format === "docx" ? null : file.format;
+      if (!key) return [];
+      const artifact = (["master_presentation_v2", "master_presentation_v1", "discovery_1", "discovery_2"] as const).find((name) => name === file.artifact) ?? "master_presentation_v2";
       return [{
-        format: file.format, fileName: file.file_name, selected: file.selected === true, available: file.available === true,
+        key, artifact, format: file.format, fileName: file.file_name, selected: file.selected === true, available: file.available === true,
         sizeBytes: typeof file.size_bytes === "number" ? file.size_bytes : null,
-        presentationId: file.presentation_id, presentationVersionId: file.presentation_version_id,
+        presentationId: isString(file.presentation_id) ? file.presentation_id : null,
+        presentationVersionId: isString(file.presentation_version_id) ? file.presentation_version_id : null,
+        artifactVersionId: isString(file.artifact_version_id) ? file.artifact_version_id : isString(file.presentation_version_id) ? file.presentation_version_id : null,
         versionNumber: typeof file.version_number === "number" ? file.version_number : null,
+        downloadPath: isString(file.download_path) && file.download_path.startsWith("/") ? file.download_path : null,
       }];
     }),
   };
@@ -215,7 +234,7 @@ export async function generatePostMeetingEmail(token: string, opportunityId: str
 export interface EmailEdit {
   selectedLength?: EmailLength;
   lengths?: Partial<Record<EmailLength, { subject: string; body: string }>>;
-  attachments?: Partial<Record<"pptx" | "pdf", boolean>>;
+  attachments?: Partial<Record<AttachmentKey, boolean>>;
 }
 
 /** Saves against the revision the edit was made on; the API answers 409 if the draft moved on. */
@@ -247,7 +266,7 @@ export function emailReviewWarnings(draft: PostMeetingEmail, length: EmailLength
   const warnings: EmailReviewWarning[] = draft.reviewFlags.map((flag) => ({ key: flag, text: emailFlagText(flag), flag: true, blocking: false }));
   const selected = draft.attachments.filter((item) => item.selected);
   for (const item of selected.filter((file) => !file.available)) {
-    warnings.push({ key: `attachment_unavailable_${item.format}`, text: `${item.fileName} is selected but not available. Deselect it or restore the approved file.`, flag: false, blocking: true });
+    warnings.push({ key: `attachment_unavailable_${item.key}`, text: `${item.fileName} is selected but not available. Deselect it or restore the approved file.`, flag: false, blocking: true });
   }
   if (draft.sourceStatus === "changed") {
     warnings.push({ key: "source_changed", text: "The finalized presentation package changed after this email was written. Regenerate the email from the current package.", flag: false, blocking: true });
@@ -319,10 +338,14 @@ export async function exportPostMeetingEmail(token: string, opportunityId: strin
   return blob;
 }
 
-/** One approved file of the pinned presentation version - never the latest one. */
+/** One approved file of the pinned version (presentation or Discovery) - never the latest one. */
 export async function downloadEmailAttachment(token: string, attachment: EmailAttachment, signal?: AbortSignal) {
   if (!attachment.available) throw new Error("This approved file is not available.");
-  const path = `/presentations/${encodeURIComponent(attachment.presentationId)}/versions/${encodeURIComponent(attachment.presentationVersionId)}/download/${attachment.format}`;
+  const path = attachment.downloadPath
+    ?? (attachment.presentationId && attachment.presentationVersionId
+      ? `/presentations/${encodeURIComponent(attachment.presentationId)}/versions/${encodeURIComponent(attachment.presentationVersionId)}/download/${attachment.format}`
+      : null);
+  if (!path) throw new Error("This approved file is not available.");
   const blob = await apiFetchBlob(path, token, { signal, cache: "no-store", redirect: "error" });
   if (!blob.size) throw new Error("The approved file is empty.");
   return blob;

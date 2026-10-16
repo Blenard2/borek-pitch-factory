@@ -333,6 +333,9 @@ class Blocker(Enum):
     MEETING_REVIEW_STALE = 'MEETING_REVIEW_STALE'
     MEETING_FINDINGS_EMPTY = 'MEETING_FINDINGS_EMPTY'
     MEETING_FINDINGS_NONE_CONFIRMED = 'MEETING_FINDINGS_NONE_CONFIRMED'
+    DISCOVERY2_MISSING = 'DISCOVERY2_MISSING'
+    DISCOVERY2_NOT_APPROVED = 'DISCOVERY2_NOT_APPROVED'
+    DISCOVERY2_STALE = 'DISCOVERY2_STALE'
 
 
 class Readiness(BaseModel):
@@ -364,7 +367,67 @@ class V2Sources(BaseModel):
     personal_notes_updated_at: AwareDatetime | None
     selected_use_case_ids: list[str]
     meeting_review_confirmed_at: AwareDatetime
+    discovery2_version_id: UUID
+    discovery2_content_hash: str = Field(..., pattern='^[0-9a-f]{64}$')
     source_hash: str = Field(..., pattern='^[0-9a-f]{64}$')
+
+
+class Status13(Enum):
+    not_generated = 'not_generated'
+    generating = 'generating'
+    failed = 'failed'
+    draft = 'draft'
+    approved = 'approved'
+    stale = 'stale'
+
+
+class WorkingStatus(Enum):
+    not_generated = 'not_generated'
+    generating = 'generating'
+    ready = 'ready'
+    failed = 'failed'
+
+
+class Error(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    code: str
+    message: str
+
+
+class StaleReason2(Enum):
+    BASIS_CHANGED = 'BASIS_CHANGED'
+    NEWER_DRAFT = 'NEWER_DRAFT'
+
+
+class Status14(Enum):
+    draft = 'draft'
+    approved = 'approved'
+
+
+class GenerationMode(Enum):
+    fixture = 'fixture'
+    live = 'live'
+
+
+class Discovery2Version(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    version_id: UUID
+    version_number: int = Field(..., ge=1)
+    status: Status14
+    content_hash: str = Field(..., pattern='^[0-9a-f]{64}$')
+    basis_hash: str = Field(..., pattern='^[0-9a-f]{64}$')
+    created_at: str
+    approved_at: str | None
+    generation_mode: GenerationMode
+
+
+class Status15(Enum):
+    confirmed = 'confirmed'
+    excluded = 'excluded'
 
 
 class Requirement2(BaseModel):
@@ -373,7 +436,7 @@ class Requirement2(BaseModel):
     )
     text: str = Field(..., min_length=1)
     source: Source
-    status: Status6
+    status: Status15
 
 
 class Challenge2(BaseModel):
@@ -382,7 +445,7 @@ class Challenge2(BaseModel):
     )
     text: str = Field(..., min_length=1)
     source: Source
-    status: Status6
+    status: Status15
 
 
 class Priority2(BaseModel):
@@ -391,7 +454,7 @@ class Priority2(BaseModel):
     )
     text: str = Field(..., min_length=1)
     source: Source
-    status: Status6
+    status: Status15
 
 
 class Opportunity2(BaseModel):
@@ -400,7 +463,7 @@ class Opportunity2(BaseModel):
     )
     text: str = Field(..., min_length=1)
     source: Source
-    status: Status6
+    status: Status15
 
 
 class DiscussedSolution2(BaseModel):
@@ -409,7 +472,7 @@ class DiscussedSolution2(BaseModel):
     )
     text: str = Field(..., min_length=1)
     source: Source
-    status: Status6
+    status: Status15
 
 
 class Decision2(BaseModel):
@@ -418,7 +481,7 @@ class Decision2(BaseModel):
     )
     text: str = Field(..., min_length=1)
     source: Source
-    status: Status6
+    status: Status15
 
 
 class FollowUp2(BaseModel):
@@ -427,7 +490,7 @@ class FollowUp2(BaseModel):
     )
     text: str = Field(..., min_length=1)
     source: Source
-    status: Status6
+    status: Status15
 
 
 class Items1(BaseModel):
@@ -469,6 +532,24 @@ class Confirmation(BaseModel):
     excluded_count: int = Field(..., ge=0)
 
 
+class Discovery2(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    status: Status13
+    working_status: WorkingStatus
+    error: Error | None
+    basis_hash: str | None = Field(
+        ...,
+        description='The current meeting basis; null until the meeting findings are confirmed.',
+        pattern='^[0-9a-f]{64}$',
+    )
+    can_generate: bool
+    latest_version: Discovery2Version | None
+    approved_version: Discovery2Version | None
+    stale_reasons: list[StaleReason2]
+
+
 class PostMeetingReview(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -493,5 +574,6 @@ class PostMeetingReview(BaseModel):
     approved_discovery: ApprovedDiscovery
     master_presentation: MasterPresentation
     confirmation: Confirmation
+    discovery2: Discovery2
     readiness: Readiness
     v2_sources: V2Sources | None

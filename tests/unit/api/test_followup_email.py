@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from app.services import followup_email as email_service
 from app.services.data.memory_store import get_memory_store
 from llm.claude.client import ClaudeClientError
+from tests.unit.api.discovery2_helpers import ensure_discovery2_approved
 from tests.unit.api.test_master_presentation_v2_api import (
     EXCLUDED,
     OBSERVATION,
@@ -70,6 +71,7 @@ def finalized(client: TestClient, user: UUID = OWNER, *, statics: bool = True, e
             user,
         )
     )
+    ensure_discovery2_approved(client, opportunity_id, headers(user))
     base["v2"] = ok(generate_v2(client, opportunity_id, user))["presentation_version_id"]
     ok(post(client, f"/opportunities/{opportunity_id}/workflow/owner-reviewed", user=user))
     base["package"] = ok(post(client, f"/opportunities/{opportunity_id}/workflow/finalize", user=user))["finalization"]
@@ -375,7 +377,10 @@ def test_attachments_are_the_approved_files_of_the_finalized_version(client: Tes
     base = finalized(client)
     opportunity_id, presentation_id = base["opportunity"], base["presentation"]
     draft = ok(generate(client, opportunity_id))["draft"]
-    pptx, pdf = draft["attachments"]
+    # The two V2 files come first; BAP-7 adds V1 and both Discovery documents after them.
+    pptx, pdf = draft["attachments"][:2]
+    assert [item["key"] for item in draft["attachments"]] == ["pptx", "pdf", "v1_pptx", "v1_pdf", "discovery1_docx", "discovery2_docx"]
+    assert [item["selected"] for item in draft["attachments"][2:]] == [False] * 4, "only the V2 PDF is selected by default"
     assert (pptx["format"], pdf["format"]) == ("pptx", "pdf")
     assert pptx["file_name"] == "Master Presentation - Nordwind Maschinenbau - V2.pptx" and pdf["file_name"].endswith(" - V2.pdf")
     for item in (pptx, pdf):
@@ -386,8 +391,8 @@ def test_attachments_are_the_approved_files_of_the_finalized_version(client: Tes
     assert (pptx["selected"], pdf["selected"]) == (False, True), "the selection is stored, not implied"
 
     chosen = ok(patch(client, opportunity_id, draft["id"], {"expected_revision": 1, "attachments": {"pptx": True}}))["draft"]
-    assert [item["selected"] for item in chosen["attachments"]] == [True, True] and chosen["revision"] == 2
-    assert [item["selected"] for item in load(client, opportunity_id)["attachments"]] == [True, True]
+    assert [item["selected"] for item in chosen["attachments"]][:2] == [True, True] and chosen["revision"] == 2
+    assert [item["selected"] for item in load(client, opportunity_id)["attachments"]][:2] == [True, True]
 
     unconfirmed = export(client, opportunity_id, chosen)
     assert unconfirmed.status_code == 409 and "EMAIL_NOT_CONFIRMED" in unconfirmed.text
@@ -738,7 +743,7 @@ def test_a_finding_too_long_for_a_draft_is_refused_and_never_shortened(client: T
 def test_the_text_only_says_attached_while_a_file_is_selected(client: TestClient) -> None:
     opportunity_id = finalized(client)["opportunity"]
     draft = ok(generate(client, opportunity_id))["draft"]
-    assert [item["selected"] for item in draft["attachments"]] == [False, True]
+    assert [item["selected"] for item in draft["attachments"]][:2] == [False, True]
     assert all("attached" in draft["lengths"][name]["body"] for name in ("short", "medium", "extensive"))
 
     # The owner rewrites the medium email, keeping the sentence about the attachment in their own words.
@@ -747,7 +752,7 @@ def test_the_text_only_says_attached_while_a_file_is_selected(client: TestClient
 
     # No file selected: the generated texts no longer claim an attachment. The owner's text is not touched.
     none = ok(patch(client, opportunity_id, draft["id"], {"expected_revision": 2, "attachments": {"pdf": False}}))["draft"]
-    assert [item["selected"] for item in none["attachments"]] == [False, False] and none["revision"] == 3
+    assert [item["selected"] for item in none["attachments"]][:2] == [False, False] and none["revision"] == 3
     for name in ("short", "extensive"):
         text = none["lengths"][name]
         assert "attach" not in text["body"].lower() and text["edited"] is False, name
@@ -771,7 +776,7 @@ def test_the_text_only_says_attached_while_a_file_is_selected(client: TestClient
     # A new draft is written for the selection it finds: without a file, without the sentence.
     ok(patch(client, opportunity_id, draft["id"], {"expected_revision": 5, "attachments": {"pptx": False, "pdf": False}}))
     fresh = ok(generate(client, opportunity_id, overwrite_edits=True))["draft"]
-    assert [item["selected"] for item in fresh["attachments"]] == [False, False]
+    assert [item["selected"] for item in fresh["attachments"]][:2] == [False, False]
     assert all("attach" not in fresh["lengths"][name]["body"].lower() for name in ("short", "medium", "extensive"))
     exported = export(client, opportunity_id, ok(confirm_email(client, opportunity_id, fresh))["draft"])
     message = email.message_from_bytes(exported.content, policy=email.policy.default)
@@ -948,7 +953,7 @@ def test_an_email_that_announces_a_missing_attachment_cannot_be_confirmed(client
     assert confirm_email(client, opportunity_id, again, "medium").status_code == 400
     selected = ok(patch(client, opportunity_id, draft["id"], {"expected_revision": again["revision"], "attachments": {"pdf": True}}))["draft"]
     confirmed = ok(confirm_email(client, opportunity_id, selected, "medium"))["draft"]
-    assert confirmed["status"] == "confirmed" and [item["selected"] for item in confirmed["attachments"]] == [False, True]
+    assert confirmed["status"] == "confirmed" and [item["selected"] for item in confirmed["attachments"]][:2] == [False, True]
 
 
 
