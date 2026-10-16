@@ -8,7 +8,7 @@ import {
   isEmailConflict, isEmailHasEdits, loadPostMeetingEmail, openReviewFlags, parsePostMeetingEmail, saveFollowupStatics, savePostMeetingEmail,
   staticsFormFrom, staticsPayload, unsavedLengths, validateStaticsForm, workingCopy,
 } from "./postMeetingEmail";
-import type { PostMeetingWorkflow } from "./postMeeting";
+import { showsWorkflowCheckpoints, type PostMeetingWorkflow } from "./postMeeting";
 // Sources are compared as text below. A Windows checkout may hold them with CRLF line ends.
 const readFileSync = (path: URL | string, encoding: "utf8"): string => readFileFromDisk(path, encoding).replace(/\r\n/g, "\n");
 
@@ -497,4 +497,34 @@ test("the page says who wrote the text and never words a fallback as AI-written"
   // The flags of both modes are explained and acknowledged like every other flag.
   assert.match(emailFlagText("ai_written"), /written by the AI writer.*read it against the findings yourself/);
   assert.match(emailFlagText("ai_fallback"), /AI writing was not used.*rule-based writer/);
+});
+
+test("BAP-8: the follow-up email step shows no workflow checkpoints, and keeps every email control", () => {
+  // Hidden on the follow-up email and the meeting input, with or without a trailing slash.
+  for (const path of ["/opportunities/abc/follow-up", "/opportunities/abc/follow-up/", "/opportunities/abc/meeting", "/opportunities/abc/meeting/"]) {
+    assert.equal(showsWorkflowCheckpoints(path), false, path);
+  }
+  // Every other post-meeting page keeps the checklist as before.
+  for (const path of ["/opportunities/abc/post-meeting-presentation", "/opportunities/abc/review", "/opportunities/follow-up-co/post-meeting-presentation"]) {
+    assert.equal(showsWorkflowCheckpoints(path), true, path);
+  }
+
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const shell = read("../components/PostMeetingShell.tsx");
+  assert.match(shell, /\{live && accessGranted && showsWorkflowCheckpoints\(pathname\) \? <details className=\{styles\.workflow\}>/, "the checklist is gated by the route helper only");
+  assert.doesNotMatch(shell, /pathname\.endsWith\("\/meeting"\)/);
+  // Workflow status loading and the access gate are unchanged.
+  assert.match(shell, /loadPostMeetingWorkflow\(accessToken, opportunityId, controller\.signal\)/);
+  assert.match(shell, /setAccessGranted\(workflowCompleted\(value, "first_meeting_completed"\)\)/);
+  assert.match(shell, /const canView = previewMode \? preview\.enabled && preview\.completed : live && accessGranted/);
+
+  // The email step keeps generation, editing, attachments, review/approval and export.
+  const panel = read("../components/FollowUpDraftPanel.tsx");
+  for (const call of ["generatePostMeetingEmail(token, opportunityId, overwrite)", "savePostMeetingEmail(token, opportunityId, draft,",
+    "attachments: { [attachment.format]: !attachment.selected }", "confirmPostMeetingEmail(token, opportunityId, draft,",
+    "exportPostMeetingEmail(token, opportunityId, draft)", "downloadEmailAttachment(token, attachment)",
+    '<PostMeetingPhaseNav opportunityId={opportunityId} active="review" />']) {
+    assert.ok(panel.includes(call), call);
+  }
+  assert.doesNotMatch(panel, /Workflow checkpoints|WORKFLOW_STATUS_CATALOG/);
 });
