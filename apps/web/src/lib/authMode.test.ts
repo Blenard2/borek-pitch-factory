@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   clearPostAuthPath,
+  DEFAULT_POST_AUTH_PATH,
+  PRE_MEETING_PATH,
   readAuthCallbackError,
   rememberPostAuthPath,
   resolveAuthMode,
@@ -90,16 +92,23 @@ assert.equal(sanitizeNextPath("/../../evil"), "/evil");
 
 // The requested page survives the identity-provider round trip, which returns to /login without a query.
 clearPostAuthPath();
-assert.equal(resolvePostAuthPath(""), "/clients");
+// BAP-1: without a requested page, sign-in lands on the Pre-Meeting page, not the client list.
+assert.equal(PRE_MEETING_PATH, "/opportunities/new/client-information");
+assert.equal(DEFAULT_POST_AUTH_PATH, PRE_MEETING_PATH);
+assert.equal(resolvePostAuthPath(""), "/opportunities/new/client-information");
+assert.equal(resolvePostAuthPath("?next="), "/opportunities/new/client-information");
+assert.equal(resolvePostAuthPath("?next=%2Flogin"), "/opportunities/new/client-information", "a /login loop falls back to Pre-Meeting");
+assert.equal(resolvePostAuthPath("?next=%2Fclients"), "/clients", "an explicit deep link to the client list is still honoured");
+assert.equal(resolvePostAuthPath("?next=%2Fclients%3Fphase%3Dpost_meeting"), "/clients?phase=post_meeting");
 assert.equal(resolvePostAuthPath("?next=%2Fopportunities%2Fabc%2Fdiscovery"), "/opportunities/abc/discovery");
 rememberPostAuthPath("/opportunities/abc/presentations");
 assert.equal(resolvePostAuthPath(""), "/opportunities/abc/presentations");
 assert.equal(resolvePostAuthPath("?next=/profile"), "/profile", "an explicit next wins over the remembered path");
 assert.equal(resolvePostAuthPath("?next=https://evil.example"), "/opportunities/abc/presentations");
 rememberPostAuthPath("https://evil.example");
-assert.equal(resolvePostAuthPath(""), "/clients", "an unsafe path is never remembered");
+assert.equal(resolvePostAuthPath(""), "/opportunities/new/client-information", "an unsafe path is never remembered");
 globalThis.sessionStorage.setItem("borek.authNext", "//evil.example");
-assert.equal(resolvePostAuthPath(""), "/clients", "a tampered remembered path is rejected");
+assert.equal(resolvePostAuthPath(""), "/opportunities/new/client-information", "a tampered remembered path is rejected");
 clearPostAuthPath();
 
 // A failed provider round trip is reported instead of silently showing the login page again.
@@ -145,6 +154,11 @@ assert.match(card, /rememberPostAuthPath\(/);
 assert.match(card, /readAuthCallbackError\(window\.location\.search, window\.location\.hash\)/);
 assert.match(card, /authCopy\.signInFailed/);
 assert.match(card, /redirectTo: `\$\{window\.location\.origin\}\/login`/);
+// BAP-1: a signed-in user leaves /login through the sanitised return path, once, replacing history.
+assert.match(card, /const target = resolvePostAuthPath\(window\.location\.search\);\s*clearPostAuthPath\(\);\s*router\.replace\(target\);/);
+// The default destination is the same page as the sidebar's Pre-meeting entry.
+const sidebar = source("../components/SiteHeader.tsx");
+assert.ok(sidebar.includes(`{ id: "pre_meeting", href: "${PRE_MEETING_PATH}"`), "sidebar Pre-meeting link and post-login default agree");
 const provider = source("../components/AuthProvider.tsx");
 assert.doesNotMatch(provider, /process\.env\.NEXT_PUBLIC_(BYPASS_LOGIN|DEV_ACCESS_TOKEN)/, "bypass env is read only through authMode");
 assert.match(provider, /await startDevAuthSession\(/);

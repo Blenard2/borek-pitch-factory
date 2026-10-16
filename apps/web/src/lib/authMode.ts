@@ -40,7 +40,10 @@ export interface AuthModeResult {
 
 /** The API ignores the token value while AUTH_BYPASS is active; it only marks the request as dev auth. */
 export const DEV_AUTH_TOKEN = "dev-bypass";
-export const DEFAULT_POST_AUTH_PATH = "/clients";
+/** The Pre-Meeting page of the main navigation: where a new pitch starts. */
+export const PRE_MEETING_PATH = "/opportunities/new/client-information";
+/** Where sign-in lands when no safe ?next= or remembered path asks for another page. */
+export const DEFAULT_POST_AUTH_PATH = PRE_MEETING_PATH;
 
 const POST_AUTH_PATH_KEY = "borek.authNext";
 const PATH_BASE = "http://borek.invalid";
