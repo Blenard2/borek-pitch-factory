@@ -166,10 +166,10 @@ async function main() {
   assert.match(provider, /if \(devUserId && error instanceof ApiRequestError && error\.status === 401\) \{\s*endPreviewSession\(\);/);
 
   // M. The post-sign-in destination stays sanitised in preview mode too.
-  assert.equal(resolvePostAuthPath(""), "/clients");
+  assert.equal(resolvePostAuthPath(""), "/opportunities/new/client-information");
   assert.equal(resolvePostAuthPath("?next=%2Fopportunities%2Fabc%2Fdiscovery"), "/opportunities/abc/discovery");
   for (const unsafe of ["https://evil.example/x", "//evil.example", "/\\evil.example", "/login?next=/clients", "javascript:alert(1)"]) {
-    assert.equal(resolvePostAuthPath(`?next=${encodeURIComponent(unsafe)}`), "/clients", `${unsafe} is rejected`);
+    assert.equal(resolvePostAuthPath(`?next=${encodeURIComponent(unsafe)}`), "/opportunities/new/client-information", `${unsafe} is rejected`);
   }
 
   console.log("Deployed development preview bypass tests passed");
