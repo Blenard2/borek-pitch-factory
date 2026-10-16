@@ -5,10 +5,12 @@ followed by a new appendix. Everything a V2 generation uses is frozen in one sna
 generation is requested:
 
     approved Discovery v2   exact version id and the content the appendix may draw on
-    approved Discovery 2    BAP-7: the post-meeting Discovery version the meeting findings come from
+    approved Discovery 2    BAP-7: the authoritative post-meeting Discovery version - its meeting
+                            items, its carried-forward opportunities and its open questions
     Master Presentation     canonical master identity and the V1 version V2 follows
     transcript              id and content revision (the appendix uses the confirmed findings)
-    meeting findings        text and source of every meeting item of the approved Discovery 2
+    meeting findings        text and source of every meeting item of the approved Discovery 2;
+                            an item the owner wrote or reworded has the source "owner"
     personal notes          revision and text, kept as the owner's own source
     Borek use cases         the selected approved reference facts with their corpus identities
     meeting review          who confirmed when, the review fingerprint and its source hash
@@ -41,7 +43,11 @@ from services.presentation.master_deck.registry import DEFAULT_MASTER_ID, Master
 SNAPSHOT_KIND = "master_presentation_v2_snapshot"
 PRODUCT_VERSION = "V2"
 PRODUCT_STAGE = "post_meeting"
-FINDING_SOURCES = frozenset({"transcript", "personal_notes", "both"})
+# "owner": written or reworded by the owner while reviewing Discovery 2 - neither a transcript
+# statement nor a note, and never presented as one.
+FINDING_SOURCES = frozenset({"transcript", "personal_notes", "both", "owner"})
+# The parts of an approved Discovery 2 item the appendix may show.
+DISCOVERY2_ITEM_FIELDS = ("id", "text", "origin", "status", "source", "discovery1_ref", "edited")
 
 
 class SnapshotError(ValueError):
@@ -115,8 +121,10 @@ def build_snapshot(
     The meeting findings are the meeting items of the approved Discovery 2 (BAP-7), the
     authoritative post-meeting Discovery: what the owner approved there - including an edited
     wording or a removed item - is what V2 shows. A finding whose wording the owner changed or
-    added is the owner's statement and is presented as an owner observation, never as a client
-    quote. Findings the owner excluded in the meeting review stay excluded.
+    added is the owner's statement (source "owner"): it is presented as reviewed by the owner,
+    never as a client statement and never as a personal note. The approved Discovery 2 also
+    supplies the carried-forward opportunities the appendix may recommend and the open questions
+    it lists, in their approved wording. Findings excluded in the meeting review stay excluded.
     """
     master = master or get_master(DEFAULT_MASTER_ID)
     paper = approved_discovery.get("paper_json")
@@ -139,7 +147,7 @@ def build_snapshot(
     for category, items in discovery2_meeting_items(discovery2).items():
         findings[category] = []
         for item in items:
-            source = "personal_notes" if item["origin"] == "owner" or item.get("edited") else str(item["source"])
+            source = "owner" if item["origin"] == "owner" or item.get("edited") else str(item["source"])
             if source not in FINDING_SOURCES:
                 # A finding whose origin cannot be shown is never presented as a fact.
                 raise SnapshotError("A Discovery 2 meeting item has no verified source; generate Discovery 2 again")
@@ -205,7 +213,23 @@ def build_snapshot(
             "basis_hash": str(approved_discovery2.get("basis_hash") or ""),
             "approved_at": None if approved_discovery2.get("approved_at") is None else str(approved_discovery2["approved_at"]),
             "generation_mode": (discovery2.get("generation") or {}).get("mode"),
+            "content": discovery2_content(discovery2),
         },
+    }
+
+
+def discovery2_content(document: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """What the appendix takes from Discovery 2 besides the findings, in its approved wording.
+
+    opportunities   the Discovery 1 opportunities Discovery 2 carries forward (as approved,
+                    possibly edited); one removed in Discovery 2 is no longer offered
+    open_questions  every question Discovery 2 lists as still open
+    """
+    sections = {section["key"]: section["items"] for section in document.get("sections") or []}
+    pick = lambda item: {key: copy.deepcopy(item.get(key)) for key in DISCOVERY2_ITEM_FIELDS}  # noqa: E731
+    return {
+        "opportunities": [pick(item) for item in sections.get("opportunities", []) if item.get("origin") == "discovery1"],
+        "open_questions": [pick(item) for item in sections.get("open_questions", [])],
     }
 
 

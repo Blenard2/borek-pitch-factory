@@ -5,7 +5,7 @@ import {
   approvePostMeetingDiscovery, changedSections, editableSections, generatePostMeetingDiscovery, needsDiscovery2, parsePostMeetingDiscovery,
   savePostMeetingDiscovery, type Discovery2Document, type Discovery2Version,
 } from "./postMeetingDiscovery";
-import { downloadEmailAttachment, parsePostMeetingEmail } from "./postMeetingEmail";
+import { downloadEmailAttachment, emailFlagText, parsePostMeetingEmail } from "./postMeetingEmail";
 // Sources are compared as text below. A Windows checkout may hold them with CRLF line ends.
 const readFileSync = (path: URL | string, encoding: "utf8"): string => readFileFromDisk(path, encoding).replace(/\r\n/g, "\n");
 
@@ -120,4 +120,11 @@ test("Discovery 2 page: one place to generate, edit, approve and download, with 
   assert.ok(panel.includes('data-testid="discovery2-download"') && panel.includes('data-testid="discovery2-versions"'));
   assert.ok(panel.includes("an approved version is never changed - your edit becomes a new draft version."));
   assert.ok(panel.includes('href={`${root}/post-meeting-presentation`}>Continue to Master Presentation V2</Link>'));
+});
+
+test("the email names owner-written Discovery 2 points as left out, not as personal notes only", () => {
+  const text = emailFlagText("owner_notes_omitted");
+  assert.match(text, /personal notes/);
+  assert.match(text, /wrote or reworded in Discovery 2/);
+  assert.match(text, /not said in the meeting in this form/);
 });

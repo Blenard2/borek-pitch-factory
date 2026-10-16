@@ -12,6 +12,8 @@ What a finding's source does and does not establish:
                                noted in the meeting - never as "your requirement", "you said" or
                                "we agreed" - and the owner is asked to check who said what.
     source personal_notes      the owner's own observation. It is left out and flagged.
+    source owner               a point the owner wrote or reworded in Discovery 2 (BAP-7): the
+                               owner's wording, not a meeting statement. Left out and flagged.
     excluded findings          are not in the snapshot's findings at all.
     owners, dates, people      only what a confirmed finding itself states.
 
@@ -49,6 +51,7 @@ RENDERER_VERSION = "followup-finalized:v3"
 # Said in the meeting. Not: said by the client (see the module text).
 MEETING_SOURCES = frozenset({"transcript", "both"})
 OWNER_SOURCE = "personal_notes"
+OWNER_SOURCES = frozenset({OWNER_SOURCE, "owner"})
 HEARD_CATEGORIES = ("requirements", "challenges", "priorities")
 DISCUSSED_CATEGORIES = ("discussed_solutions", "opportunities")
 WORD_CAPS = {"short": SHORT_CONTENT_WORD_CAP, "medium": MEDIUM_CONTENT_WORD_CAP, "extensive": EXTENSIVE_CONTENT_WORD_CAP}
@@ -118,7 +121,7 @@ def content_from_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     actions = _texts(findings, ("follow_ups",), MEETING_SOURCES)
     if not (heard or decisions or discussed or actions):
         raise NoConfirmedContent("The finalized package contains no confirmed statement from the meeting.")
-    owner_only = _texts(findings, (*HEARD_CATEGORIES, *DISCUSSED_CATEGORIES, "decisions", "follow_ups"), frozenset({OWNER_SOURCE}))
+    owner_only = _texts(findings, (*HEARD_CATEGORIES, *DISCUSSED_CATEGORIES, "decisions", "follow_ups"), OWNER_SOURCES)
     flags: list[str] = []
     if (snapshot.get("meeting_extraction") or {}).get("execution_mode") != "live":
         flags.append(FLAG_FIXTURE_EXTRACTION)

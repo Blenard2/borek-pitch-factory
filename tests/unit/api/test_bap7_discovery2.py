@@ -449,7 +449,7 @@ def test_v2_is_blocked_without_an_approved_current_discovery2_and_built_from_the
         if (job.get("result_json") or {}).get("_enqueue", {}).get("master_v2_snapshot")
     )
     assert snapshot["approved_discovery2"]["version_id"] == approved["id"]
-    assert snapshot["findings"]["requirements"] == [{"text": "Quotes must leave the same working day.", "source": "personal_notes"}]
+    assert snapshot["findings"]["requirements"] == [{"text": "Quotes must leave the same working day.", "source": "owner"}]
 
     # A changed meeting basis makes Discovery 2 stale; V2 waits for a new approval.
     view = review(client, opportunity_id)
@@ -462,6 +462,112 @@ def test_v2_is_blocked_without_an_approved_current_discovery2_and_built_from_the
     stale = generate_v2(client, opportunity_id)
     assert stale.status_code == 409 and "generate Discovery 2 again" in stale.text
     assert ok(get(client, f"/opportunities/{opportunity_id}/master-presentation/v2"))["blockers"] == ["DISCOVERY2_STALE"]
+
+
+def _v2_plan(client: TestClient, opportunity_id: str, presentation_id: str) -> tuple[dict, list[str]]:
+    """The stored V2 plan of the newest V2 and every text on its slides."""
+    started = ok(generate_v2(client, opportunity_id))
+    store = get_memory_store()
+    presentation = store.presentations[UUID(presentation_id)]
+    plan = store.presentation_plans[UUID(str(presentation["presentation_plan_id"]))]["plan_json"]
+    texts = [text for slide in slide_texts(download(client, presentation_id, started["presentation_version_id"])) for text in slide]
+    return plan, texts
+
+
+def _notes(plan: dict) -> list[str]:
+    return [str(note.get("text")) for slide in plan["slides"] for note in (slide.get("borekSlide") or {}).get("notes", []) or []]
+
+
+def test_v2_shows_the_approved_discovery2_opportunities_and_questions_not_the_old_wording(client: TestClient) -> None:
+    base = confirmed(client)
+    opportunity_id, presentation_id = base["opportunity"], base["presentation"]
+    approve_current = lambda: ok(approve(client, opportunity_id, d2(client, opportunity_id)["current_version"]))  # noqa: E731
+    generated = generate_discovery2(client, opportunity_id, headers())
+    approve_current()
+    before, before_texts = _v2_plan(client, opportunity_id, presentation_id)
+    recommendations = [row for slide in before["slides"] for row in (slide.get("borekSlide") or {}).get("rows", []) if str(row.get("code", "")).startswith("A")]
+    questions = [row for slide in before["slides"] for row in (slide.get("borekSlide") or {}).get("rows", []) if row.get("title") == "Open question"]
+    assert recommendations and questions, "the reference meeting gives recommendations and open questions"
+    references = [ref for slide in before["slides"] for ref in slide["frameworkReferences"]]
+    assert any(ref.startswith("discovery2.item:") for ref in references) and not any(ref.startswith("discovery.opportunity:") for ref in references), (
+        "recommendations and open questions cite the approved Discovery 2, not Discovery 1 directly"
+    )
+
+    document = generated["document"]
+    opportunities = section(document, "opportunities")["items"]
+    top = next(item for item in opportunities if recommendations[0]["title"] in item["text"])
+    removed = next((item for item in opportunities if len(recommendations) > 1 and recommendations[1]["title"] in item["text"]), None)
+    question_ref = f"{top['discovery1_ref']}/question"
+    question = next(item for item in section(document, "open_questions")["items"] if item["discovery1_ref"] == question_ref)
+    new_opportunity = "Sales & Quoting: A quote drafting assistant for inbound requests, piloted with ten quotes before any rollout."
+    new_question = "Which three systems hold the pricing data the quote assistant needs to read?"
+    sections = [
+        {"key": "opportunities", "items": [
+            {"id": item["id"], "text": new_opportunity if item["id"] == top["id"] else item["text"]}
+            for item in opportunities if removed is None or item["id"] != removed["id"]
+        ]},
+        {"key": "open_questions", "items": [
+            {"id": item["id"], "text": new_question if item["id"] == question["id"] else item["text"]}
+            for item in section(document, "open_questions")["items"]
+        ]},
+    ]
+    ok(edit(client, opportunity_id, d2(client, opportunity_id)["current_version"], sections))
+    approve_current()
+    after, after_texts = _v2_plan(client, opportunity_id, presentation_id)
+    rows = [row for slide in after["slides"] for row in (slide.get("borekSlide") or {}).get("rows", [])]
+
+    assert any(row["text"] == new_opportunity and row["title"] == "Updated opportunity" for row in rows), "the approved edit is what V2 recommends"
+    assert recommendations[0]["text"] not in after_texts, "the old wording of the edited opportunity is not presented as current"
+    if removed is not None:
+        assert recommendations[1]["title"] not in after_texts, "an opportunity removed in Discovery 2 is not recommended"
+    assert new_question in after_texts and question["text"] not in after_texts, "the open question appears in its approved wording only"
+    assert before_texts != after_texts
+
+
+def test_v2_does_not_call_findings_quotes_and_keeps_owner_points_apart(client: TestClient) -> None:
+    base = confirmed(client)
+    opportunity_id, presentation_id = base["opportunity"], base["presentation"]
+    generated = generate_discovery2(client, opportunity_id, headers())
+    requirement = next(item for item in section(generated["document"], "requirements")["items"] if item["origin"] == "meeting")
+    added = "The sales lead wants to see a first draft within a week."
+    ok(edit(client, opportunity_id, generated["current_version"], [
+        {"key": "requirements", "items": [{"id": requirement["id"], "text": requirement["text"]}, {"text": added}]},
+    ]))
+    ok(approve(client, opportunity_id, d2(client, opportunity_id)["current_version"]))
+    plan, texts = _v2_plan(client, opportunity_id, presentation_id)
+    everything = " ".join(texts + _notes(plan) + [str((slide.get("borekSlide") or {}).get("lead") or "") for slide in plan["slides"]])
+
+    # No slide claims that a finding is a quotation.
+    for claim in ("word for word", "in their own words", "verbatim", "quoted from the transcript"):
+        assert claim not in everything.lower(), claim
+    assert "may summarise what was said rather than quote it" in everything
+
+    # The owner's addition is the owner's: never a client statement, never "from our notes".
+    slides = [slide["borekSlide"] for slide in plan["slides"] if slide["borekSlide"].get("rows")]
+    holder = next(slide for slide in slides if any(row["text"] == added for row in slide["rows"]))
+    row = next(row for row in holder["rows"] if row["text"] == added)
+    assert row["title"] == "Reviewed by us" and "Not client statements" in holder["kicker"]
+    assert not any(slide["kicker"].startswith("From the meeting") and any(r["text"] == added for r in slide["rows"]) for slide in slides)
+    owner_notes = " ".join(note["text"] for note in holder["notes"])
+    # This page also shows an observation from the notes, so the note names both kinds apart.
+    assert "'Reviewed by us' was written or reworded by our team in Discovery 2" in owner_notes
+    assert "Neither is a quote from the transcript" in owner_notes
+    assert next(r for r in holder["rows"] if r["text"] == OBSERVATION)["title"] == "Our observation", "a note stays a note"
+
+    store = get_memory_store()
+    snapshot = next(
+        (job.get("result_json") or {}).get("_enqueue", {}).get("master_v2_snapshot")
+        for job in reversed(store.list_generation_jobs_for_opportunity(UUID(opportunity_id)))
+        if (job.get("result_json") or {}).get("_enqueue", {}).get("master_v2_snapshot")
+    )
+    assert {"text": added, "source": "owner"} in snapshot["findings"]["requirements"]
+    assert not any(item["text"] == added and item["source"] in {"transcript", "both", "personal_notes"} for items in snapshot["findings"].values() for item in items)
+
+    # The follow-up email leaves the owner's point out and flags it for review.
+    from services.followup.finalized import content_from_snapshot
+
+    content = content_from_snapshot(snapshot)
+    assert added not in json.dumps(content) and "owner_notes_omitted" in content["review_flags"] and content["owner_only_count"] >= 1
 
 
 # ------------------------------------------------------------------ follow-up email

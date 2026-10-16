@@ -60,7 +60,7 @@ const FLAG_TEXT: Record<string, string> = {
   speaker_unverified: "The package records that these points were made in the meeting, not who made them. Check that nothing a Borek colleague proposed reads as a client statement or as agreed.",
   fixture_extraction: "The meeting findings came from the built-in demo extraction, not from a live AI analysis. Check every statement against the transcript.",
   meeting_date_unconfirmed: "No approved source states the meeting date, so the email names none. Add it if you want it mentioned.",
-  owner_notes_omitted: "Findings that came only from your personal notes are left out: they were not said in the meeting.",
+  owner_notes_omitted: "Findings from your personal notes, and points you wrote or reworded in Discovery 2, are left out: they were not said in the meeting in this form.",
   action_owner_unconfirmed: "At least one next step does not name who is responsible. Add the owner or remove the step.",
   action_date_unconfirmed: "At least one next step has no deadline and is marked “date to be confirmed”.",
   no_next_steps_confirmed: "No next step was confirmed for this package, so the email lists none.",

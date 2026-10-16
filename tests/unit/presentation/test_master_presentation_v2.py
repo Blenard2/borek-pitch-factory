@@ -365,9 +365,9 @@ def test_recommendations_need_clear_support_in_what_the_client_said() -> None:
     assert recommendation["content"]["notes"][1]["text"] == appendix.BENCHMARK_NOTE
 
     # One shared word is a coincidence: every recommended opportunity shares at least two subject words.
-    matches = appendix_v2._matching_opportunities(analysis, appendix_v2.confirmed_findings(snapshot))
+    matches = appendix_v2._matching_opportunities(analysis, appendix_v2.confirmed_findings(snapshot), snapshot["approved_discovery2"])
     recommended = appendix_v2._recommended(matches)
-    assert [match["item"]["title"] for match in recommended] == [row["title"] for row in rows]
+    assert [match["title"] for match in recommended] == [row["title"] for row in rows]
     assert all(len(match["shared_terms"]) >= 2 for match in recommended)
     assert not {"every", "system", "team", "data"} & {term for match in matches for term in match["shared_terms"]}, "generic words carry no support"
     assert appendix_v2._keywords("Quotes and quoting processes for every team") == {"quote", "quot"} or "quote" in appendix_v2._keywords("Quotes for every team")

@@ -53,7 +53,6 @@ SECTION_TITLES = {
 }
 SECTION_KEYS = tuple(SECTION_TITLES)
 MEETING_SOURCES = frozenset({"transcript", "personal_notes", "both"})
-MAX_CARRIED_QUESTIONS = 5
 # Long enough for any statement made in a meeting; content is never cut, an over-long edit is refused.
 MAX_ITEM_CHARACTERS = 4000
 
@@ -170,15 +169,27 @@ def carried_forward_items(paper: dict[str, Any]) -> dict[str, list[dict[str, Any
     target = (((analysis.get("framing") or {}).get("chapters") or {}).get("target") or {}).get("key_message")
     if target:
         carry("context", "analysis.framing.chapters.target.key_message", target)
-    areas = {area["name"]: area for area in analysis.get("areas") or []}
+    # Every opportunity of Discovery 1, the brief's priorities first: Discovery 2 is the complete
+    # post-meeting basis, and Master Presentation V2 recommends only what Discovery 2 carries.
+    areas = analysis.get("areas") or []
+    by_name = {area["name"]: area for area in areas}
+    ordered: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for priority in brief.get("priority_opportunities") or []:
-        area = areas.get(priority.get("area"))
-        lead = (area or {}).get("opportunities", [{}])[0] if area else {}
-        ref = f"area:{(area or {}).get('id', '')}/opportunity:{lead.get('id', '')}"
-        carry("opportunities", ref, f"{priority['area']}: {priority['title']} — {priority['result']}")
-        for question in lead.get("discovery_questions") or []:
-            if len(items["open_questions"]) < MAX_CARRIED_QUESTIONS:
-                carry("open_questions", f"{ref}/question", question)
+        area = by_name.get(priority.get("area"))
+        if area and area.get("opportunities"):
+            ordered.append((area, area["opportunities"][0]))
+    for area in areas:
+        for opportunity in area.get("opportunities") or []:
+            if (area, opportunity) not in ordered:
+                ordered.append((area, opportunity))
+    for area, opportunity in ordered:
+        ref = f"area:{area['id']}/opportunity:{opportunity['id']}"
+        carry("opportunities", ref, f"{area['name']}: {opportunity['title']} — {opportunity['result']}")
+        # One open question per opportunity: the first full question Discovery 1 asks about it.
+        questions = [str(question) for question in opportunity.get("discovery_questions") or []]
+        question = next((text for text in questions if text.strip().endswith("?") and len(text.split()) >= 5), questions[0] if questions else None)
+        if question:
+            carry("open_questions", f"{ref}/question", question)
     return items
 
 

@@ -3,20 +3,23 @@
 The V2 appendix prepares the SECOND client conversation. It is built from one frozen snapshot
 (see ``master_deck/v2.py``) and from nothing else:
 
-* the meeting findings the owner confirmed - never an excluded one,
+* the meeting findings of the approved Discovery 2 - never an excluded one,
 * the selected, approved Borek use cases,
-* the approved Discovery analysis as background.
+* the approved Discovery 2's carried-forward opportunities and open questions (BAP-7), in their
+  approved wording; the approved Discovery analysis (Discovery 1) as background for the rest.
 
 Every statement keeps its origin visible. Each slide carries exactly one kind of content, named
 in its kicker and explained in its notes:
 
-    client     said in the first meeting (found in the transcript) and confirmed by the owner
-    owner      an observation from the owner's personal notes - never shown as a client statement
+    client     said in the first meeting (supported by the transcript) and confirmed by the owner;
+               it may summarise what was said, so it is never called a quote
+    owner      an observation from the owner's personal notes, or a point the owner wrote or
+               reworded when reviewing Discovery 2 - never shown as a client statement
     reference  an approved Borek reference use case
     borek      a Borek recommendation, taken from the approved Discovery analysis
-    open       a question of the approved Discovery analysis that is still open
+    open       a question the approved Discovery 2 lists as still open
 
-Nothing is invented: every finding is rendered verbatim, figures must occur in the snapshot,
+Nothing is invented: every finding is rendered in its approved wording and never shortened, figures must occur in the snapshot,
 and industry benchmarks from the Discovery analysis stay labelled as benchmarks. The planner is
 deterministic and adds a slide only where the snapshot has content for it.
 """
@@ -67,6 +70,9 @@ CATEGORY_CODE = {
 # Findings that occur in the transcript are client statements; "both" was also noted by the owner.
 CLIENT_SOURCES = frozenset({"transcript", "both"})
 OWNER_SOURCE = "personal_notes"
+# Written or reworded by the owner while reviewing Discovery 2 (BAP-7): not a note, not a quote.
+REVIEWED_SOURCE = "owner"
+OWNER_SOURCES = frozenset({OWNER_SOURCE, REVIEWED_SOURCE})
 MAX_OPEN_QUESTIONS = 3
 # A recommendation needs this many content words in common with what the client said.
 MIN_SHARED_TERMS = 2
@@ -121,7 +127,7 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
     client_notes = [
         {
             "title": "Said in the meeting",
-            "text": "Each point is taken word for word from the transcript of our first conversation and was confirmed for this presentation.",
+            "text": "Each point is supported by the transcript of our first conversation and was confirmed for this presentation. It may summarise what was said rather than quote it.",
         },
         {
             "title": "Please correct us",
@@ -143,7 +149,7 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
             heard,
             kicker="From the meeting · Client statements",
             title="What we heard in our first meeting",
-            lead=f"The points {named} raised in our first meeting, in their own words.",
+            lead=f"The points {named} raised in our first meeting, as we understood them.",
             notes=discussed_notes if discussed else client_notes,
             purpose="Client statements confirmed from the first meeting",
         )
@@ -180,22 +186,25 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
     #   the owner's own observations, the approved references selected for this client, and
     #   Discovery opportunities with clear support in what the client said (the recommendation).
     # Fewer than MIN_SHARED_TERMS shared subject words means no recommendation rather than a weak one.
-    observations = _finding_rows(findings, CATEGORIES, frozenset({OWNER_SOURCE}), omitted, prefix="N", title="Our observation")
+    noted = _finding_rows(findings, CATEGORIES, frozenset({OWNER_SOURCE}), omitted, prefix="N", title="Our observation")
+    reviewed = _finding_rows(findings, CATEGORIES, frozenset({REVIEWED_SOURCE}), omitted, prefix="R", title="Reviewed by us")
+    observations = noted + reviewed
     references = _use_case_rows(snapshot, omitted)
-    matches = _matching_opportunities(analysis, findings)
+    matches = _matching_opportunities(analysis, findings, snapshot.get("approved_discovery2"))
     recommended = _recommended(matches)
     recommendation_rows = [
-        {
-            "code": f"A{position}",
-            "title": match["item"]["title"],
-            "text": match["item"]["result"],
-            "reference": f"discovery.opportunity:{match['area']['id']}/{match['item']['id']}",
-        }
+        {"code": f"A{position}", "title": match["title"], "text": match["text"], "reference": match["reference"]}
         for position, match in enumerate(recommended, start=1)
     ]
     recommendation_rows = [row for row in recommendation_rows if _row_height(row) <= _MATRIX_BOTTOM - _MATRIX_TOP]
     evidence = sorted({reference for match in recommended for reference in match["evidence"]})
-    observation_note = {"title": "Our observations", "text": "From our own notes after the meeting, not from the transcript. We would like to verify each of them with you."}
+    observation_note = (
+        {"title": "Our observations", "text": "From our own notes after the meeting, not from the transcript. We would like to verify each of them with you."}
+        if not reviewed
+        else {"title": "Reviewed by us", "text": "Written or reworded by our team when we reviewed Discovery 2: our reading of the meeting, not a quote from the transcript and not from our notes."}
+        if not noted
+        else {"title": "Our observations", "text": "'Our observation' is from our own notes; 'Reviewed by us' was written or reworded by our team in Discovery 2. Neither is a quote from the transcript."}
+    )
     reference_note = {"title": "Borek references", "text": "From Borek's approved reference library: examples of comparable work, not statements about your company."}
     own = observations + references
     before = len(slides)
@@ -232,7 +241,7 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
                 title="What we noted for ourselves",
                 lead=f"Observations by the Borek team after the meeting. They are our reading, not statements by {named}.",
                 notes=[observation_note, {"title": "Not from the transcript", "text": "None of these points was said in this form during the meeting."}],
-                purpose="Owner observations from the personal notes",
+                purpose="Owner observations and points reviewed by the owner",
             )
             _matrix_slides(
                 slides,
@@ -249,7 +258,9 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
             recommendation_rows,
             kicker="Borek recommendation",
             title="Where we would start, given what we heard",
-            lead="Opportunities from the approved Discovery analysis that relate to points you raised in the meeting.",
+            lead="Opportunities carried forward in the approved Discovery 2 that relate to points you raised in the meeting."
+            if snapshot.get("approved_discovery2")
+            else "Opportunities from the approved Discovery analysis that relate to points you raised in the meeting.",
             notes=[
                 {"title": "Why these", "text": _evidence_sentence(evidence) if evidence else ""},
                 {"title": "Benchmarks, not commitments", "text": BENCHMARK_NOTE},
@@ -267,24 +278,16 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
     # never a bare topic label.
     closing_rows = _finding_rows(findings, ("decisions", "follow_ups"), CLIENT_SOURCES, omitted)
     questions: list[dict[str, str]] = []
-    for match in matches:
-        question = next(
-            (q for q in match["item"]["discovery_questions"] if str(q).strip().endswith("?") and len(str(q).split()) >= 5),
-            None,
-        )
-        row = {
-            "code": f"Q{len(questions) + 1}",
-            "title": "Open question",
-            "text": str(question or ""),
-            "reference": f"discovery.opportunity:{match['area']['id']}/{match['item']['id']}",
-        }
-        if question and row["text"] not in [entry["text"] for entry in questions] and _row_height(row) <= _MATRIX_BOTTOM - _MATRIX_TOP:
+    for text, reference in _open_question_candidates(snapshot, matches):
+        row = {"code": f"Q{len(questions) + 1}", "title": "Open question", "text": text, "reference": reference}
+        if _is_question(text) and text not in [entry["text"] for entry in questions] and _row_height(row) <= _MATRIX_BOTTOM - _MATRIX_TOP:
             questions.append(row)
         if len(questions) == MAX_OPEN_QUESTIONS:
             break
-    closing_notes = [{"title": "Decisions and follow-ups", "text": "Taken word for word from the transcript of our first conversation."}]
+    questions_source = "the approved Discovery 2" if snapshot.get("approved_discovery2") else "the Discovery analysis"
+    closing_notes = [{"title": "Decisions and follow-ups", "text": "Supported by the transcript of our first conversation and confirmed for this presentation."}]
     closing_notes.append(
-        {"title": "Open questions", "text": "Questions from the approved Discovery analysis for the topics you raised. We would like to clarify them with you."}
+        {"title": "Open questions", "text": f"Questions that are still open in {questions_source}. We would like to clarify them with you."}
         if questions
         else {"title": "Please correct us", "text": "If a decision or follow-up is missing or wrong, tell us. We will update this page."}
     )
@@ -294,9 +297,9 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
         kicker="Decisions · Next steps · Open questions" if questions else "From the meeting · Decisions and next steps",
         title="What was agreed and what is still open" if questions else "What was agreed",
         lead=(
-            "Decisions and follow-ups come from the meeting. Open questions come from the Discovery analysis."
+            f"Decisions and follow-ups come from the meeting. Open questions come from {questions_source}."
             if closing_rows and questions
-            else "Open questions from the Discovery analysis for the topics you raised."
+            else f"Open questions from {questions_source}."
             if questions
             else "Decisions and follow-ups as they were stated in our first meeting."
         ),
@@ -368,7 +371,7 @@ def _finding_rows(
     prefix: str | None = None,
     title: str | None = None,
 ) -> list[dict[str, str]]:
-    """Matrix rows for the confirmed findings of the given categories and sources, verbatim.
+    """Matrix rows for the confirmed findings of the given categories and sources, in their approved wording.
 
     A finding that cannot fit one slide on its own is left out and reported - it is never cut,
     because a shortened client statement is no longer the statement that was confirmed.
@@ -468,8 +471,67 @@ def _keywords(text: str) -> set[str]:
     return stems - _STOPWORDS
 
 
-def _matching_opportunities(analysis: dict[str, Any], findings: list[dict[str, str]]) -> list[dict[str, Any]]:
-    """Discovery opportunities clearly supported by what the client said, best supported first.
+def _opportunity_candidates(analysis: dict[str, Any], discovery2: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """The opportunities V2 may recommend, as {title, text, words, reference, questions}.
+
+    With an approved Discovery 2 (BAP-7) only the opportunities it carries forward, in its
+    approved wording: an opportunity the owner removed is not offered, and one the owner
+    reworded is matched and shown with the new wording only - the old wording never reappears.
+    Snapshots frozen before Discovery 2 use every opportunity of the Discovery analysis.
+    """
+    content = (discovery2 or {}).get("content")
+    if not isinstance(content, dict):
+        return [
+            {
+                "title": item["title"],
+                "text": item["result"],
+                "words": _keywords(" ".join([item["title"], item["result"], item["opportunity_signal"]])),
+                "reference": f"discovery.opportunity:{area['id']}/{item['id']}",
+                "questions": list(item.get("discovery_questions") or []),
+            }
+            for area, item in _opportunity_pool(analysis)
+        ]
+    carried = {str(entry.get("discovery1_ref")): entry for entry in content.get("opportunities") or []}
+    candidates = []
+    # Discovery 1's order, so an unedited Discovery 2 recommends exactly what Discovery 1 would.
+    for area, original in _opportunity_pool(analysis):
+        entry = carried.get(f"area:{area['id']}/opportunity:{original['id']}")
+        if entry is None:
+            continue  # removed in Discovery 2: not offered
+        if entry.get("edited"):
+            title, text, words = "Updated opportunity", str(entry["text"]), _keywords(str(entry["text"]))
+        else:
+            title, text = original["title"], original["result"]
+            words = _keywords(" ".join([original["title"], original["result"], original["opportunity_signal"]]))
+        candidates.append({
+            "title": title, "text": text, "words": words, "reference": f"discovery2.item:{entry['id']}", "questions": [],
+            "discovery1_ref": str(entry.get("discovery1_ref") or ""),
+        })
+    return candidates
+
+
+def _open_question_candidates(snapshot: dict[str, Any], matches: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """(question, reference) in the order they are offered."""
+    content = (snapshot.get("approved_discovery2") or {}).get("content")
+    if isinstance(content, dict):
+        # The questions Discovery 2 keeps open for the opportunities the meeting relates to, then
+        # the questions raised in the meeting or added by the owner - all in the approved wording.
+        items = list(content.get("open_questions") or [])
+        chosen: list[dict[str, Any]] = []
+        for match in matches:
+            prefix = f"{match.get('discovery1_ref')}/" if match.get("discovery1_ref") else None
+            chosen.extend(item for item in items if prefix and str(item.get("discovery1_ref") or "").startswith(prefix) and item not in chosen)
+        chosen.extend(item for item in items if item.get("origin") != "discovery1" and item not in chosen)
+        return [(str(item["text"]).strip(), f"discovery2.item:{item['id']}") for item in chosen]
+    return [(str(question).strip(), match["reference"]) for match in matches for question in match["questions"]]
+
+
+def _is_question(text: str) -> bool:
+    return text.endswith("?") and len(text.split()) >= 5
+
+
+def _matching_opportunities(analysis: dict[str, Any], findings: list[dict[str, str]], discovery2: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Opportunities clearly supported by what the client said, best supported first.
 
     Only client statements count: an owner observation never steers a recommendation. Every
     returned opportunity shares at least one subject word with the client's statements and is
@@ -483,13 +545,13 @@ def _matching_opportunities(analysis: dict[str, Any], findings: list[dict[str, s
         if item["source"] in CLIENT_SOURCES
     ]
     scored = []
-    for position, (area, item) in enumerate(_opportunity_pool(analysis)):
-        words = _keywords(" ".join([item["title"], item["result"], item["opportunity_signal"]]))
+    for position, candidate in enumerate(_opportunity_candidates(analysis, discovery2)):
+        words = candidate["words"]
         shared = set().union(*(terms & words for _reference, terms in heard), set())
         if not shared:
             continue
         evidence = [reference for reference, terms in heard if terms & words]
-        scored.append((-len(shared), position, {"area": area, "item": item, "evidence": evidence, "shared_terms": sorted(shared)}))
+        scored.append((-len(shared), position, {**candidate, "evidence": evidence, "shared_terms": sorted(shared)}))
     return [match for _score, _position, match in sorted(scored, key=lambda entry: entry[:2])]
 
 
@@ -531,6 +593,9 @@ def resolve_v2_reference(snapshot: dict[str, Any], reference: str) -> Any:
         return next((item for item in snapshot["use_cases"] if item["fact_id"] == ref), None)
     if kind == "discovery.closing":
         return analysis["closing"]
+    if kind == "discovery2.item":
+        content = (snapshot.get("approved_discovery2") or {}).get("content") or {}
+        return next((item for items in content.values() for item in items if item.get("id") == ref), None)
     if kind == "discovery.opportunity":
         area_id, _, opportunity_id = ref.partition("/")
         area = next((item for item in analysis["areas"] if item["id"] == area_id), None)
@@ -560,7 +625,7 @@ def validate_v2_appendix(
     problems: list[str] = []
     findings = confirmed_findings(snapshot)
     client_texts = {item["text"] for item in findings if item["source"] in CLIENT_SOURCES}
-    owner_texts = {item["text"] for item in findings if item["source"] == OWNER_SOURCE}
+    owner_texts = {item["text"] for item in findings if item["source"] in OWNER_SOURCES}
     reference_texts = {str(item["statement"]) for item in snapshot["use_cases"]}
     excluded = {str(text) for text in snapshot.get("excluded_findings", [])} - {item["text"] for item in findings}
     source_numbers = set(
@@ -571,6 +636,7 @@ def validate_v2_appendix(
                     "use_cases": snapshot["use_cases"],
                     "analysis": snapshot["approved_discovery"]["analysis"],
                     "brief": snapshot["approved_discovery"]["presentation_brief"],
+                    "discovery2": (snapshot.get("approved_discovery2") or {}).get("content"),
                     "client": snapshot.get("client_name"),
                 },
                 ensure_ascii=False,
