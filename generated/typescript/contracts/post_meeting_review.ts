@@ -29,6 +29,7 @@ export interface PostMeetingReview {
   approved_discovery: ApprovedDiscovery;
   master_presentation: MasterPresentation;
   confirmation: Confirmation;
+  discovery2: Discovery2;
   readiness: Readiness;
   v2_sources: null | V2Sources;
 }
@@ -182,6 +183,35 @@ export interface ConfirmedSources {
   personal_notes_updated_at: string | null;
   selected_use_case_ids: string[];
 }
+/**
+ * BAP-7: the post-meeting Discovery document (Discovery 2). V2 is generated only from its latest version, and only when that version is approved and was generated from the current meeting basis.
+ */
+export interface Discovery2 {
+  status: "not_generated" | "generating" | "failed" | "draft" | "approved" | "stale";
+  working_status: "not_generated" | "generating" | "ready" | "failed";
+  error: null | {
+    code: string;
+    message: string;
+  };
+  /**
+   * The current meeting basis; null until the meeting findings are confirmed.
+   */
+  basis_hash: string | null;
+  can_generate: boolean;
+  latest_version: null | Discovery2Version;
+  approved_version: null | Discovery2Version;
+  stale_reasons: ("BASIS_CHANGED" | "NEWER_DRAFT")[];
+}
+export interface Discovery2Version {
+  version_id: string;
+  version_number: number;
+  status: "draft" | "approved";
+  content_hash: string;
+  basis_hash: string;
+  created_at: string;
+  approved_at: string | null;
+  generation_mode: "fixture" | "live";
+}
 export interface Readiness {
   ready_for_v2: boolean;
   blockers: (
@@ -195,6 +225,9 @@ export interface Readiness {
     | "MEETING_REVIEW_STALE"
     | "MEETING_FINDINGS_EMPTY"
     | "MEETING_FINDINGS_NONE_CONFIRMED"
+    | "DISCOVERY2_MISSING"
+    | "DISCOVERY2_NOT_APPROVED"
+    | "DISCOVERY2_STALE"
   )[];
 }
 /**
@@ -213,5 +246,7 @@ export interface V2Sources {
   personal_notes_updated_at: string | null;
   selected_use_case_ids: string[];
   meeting_review_confirmed_at: string;
+  discovery2_version_id: string;
+  discovery2_content_hash: string;
   source_hash: string;
 }

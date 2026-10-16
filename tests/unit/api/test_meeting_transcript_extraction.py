@@ -13,6 +13,8 @@ import jsonschema
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.unit.api.discovery2_helpers import ensure_discovery2_approved
+
 from app.auth import create_test_access_token
 from app.config import settings
 from app.main import create_app
@@ -146,7 +148,9 @@ def test_the_original_transcript_can_be_analysed_confirmed_and_is_ready_for_v2(c
     assert all(view["extraction"]["categories"][category] for category in CATEGORIES)
     ok(confirm(client, opportunity_id, view))
     after = review(client, opportunity_id)
-    assert after["confirmation"]["confirmed_count"] == 26 and after["readiness"] == {"ready_for_v2": True, "blockers": []}
+    assert after["confirmation"]["confirmed_count"] == 26 and after["readiness"] == {"ready_for_v2": False, "blockers": ["DISCOVERY2_MISSING"]}
+    # BAP-7: Discovery 2 from the confirmed findings is the step that makes V2 possible.
+    assert ensure_discovery2_approved(client, opportunity_id, headers())["readiness"] == {"ready_for_v2": True, "blockers": []}
 
 
 # ------------------------------------------------------------------ line formats
@@ -264,7 +268,7 @@ def test_excluding_every_finding_is_not_a_confirmation(client: TestClient) -> No
     # One remaining finding is enough.
     ok(confirm(client, opportunity_id, view, {"decisions": ["Pilot."]}))
     after = review(client, opportunity_id)
-    assert after["confirmation"]["confirmed_count"] == 1 and after["readiness"]["ready_for_v2"] is True
+    assert after["confirmation"]["confirmed_count"] == 1 and after["readiness"]["blockers"] == ["DISCOVERY2_MISSING"]
 
 
 def test_a_stored_confirmation_without_a_confirmed_finding_blocks_v2() -> None:

@@ -176,7 +176,9 @@ test("the Master journey names its steps after the presentation; earlier pitches
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
   const shell = read("../components/PostMeetingShell.tsx");
   assert.match(shell, /workflowStepLabel\(step.id, step.label, isMasterJourney\(workflow\?.documents\)\)/);
-  assert.match(shell, /master\s+\? <><Link href=\{`\$\{root\}\/post-meeting-presentation`\}>/, "step 2 of the Master journey is the presentation, not the earlier document flow");
+  // BAP-7: Discovery 2 is step 2; the presentation follows as step 3, never the earlier document flow.
+  assert.match(shell, /master\s+\? <><Link href=\{`\$\{root\}\/post-meeting-discovery`\}/, "step 2 of the Master journey is Discovery 2");
+  assert.match(shell, /<Link href=\{`\$\{root\}\/post-meeting-presentation`\}><span>3<\/span><div><small>Master Presentation V2<\/small>/, "step 3 of the Master journey is the presentation, not the earlier document flow");
   const stepper = read("../components/DiscoveryWorkflowStepper.tsx");
   assert.match(stepper, /workflowStepLabel\(step.id, copy.workflow.statuses\[step.id\], workflow.master_journey, copy.workflow.masterStatuses\)/);
   const language = read("../components/LanguageProvider.tsx");

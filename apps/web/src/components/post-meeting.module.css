@@ -184,6 +184,21 @@
 .nextStep p { margin: 4px 0 0; font-size: var(--pitch-text-label); }
 .nextStep :global(.btn-primary) { background: var(--pitch-teal); border-color: var(--pitch-teal); text-decoration: none; }
 .phaseNavThree { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 1080px; }
+/* BAP-7: Meeting input, Discovery 2, Master Presentation V2 and the follow-up email. */
+.phaseNavFour { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 1280px; }
+@media (max-width: 960px) { .phaseNavFour { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.discovery2Header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+.discovery2Header > div { flex: 1 1 420px; min-width: 0; }
+.discovery2Status { display: grid; gap: 4px; margin: 0; text-align: right; }
+.discovery2Summary { display: grid; gap: 8px; margin-bottom: 16px; padding: 12px 16px; background: var(--pitch-gray-50); border-radius: var(--pitch-control-radius); }
+.discovery2Section { margin-top: 20px; }
+.discovery2Section ol { display: grid; gap: 12px; margin: 8px 0; padding: 0; list-style: none; }
+.discovery2Section li { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--pitch-gray-200); border-radius: var(--pitch-control-radius); }
+.discovery2Section textarea { width: 100%; font: inherit; resize: vertical; }
+.discovery2Previous { background: var(--pitch-gray-50); color: var(--pitch-gray-700, #374151); }
+.discovery2Evidence { margin: 0; padding-left: 10px; border-left: 2px solid var(--pitch-gray-200); color: var(--pitch-gray-500); overflow-wrap: anywhere; }
+.discovery2Sources ul, .discovery2Versions { display: grid; gap: 6px; padding: 0; list-style: none; font-size: var(--pitch-text-label); }
+.discovery2Versions li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 /* Follow-up email (Figma 416:877): label rows, length selector, saved state, review and package. */
 .emailHeader { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .emailHeader .eyebrow { color: var(--pitch-teal); }

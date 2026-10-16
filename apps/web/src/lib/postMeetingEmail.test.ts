@@ -233,7 +233,9 @@ test("the package sidebar shows the pinned V2 version and a real attachment sele
   }
   assert.match(sidebar, /styles.card.*styles.packageSidebar/);
   assert.match(sidebar, /Open in Deck Center/);
-  assert.match(sidebar, /draft\?\.attachments.map\(\(item\) => <button key=\{item.format\}/, "PPTX and PDF downloads of the pinned version");
+  assert.match(sidebar, /draft\?\.attachments.filter\(\(item\) => item.artifact === "master_presentation_v2"\).map\(\(item\) => <button key=\{item.key\}/, "PPTX and PDF downloads of the pinned version");
+  // BAP-7: every generated document is listed with what it is, and can be downloaded and selected by its key.
+  assert.ok(sidebar.includes("data-testid={`email-attach-${item.key}`}") && sidebar.includes("{ATTACHMENT_ARTIFACT_LABEL[item.artifact]}"));
   assert.match(sidebar, /never a newer one/);
   assert.match(sidebar, /type="checkbox" checked=\{item.selected\}/);
   assert.match(sidebar, /Not available — this file cannot be attached/);
@@ -258,7 +260,8 @@ test("layout follows the Figma frame and stacks on tablet and mobile", () => {
   assert.match(css, /@media \(max-width: 640px\)[^\n]*\.emailStaticsGrid, \.emailLengths \{ grid-template-columns: minmax\(0, 1fr\); \}/);
   assert.match(css, /@media \(max-width: 640px\)[^\n]*\.emailFields > div, \.root \.emailSubject \{ grid-template-columns: minmax\(0, 1fr\)/);
   const shell = readFileSync(new URL("../components/PostMeetingShell.tsx", import.meta.url), "utf8");
-  assert.match(shell, /<span>3<\/span><div><small>Follow-up email<\/small><strong>Review, confirm &amp; export<\/strong>/);
+  assert.match(shell, /<span>4<\/span><div><small>Follow-up email<\/small><strong>Review, confirm &amp; export<\/strong>/);
+  assert.match(shell, /<span>2<\/span><div><small>Discovery 2<\/small><strong>Review, edit &amp; approve<\/strong>/, "BAP-7: Discovery 2 is the step before V2");
 });
 
 test("the email route has its own page title and is reachable from the finalized owner checkpoint", () => {
@@ -521,7 +524,7 @@ test("BAP-8: the follow-up email step shows no workflow checkpoints, and keeps e
   // The email step keeps generation, editing, attachments, review/approval and export.
   const panel = read("../components/FollowUpDraftPanel.tsx");
   for (const call of ["generatePostMeetingEmail(token, opportunityId, overwrite)", "savePostMeetingEmail(token, opportunityId, draft,",
-    "attachments: { [attachment.format]: !attachment.selected }", "confirmPostMeetingEmail(token, opportunityId, draft,",
+    "attachments: { [attachment.key]: !attachment.selected }", "confirmPostMeetingEmail(token, opportunityId, draft,",
     "exportPostMeetingEmail(token, opportunityId, draft)", "downloadEmailAttachment(token, attachment)",
     '<PostMeetingPhaseNav opportunityId={opportunityId} active="review" />']) {
     assert.ok(panel.includes(call), call);
