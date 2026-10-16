@@ -33,6 +33,11 @@ export function postMeetingPath(opportunityId: string, suffix: string) {
   return `/opportunities/${encodeURIComponent(resolveBackendOpportunityId(opportunityId))}/${suffix}`;
 }
 
+/** The checkpoint list is hidden on the meeting input and the follow-up email step (BAP-8); other post-meeting pages keep it. */
+export function showsWorkflowCheckpoints(pathname: string) {
+  return !/\/(meeting|follow-up)\/?$/.test(pathname);
+}
+
 export async function loadPostMeetingWorkflow(token: string, opportunityId: string, signal?: AbortSignal) {
   const value = await apiFetch<PostMeetingWorkflow>(postMeetingPath(opportunityId, "workflow-status"), token, { signal, cache: "no-store" });
   if (value.opportunity_id !== resolveBackendOpportunityId(opportunityId) || !Array.isArray(value.steps) || !value.documents) {

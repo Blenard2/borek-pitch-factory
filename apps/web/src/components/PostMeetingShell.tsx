@@ -7,7 +7,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { SiteHeader } from "@/components/SiteHeader";
 import { usePreviewMeeting } from "@/components/usePreviewMeeting";
 import { WORKFLOW_STATUS_CATALOG, isMasterJourney, workflowStepLabel } from "@/lib/discoveryFirst";
-import { loadPostMeetingWorkflow, postMeetingError, workflowCompleted, type PostMeetingWorkflow } from "@/lib/postMeeting";
+import { loadPostMeetingWorkflow, postMeetingError, showsWorkflowCheckpoints, workflowCompleted, type PostMeetingWorkflow } from "@/lib/postMeeting";
 import styles from "./post-meeting.module.css";
 
 const PostMeetingContext = createContext<{
@@ -82,7 +82,7 @@ function PostMeetingSession({ opportunityId, companyName, contactPerson, childre
           {previewMode ? <p>Complete the preview PPT #1 and confirm the preview meeting to inspect the post-meeting screens.</p> : !live ? <p>A signed-in API session is required.</p> : null}
           <Link className="btn btn-primary" href={`${root}/presentations`}>Back to pre-meeting presentation</Link>
         </section> : null}
-        {live && accessGranted && !pathname.endsWith("/meeting") ? <details className={styles.workflow}>
+        {live && accessGranted && showsWorkflowCheckpoints(pathname) ? <details className={styles.workflow}>
           <summary>Workflow checkpoints {workflow ? `(${workflow.steps.filter((step) => step.state === "completed").length}/8 completed)` : "(awaiting server status)"}</summary>
           <ol>{WORKFLOW_STATUS_CATALOG.map((step) => {
             const key = step.id.replace("ppt_1", "ppt1").replace("ppt_2", "ppt2");
