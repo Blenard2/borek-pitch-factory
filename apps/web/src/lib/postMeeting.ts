@@ -118,9 +118,13 @@ export function workflowCompleted(workflow: PostMeetingWorkflow | null, key: str
   return workflow?.steps.some((step) => step.key === key && step.state === "completed") ?? false;
 }
 
+/** Same limit as the API (MAX_TRANSCRIPT_BYTES); a transcript needs no time stamps, names or labels. */
+export const MAX_TRANSCRIPT_BYTES = 10 * 1024 * 1024;
+
 export function validateTranscript(file: { name: string; size: number }): string | null {
   if (!/\.(txt|vtt|srt|docx)$/i.test(file.name)) return "Choose a TXT, VTT, SRT, or DOCX transcript.";
   if (!file.size) return "The transcript is empty. Choose a file containing meeting text.";
+  if (file.size > MAX_TRANSCRIPT_BYTES) return "The transcript file is larger than 10 MB. Upload the transcript text only, or split a very long meeting into parts.";
   return null;
 }
 

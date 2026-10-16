@@ -235,7 +235,7 @@ def test_a_failed_extraction_keeps_the_previous_result_and_can_be_retried(client
     def broken(**_kwargs):
         raise MeetingExtractionError("The model did not answer.")
 
-    monkeypatch.setattr(extraction_service, "extract_meeting_categories", broken)
+    monkeypatch.setattr(extraction_service, "extract_meeting_findings", broken)
     failed = client.post(f"/opportunities/{opportunity_id}/meeting-extraction/generate", headers=headers(), json={"transcript_id": transcript_id})
     assert failed.status_code == 400 and "MEETING_EXTRACTION_FAILED" in failed.text and "did not answer" in failed.text
     assert ok(client.get(f"/opportunities/{opportunity_id}/meeting-extraction", headers=headers())) == first

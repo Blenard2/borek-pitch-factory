@@ -14,7 +14,11 @@ from app.services.audit import AuditAction, AuditObjectType, record_audit_event
 from app.services.api_errors import bad_request
 from app.services.data.supabase_store import validate_transcript_upload
 from services.transcript.conversation_ids import next_conversation_id
-from services.transcript.ingestion import TranscriptIngestionError
+from services.transcript.ingestion import (
+    MAX_TRANSCRIPT_BYTES,
+    TranscriptIngestionError,
+    transcript_too_large_message,
+)
 from services.transcript.speaker_turns import split_speaker_turns
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -33,7 +37,10 @@ async def upload_transcript(
 ) -> TranscriptUploadResponse:
     file_name = file.filename or "upload.txt"
     validate_transcript_upload(file_name, file.content_type)
-    content = await file.read()
+    # Read at most one byte past the limit, so an oversized upload is never held in memory whole.
+    content = await file.read(MAX_TRANSCRIPT_BYTES + 1)
+    if len(content) > MAX_TRANSCRIPT_BYTES:
+        raise bad_request("TRANSCRIPT_TOO_LARGE", transcript_too_large_message())
     try:
         turns = split_speaker_turns(file_name, content)
     except TranscriptIngestionError as exc:
