@@ -432,7 +432,7 @@ def test_nothing_confirmed_nothing_invented_and_nothing_cut() -> None:
     essay = "The client explained at length that " + "the current quoting process depends on several people and tools " * 30
     long_plan = v2.build_plan(snapshot_for(reviewed(challenges=[finding(essay.strip() + ".")])))
     assert long_plan["appendix"]["omitted_findings"] == ["finding:challenges:0"]
-    assert all("depends on several people" not in text for slide in long_plan["slides"][26:] for text in appendix._texts(slide["borekSlide"]))
+    assert all("depends on several people" not in text for slide in long_plan["slides"][25:-1] for text in appendix._texts(slide["borekSlide"]))
 
 
 def test_plan_and_assembly_keep_the_canonical_deck_and_only_accept_their_own_snapshot(tmp_path: Path) -> None:
@@ -440,9 +440,13 @@ def test_plan_and_assembly_keep_the_canonical_deck_and_only_accept_their_own_sna
     plan = v2.build_plan(snapshot)
     manifest = v2.generation_manifest(snapshot)
     assert (plan["deck_kind"], plan["product_version"]) == ("master_v2", "V2") and is_master_plan(plan)
-    assert [slide["layoutId"] for slide in plan["slides"][:26]] == ["CANONICAL"] * 26
+    canonical = [*plan["slides"][:25], plan["slides"][-1]]
+    assert [slide["layoutId"] for slide in canonical] == ["CANONICAL"] * 26
+    assert [slide["borekSlide"]["master_slide"] for slide in canonical] == list(range(1, 27))
+    assert plan["slides"][-1]["borekSlide"]["title"] == "Let’s talk" and plan["deck_layout"] == "closing-last:v1"
+    assert manifest["deck_layout"] == snapshot["master"]["deck_layout"] == "closing-last:v1"
     assert plan["appendix"] == {
-        "first_slide": 27, "slide_count": len(plan["slides"]) - 26, "source_hash": manifest["snapshot_hash"], "omitted_findings": [],
+        "first_slide": 26, "slide_count": len(plan["slides"]) - 26, "source_hash": manifest["snapshot_hash"], "omitted_findings": [],
     }
     v2.verify_frozen_job(manifest=manifest, snapshot=snapshot, plan_json=plan)
     altered = copy.deepcopy(snapshot)
@@ -462,18 +466,23 @@ def test_plan_and_assembly_keep_the_canonical_deck_and_only_accept_their_own_sna
 
     master = registry.get_master()
     final = tmp_path / "v2.pptx"
-    contents = [slide["borekSlide"] for slide in plan["slides"][26:]]
+    contents = [slide["borekSlide"] for slide in plan["slides"][25:-1]]
     assembly.assemble(master, contents, final)
     prints = assembly.canonical_fingerprints(final)
-    assert len(prints) == 26 + len(contents) and prints[:26] == assembly.canonical_fingerprints(master.pptx_path)
-    assert assembly.presentation_settings(final, slide_count=26) == assembly.presentation_settings(master.pptx_path, slide_count=26)
+    assert len(prints) == 26 + len(contents) and [*prints[:25], prints[-1]] == assembly.canonical_fingerprints(master.pptx_path)
+    canonical_ids = assembly.canonical_slide_rel_ids(master.pptx_path)
+    assert assembly.presentation_settings(final, slide_count=26, canonical_ids=canonical_ids) == assembly.presentation_settings(
+        master.pptx_path, slide_count=26
+    )
     assert registry.file_sha256(master.pptx_path) == master.sha256
     deck = Presentation(str(final))
     total = len(deck.slides)
-    last = [shape.text_frame.text for shape in deck.slides[total - 1].shapes if shape.has_text_frame]
-    assert f"{total:02d} / {total:02d}" in last
+    last_appendix = [shape.text_frame.text for shape in deck.slides[total - 2].shapes if shape.has_text_frame]
+    assert f"{total - 1:02d} / {total:02d}" in last_appendix
+    closing = [shape.text_frame.text for shape in deck.slides[total - 1].shapes if shape.has_text_frame]
+    assert any("Managing Partner & Co-CCO" in text for text in closing), "Let’s talk is the last slide"
     with zipfile.ZipFile(final) as package:
-        for part in assembly._slide_parts(package)[26:]:
+        for part in assembly._slide_parts(package)[25:-1]:
             xml = package.read(part).decode("utf-8")
             assert "roundRect" not in xml and "gradFill" not in xml and 'typeface="Inter"' in xml
 

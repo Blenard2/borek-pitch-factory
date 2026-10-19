@@ -18,7 +18,15 @@ from services.presentation.master_deck.appendix import (
     approved_analysis,
     plan_appendix,
 )
-from services.presentation.master_deck.registry import DEFAULT_MASTER_ID, MasterDeck, get_master, verify_master
+from services.presentation.master_deck.registry import (
+    DECK_LAYOUT,
+    DEFAULT_MASTER_ID,
+    MasterDeck,
+    deck_order,
+    first_appendix_position,
+    get_master,
+    verify_master,
+)
 
 MASTER_V1 = "master_v1"
 MANIFEST_KIND = "master_presentation_v1"
@@ -62,47 +70,73 @@ def generation_manifest(version_row: dict[str, Any], master: MasterDeck | None =
         "approved_discovery_document_id": str(version_row.get("document_id") or paper.get("document_id") or ""),
         "discovery_schema_version": DISCOVERY_SCHEMA_VERSION,
         "appendix_source_hash": appendix_source_hash(paper),
+        "deck_layout": DECK_LAYOUT,
     }
 
 
 def same_source(left: Any, right: Any) -> bool:
-    """Two manifests describe the same master and the same approved Discovery content."""
-    keys = ("kind", "master_id", "master_version", "master_sha256", "approved_discovery_version_id", "appendix_source_hash")
+    """Two manifests describe the same master, the same approved Discovery content and slide order.
+
+    A deck generated before the closing slide was placed last (no ``deck_layout``) is never the
+    same source, so it is generated again instead of being reused.
+    """
+    keys = ("kind", "master_id", "master_version", "master_sha256", "approved_discovery_version_id", "appendix_source_hash", "deck_layout")
     return isinstance(left, dict) and isinstance(right, dict) and all(left.get(key) == right.get(key) and left.get(key) for key in keys)
 
 
+def arrange_slides(
+    master: MasterDeck, canonical: list[dict[str, Any]], appendix: list[dict[str, Any]], *, closing_last: bool = True
+) -> list[dict[str, Any]]:
+    """Plan slides in deck order (``registry.deck_order``): canonical, appendix, closing slide last.
+
+    ``canonical`` holds the master's slide entries (``number``, ``title``), ``appendix`` the
+    planned appendix slides, numbered from the first appendix position. ``closing_last=False``
+    is the order used before BAP-4 (all canonical slides, then the appendix).
+    """
+    by_number = {slide["number"]: slide for slide in canonical}
+    order = (
+        deck_order(master, len(appendix))
+        if closing_last
+        else [("canonical", number) for number in range(1, master.slide_count + 1)] + [("appendix", index) for index in range(len(appendix))]
+    )
+    slides: list[dict[str, Any]] = []
+    for position, (kind, ref) in enumerate(order, start=1):
+        if kind == "canonical":
+            slide = by_number[ref]
+            slides.append(
+                {
+                    "order": position,
+                    "purpose": f"canonical: {slide['title']}",
+                    "layoutId": CANONICAL_LAYOUT,
+                    "frameworkReferences": [],
+                    "borekSlide": {"layout": "canonical", "master_id": master.master_id, "master_slide": slide["number"], "title": slide["title"]},
+                }
+            )
+        else:
+            slide = appendix[ref]
+            if slide["order"] != position:
+                raise ValueError(f"Appendix slide {ref + 1} is planned at {slide['order']}, its place in the deck is {position}")
+            slides.append(
+                {
+                    "order": position,
+                    "purpose": slide["purpose"],
+                    "layoutId": slide["layout_id"],
+                    "frameworkReferences": list(slide["source_references"]),
+                    "borekSlide": copy.deepcopy(slide["content"]),
+                }
+            )
+    return slides
+
+
 def build_master_plan(version_row: dict[str, Any], master: MasterDeck | None = None) -> dict[str, Any]:
-    """The stored plan: 26 canonical slide references followed by the finished appendix slides."""
+    """The stored plan: the canonical slides, the finished appendix slides, the closing slide last."""
     master = master or get_master(DEFAULT_MASTER_ID)
     manifest = verify_master(master)
     paper = approved_analysis(version_row)
-    appendix = plan_appendix(paper, first_order=master.slide_count + 1)
+    first_slide = first_appendix_position(master)
+    appendix = plan_appendix(paper, first_order=first_slide)
     client = str(paper["presentation_brief"].get("client_name") or "").strip()
-    slides: list[dict[str, Any]] = [
-        {
-            "order": slide["number"],
-            "purpose": f"canonical: {slide['title']}",
-            "layoutId": CANONICAL_LAYOUT,
-            "frameworkReferences": [],
-            "borekSlide": {
-                "layout": "canonical",
-                "master_id": master.master_id,
-                "master_slide": slide["number"],
-                "title": slide["title"],
-            },
-        }
-        for slide in manifest["slides"]
-    ]
-    slides.extend(
-        {
-            "order": slide["order"],
-            "purpose": slide["purpose"],
-            "layoutId": slide["layout_id"],
-            "frameworkReferences": list(slide["source_references"]),
-            "borekSlide": copy.deepcopy(slide["content"]),
-        }
-        for slide in appendix
-    )
+    slides = arrange_slides(master, manifest["slides"], appendix)
     return {
         "schema_version": "1.0",
         "engine": PLAN_ENGINE,
@@ -111,6 +145,7 @@ def build_master_plan(version_row: dict[str, Any], master: MasterDeck | None = N
         "lang": master.language.upper(),
         "title": f"Master Presentation — {client}" if client else "Master Presentation",
         "master": {**master.identity(), "slide_count": master.slide_count},
-        "appendix": {"first_slide": master.slide_count + 1, "slide_count": len(appendix), "source_hash": appendix_source_hash(paper)},
+        "deck_layout": DECK_LAYOUT,
+        "appendix": {"first_slide": first_slide, "slide_count": len(appendix), "source_hash": appendix_source_hash(paper)},
         "slides": slides,
     }

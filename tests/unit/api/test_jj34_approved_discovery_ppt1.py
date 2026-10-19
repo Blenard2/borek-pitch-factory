@@ -156,11 +156,11 @@ def test_approved_v1_grounds_plan_and_slide_content() -> None:
         assert plan["slides"][0]["frameworkReferences"] == []
         specs = version["slides_json"]
         assert specs[0]["layoutId"] == "CANONICAL"
-        assert specs[26]["sourceChapterIds"]
+        assert specs[25]["sourceChapterIds"]
         assert plan["engine"] == "borek_deck"
         assert plan["deck_kind"] == "master_v1"
-        assert specs[25]["title"] == "Let’s talk"
-        assert specs[-1]["layoutId"].startswith("L")
+        assert specs[-1]["title"] == "Let’s talk" and specs[-1]["layoutId"] == "CANONICAL"
+        assert specs[-2]["layoutId"].startswith("L")
         assert "Northwind" in json.dumps(specs)
         framework = next(iter(store.framework_versions.values()))
         framework_blob = json.dumps(framework["framework_json"])

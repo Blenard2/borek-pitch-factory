@@ -241,6 +241,8 @@ test("cancelled mount loads stop before requesting a deck", async () => {
 
 test("a Master Presentation lists the canonical deck and the client appendix with its approved source", () => {
   const total = 33;
+  // BAP-4: canonical slides 1-25, the appendix, and the canonical closing slide ("Let's talk") last.
+  const layoutAt = (index: number) => (index < 25 || index === total - 1 ? "CANONICAL" : "L08");
   const source = {
     kind: "master_presentation_v1", product_version: "V1", product_stage: "pre_meeting", revision: 2,
     master_id: "borek_ai_tech_en_v1", master_version: "1.0",
@@ -249,7 +251,7 @@ test("a Master Presentation lists the canonical deck and the client appendix wit
   };
   const slides: SlideResponse[] = Array.from({ length: total }, (_, index) => ({
     id: `slide-${index}`, presentation_version_id: "version-1", slide_index: index,
-    layout_id: index < 26 ? "CANONICAL" : "L08", slide_spec: { title: `Title ${index + 1}` },
+    layout_id: layoutAt(index), slide_spec: { title: index === total - 1 ? "Let’s talk" : `Title ${index + 1}` },
   }));
   const master: DeckResponse = {
     ...deck, source,
@@ -259,8 +261,11 @@ test("a Master Presentation lists the canonical deck and the client appendix wit
   assert.equal(result.slides.length, total, "no slide cap: every canonical and appendix slide is listed");
   assert.deepEqual(result.slides.map((slide) => slide.index), slides.map((slide) => slide.slide_index));
   assert.equal(result.slides.filter((slide) => slide.appendix).length, 7);
-  assert.equal(result.slides[25].appendix, false, "slide 26 is the canonical closing slide");
-  assert.equal(result.slides[26].appendix, true, "the appendix begins at slide 27");
+  assert.equal(result.slides[24].appendix, false, "slide 25 is canonical");
+  assert.equal(result.slides[25].appendix, true, "the appendix begins at slide 26");
+  assert.equal(result.slides[31].appendix, true, "the appendix ends at slide 32");
+  assert.equal(result.slides[32].appendix, false, "the closing slide after the appendix is canonical");
+  assert.equal(result.slides[32].label, "Let’s talk", "Let’s talk is the last slide");
   assert.equal(result.slides[32].previewPath, `${prefix}/preview/slides/32.png`);
   assert.equal(result.source?.approved_discovery_version_id, "approved-1");
   // Other decks carry no source and no appendix marker.
@@ -279,6 +284,8 @@ test("the workspace shows the approved source and never substitutes fixture slid
   const source = readFileSync("src/components/PresentationWorkspace.tsx", "utf8");
   assert.match(source, /approved Discovery \$\{liveDeck\.source\.approved_discovery_version_id\}/);
   assert.match(source, /canonical Borek deck, unchanged/);
+  // No fixed slide ranges: the closing slide follows the appendix.
+  assert.doesNotMatch(source, /slides 1–\{liveDeck\.source\.canonical_slide_count\}/);
   // The product stage comes from the server; the database version is shown as a revision only.
   assert.match(source, /Master Presentation \{liveDeck\.source\.product_version\}/);
   assert.match(source, /revision \{liveDeck\.source\.revision\}/);

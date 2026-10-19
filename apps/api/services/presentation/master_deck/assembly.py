@@ -1,5 +1,9 @@
 """PowerPoint assembly: canonical deck (untouched) + appendix slides = Master Presentation.
 
+Slide order (BAP-4): the canonical slides, the appendix, and the canonical closing slide
+("Let's talk") last - see ``registry.deck_order``. Only the presentation's slide list is
+reordered; the closing slide itself stays exactly the canonical slide.
+
 The canonical package is opened and the appendix slides are added to it as new slide parts.
 Nothing of the original slides is regenerated: their XML, relationships and media stay as
 they are, and only the package-level lists (slide ids, relationships, content types) grow.
@@ -27,7 +31,7 @@ from pptx.util import Emu
 
 from services.presentation.borek_deck.engine import engine
 from services.presentation.master_deck.layouts import NAVY, WHITE, Canvas, draw_slide
-from services.presentation.master_deck.registry import MasterDeck, MasterDeckError, get_master, verify_master
+from services.presentation.master_deck.registry import MasterDeck, MasterDeckError, deck_order, get_master, verify_master
 
 _REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 _P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -96,18 +100,48 @@ def fit_problems(contents: list[dict[str, Any]], master_id: str | None = None) -
     return _draw_all(deck, layout, contents, master_id or DEFAULT_MASTER_ID, first_page=1, total=len(contents))
 
 
-def assemble(master: MasterDeck, contents: list[dict[str, Any]], out: Path) -> None:
-    """Write the final deck: the verified canonical slides followed by the appendix slides."""
+def assemble(master: MasterDeck, contents: list[dict[str, Any]], out: Path, *, closing_last: bool = True) -> None:
+    """Write the final deck in ``deck_order``: canonical slides, appendix, closing slide last.
+
+    ``closing_last=False`` keeps the earlier order (all canonical slides, then the appendix) for a
+    plan stored before BAP-4, so a retried earlier job renders exactly what it planned.
+    """
     verify_master(master)
     deck = Presentation(str(master.pptx_path))
     if len(deck.slides) != master.slide_count:
         raise MasterDeckError(f"Master deck {master.master_id} does not open with {master.slide_count} slides")
     total = master.slide_count + len(contents)
-    problems = _draw_all(deck, deck.slide_layouts[0], contents, master.master_id, first_page=master.slide_count + 1, total=total)
+    order = slide_order(master, len(contents), closing_last=closing_last)
+    first_page = next((position for position, (kind, _ref) in enumerate(order, start=1) if kind == "appendix"), master.slide_count + 1)
+    problems = _draw_all(deck, deck.slide_layouts[0], contents, master.master_id, first_page=first_page, total=total)
     if problems:
         raise AssemblyError("; ".join(problems))
+    _apply_order(deck, master, order)
     deck.save(str(out))
-    verify_canonical_preserved(master, out, expected_total=total)
+    verify_canonical_preserved(master, out, expected_total=total, order=order)
+
+
+def slide_order(master: MasterDeck, appendix_count: int, *, closing_last: bool = True) -> list[tuple[str, int]]:
+    if closing_last:
+        return deck_order(master, appendix_count)
+    return [("canonical", number) for number in range(1, master.slide_count + 1)] + [("appendix", index) for index in range(appendix_count)]
+
+
+def _apply_order(deck: Any, master: MasterDeck, order: list[tuple[str, int]]) -> None:
+    """Rearrange the presentation's slide list (sldIdLst) into ``order``. Slides are not touched."""
+    ids = deck.slides._sldIdLst
+    entries = list(ids)
+    if len(entries) != len(order):
+        raise AssemblyError(f"The deck has {len(entries)} slides, the order names {len(order)}")
+    position = {("canonical", number): entries[number - 1] for number in range(1, master.slide_count + 1)}
+    position.update({("appendix", index): entries[master.slide_count + index] for index in range(len(entries) - master.slide_count)})
+    arranged = [position[item] for item in order]
+    if len({id(entry) for entry in arranged}) != len(arranged):
+        raise AssemblyError("A slide would appear twice in the deck")
+    for entry in entries:
+        ids.remove(entry)
+    for entry in arranged:
+        ids.append(entry)
 
 
 # ---------------------------------------------------------------------------------- verification
@@ -220,21 +254,31 @@ def canonical_fingerprints(path: Path) -> list[str]:
     return [_fingerprint(entries) for entries in _slide_closures(path)]
 
 
-def presentation_settings(path: Path, *, slide_count: int) -> dict[str, str]:
-    """Everything at presentation level that shapes how the first ``slide_count`` slides look.
+def canonical_slide_rel_ids(path: Path) -> set[str]:
+    """Relationship ids of the slides of a deck as stored (the canonical master's slides)."""
+    with zipfile.ZipFile(path) as archive:
+        root = etree.fromstring(archive.read("ppt/presentation.xml"))
+        return {item.get(f"{{{_R_NS}}}id") for item in root.find(f"{{{_P_NS}}}sldIdLst")}
+
+
+def presentation_settings(path: Path, *, slide_count: int, canonical_ids: set[str] | None = None) -> dict[str, str]:
+    """Everything at presentation level that shapes how the canonical slides look.
 
     ``presentation.xml`` (slide size, default text styles, embedded fonts, master lists, and the
-    ids of those slides - slides appended after them are ignored) and every non-slide part the
-    presentation references: slide masters, notes master, theme, table styles, presentation and
-    view properties, fonts, each with its own dependency chain.
+    ids of the canonical slides in their relative order - appendix slides are ignored wherever
+    they are placed) and every non-slide part the presentation references: slide masters, notes
+    master, theme, table styles, presentation and view properties, fonts, each with its own
+    dependency chain. ``canonical_ids`` names the canonical slides; without it, the first
+    ``slide_count`` slides are taken.
     """
     with zipfile.ZipFile(path) as archive:
         package = _Package(archive)
         root = etree.fromstring(archive.read("ppt/presentation.xml"))
         ids = root.find(f"{{{_P_NS}}}sldIdLst")
-        kept = {item.get(f"{{{_R_NS}}}id") for item in list(ids)[:slide_count]}
-        for item in list(ids)[slide_count:]:
-            ids.remove(item)
+        kept = canonical_ids if canonical_ids is not None else {item.get(f"{{{_R_NS}}}id") for item in list(ids)[:slide_count]}
+        for item in list(ids):
+            if item.get(f"{{{_R_NS}}}id") not in kept:
+                ids.remove(item)
         settings = {"presentation.xml": hashlib.sha256(etree.tostring(root, method="c14n")).hexdigest()}
         for rel_id, kind, external, target in package.relationships("ppt/presentation.xml"):
             if kind == "slide":
@@ -254,23 +298,33 @@ def _changed_dependency(before: list[tuple[str, str]], after: list[tuple[str, st
     return "dependencies"
 
 
-def verify_canonical_preserved(master: MasterDeck, final_path: Path, *, expected_total: int) -> None:
-    """The first slides of the final deck are the canonical slides, in order and unchanged.
+def verify_canonical_preserved(
+    master: MasterDeck, final_path: Path, *, expected_total: int, order: list[tuple[str, int]] | None = None
+) -> None:
+    """Every canonical slide is in the final deck, at its place in ``order``, and unchanged.
 
     Unchanged includes everything they are rendered with: layouts, slide masters, themes, notes,
-    media and the presentation-level settings.
+    media and the presentation-level settings. Without ``order`` the deck is checked against
+    ``deck_order`` (closing slide last).
     """
     expected = _slide_closures(master.pptx_path)
     actual = _slide_closures(final_path)
     if len(actual) != expected_total:
         raise AssemblyError(f"The assembled deck has {len(actual)} slides, expected {expected_total}")
-    for number, (before, after) in enumerate(zip(expected, actual[: len(expected)], strict=True), start=1):
+    order = order or slide_order(master, max(expected_total - len(expected), 0))
+    if len(order) != expected_total or sorted(ref for kind, ref in order if kind == "canonical") != list(range(1, len(expected) + 1)):
+        raise AssemblyError("The slide order does not place every canonical slide exactly once")
+    for position, (kind, number) in enumerate(order):
+        if kind != "canonical":
+            continue
+        before, after = expected[number - 1], actual[position]
         if before != after:
             what = _changed_dependency(before, after)
             detail = "" if what == "slide" else f" (its {what})"
             raise AssemblyError(f"Canonical slide {number} was changed during assembly{detail}")
-    before_settings = presentation_settings(master.pptx_path, slide_count=len(expected))
-    after_settings = presentation_settings(final_path, slide_count=len(expected))
+    canonical_ids = canonical_slide_rel_ids(master.pptx_path)
+    before_settings = presentation_settings(master.pptx_path, slide_count=len(expected), canonical_ids=canonical_ids)
+    after_settings = presentation_settings(final_path, slide_count=len(expected), canonical_ids=canonical_ids)
     if before_settings != after_settings:
         changed = sorted(
             key.split(" ")[0]

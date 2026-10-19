@@ -165,6 +165,7 @@ def test_only_an_approved_discovery_v2_version_is_accepted() -> None:
         "approved_discovery_document_id": row["document_id"],
         "discovery_schema_version": "2.0",
         "appendix_source_hash": appendix.appendix_source_hash(row["paper_json"]),
+        "deck_layout": "closing-last:v1",
     }
     with pytest.raises(appendix.AppendixPlanError, match="approved Discovery version"):
         generation_manifest(approved_row(status="draft"))
@@ -189,6 +190,8 @@ def test_source_identity_follows_the_approved_content_only() -> None:
     assert not same_source(manifest, generation_manifest({**row, "id": "44444444-4444-4444-8444-444444444444"}))
     assert not same_source(manifest, {**manifest, "master_sha256": "0" * 64})
     assert not same_source(manifest, {"kind": "ppt1", "approved_discovery_version_id": row["id"]})
+    # A deck generated before the closing slide was placed last is generated again, never reused.
+    assert not same_source(manifest, {key: value for key, value in manifest.items() if key != "deck_layout"})
     # Page layout, generation state or a later draft are not part of the appendix source.
     relaid = copy.deepcopy(row)
     relaid["paper_json"]["page_manifest"] = []
@@ -199,19 +202,21 @@ def test_source_identity_follows_the_approved_content_only() -> None:
 # --- appendix: structure ------------------------------------------------------------------
 
 
-def test_plan_is_the_canonical_deck_followed_by_the_appendix() -> None:
+def test_plan_is_the_canonical_deck_then_the_appendix_then_the_closing_slide() -> None:
     row = approved_row()
     plan = build_master_plan(row)
     slides = plan["slides"]
     assert (plan["engine"], plan["deck_kind"], plan["title"]) == ("borek_deck", "master_v1", "Master Presentation — Nordwind Maschinenbau")
     assert [slide["order"] for slide in slides] == list(range(1, len(slides) + 1))
-    canonical, extra = slides[:26], slides[26:]
+    canonical, extra = [*slides[:25], slides[-1]], slides[25:-1]
     assert {slide["layoutId"] for slide in canonical} == {CANONICAL_LAYOUT}
+    assert CANONICAL_LAYOUT not in {slide["layoutId"] for slide in extra}
     assert [slide["borekSlide"]["master_slide"] for slide in canonical] == list(range(1, 27))
+    assert slides[-1]["borekSlide"]["title"] == "Let’s talk" and plan["deck_layout"] == "closing-last:v1"
     assert all(slide["frameworkReferences"] == [] for slide in canonical)
     assert len(slides) > 8, "the old eight-slide cap does not apply"
-    assert extra[0]["order"] == 27 and plan["appendix"] == {
-        "first_slide": 27,
+    assert extra[0]["order"] == 26 and plan["appendix"] == {
+        "first_slide": 26,
         "slide_count": len(extra),
         "source_hash": appendix.appendix_source_hash(row["paper_json"]),
     }
@@ -358,34 +363,34 @@ def test_layout_library_is_l01_to_l25_and_text_never_shrinks() -> None:
 # --- assembly -----------------------------------------------------------------------------
 
 
-def test_assembly_appends_the_appendix_and_leaves_the_canonical_slides_untouched(tmp_path: Path) -> None:
+def test_assembly_places_the_appendix_before_the_closing_slide_and_leaves_the_canonical_slides_untouched(tmp_path: Path) -> None:
     master = registry.get_master()
-    contents = [slide["content"] for slide in appendix.plan_appendix(paper_for(RICH), first_order=27)]
+    contents = [slide["content"] for slide in appendix.plan_appendix(paper_for(RICH), first_order=26)]
     final = tmp_path / "final.pptx"
     assembly.assemble(master, contents, final)
 
     before = assembly.canonical_fingerprints(master.pptx_path)
     after = assembly.canonical_fingerprints(final)
     assert len(before) == 26 and len(after) == 26 + len(contents)
-    assert after[:26] == before, "every canonical slide and its media are unchanged, in the original order"
+    assert [*after[:25], after[-1]] == before, "every canonical slide and its media are unchanged, in the original order"
     assert registry.file_sha256(master.pptx_path) == master.sha256, "the stored master itself is never written"
 
     source, deck = Presentation(str(master.pptx_path)), Presentation(str(final))
     text = lambda slide: [shape.text_frame.text for shape in slide.shapes if shape.has_text_frame]  # noqa: E731
-    for number in range(26):
-        assert text(deck.slides[number]) == text(source.slides[number])
-    assert any("CONFIDENTIAL" in value.upper() for value in text(deck.slides[12])), "slide 13 keeps its footer"
-    assert "01 / 26" in text(deck.slides[0]) and "26 / 26" in text(deck.slides[25]), "original footers are not renumbered"
-    assert any("Managing Partner & Co-CCO" in value for value in text(deck.slides[25]))
     total = len(deck.slides)
-    appendix_text = [value for number in range(26, total) for value in text(deck.slides[number])]
-    assert f"27 / {total}" in appendix_text and f"{total} / {total}" in appendix_text
+    for number, position in [*((n, n) for n in range(25)), (25, total - 1)]:
+        assert text(deck.slides[position]) == text(source.slides[number])
+    assert any("CONFIDENTIAL" in value.upper() for value in text(deck.slides[12])), "slide 13 keeps its footer"
+    assert "01 / 26" in text(deck.slides[0]) and "26 / 26" in text(deck.slides[-1]), "original footers are not renumbered"
+    assert any("Managing Partner & Co-CCO" in value for value in text(deck.slides[-1])), "Let’s talk is the last slide"
+    appendix_text = [value for number in range(25, total - 1) for value in text(deck.slides[number])]
+    assert f"26 / {total}" in appendix_text and f"{total - 1} / {total}" in appendix_text
     assert not any("CONFIDENTIAL" in value.upper() for value in appendix_text)
 
     # No rounded corners, gradients, shadows or fonts other than Inter in the appendix.
     with zipfile.ZipFile(final) as package:
         parts = assembly._slide_parts(package)
-        for part in parts[26:]:
+        for part in parts[25:-1]:
             xml = package.read(part).decode("utf-8")
             assert "roundRect" not in xml and "gradFill" not in xml and "outerShdw" not in xml
             assert set(re.findall(r'typeface="([^"]+)"', xml)) <= {"Inter"}
@@ -433,7 +438,7 @@ def _dependency(deck: Path, start: str, kind: str) -> str:
 @pytest.fixture(scope="module")
 def assembled(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, int]:
     master = registry.get_master()
-    contents = [slide["content"] for slide in appendix.plan_appendix(paper_for(MEDIUM), first_order=27)]
+    contents = [slide["content"] for slide in appendix.plan_appendix(paper_for(MEDIUM), first_order=26)]
     final = tmp_path_factory.mktemp("assembled") / "final.pptx"
     assembly.assemble(master, contents, final)
     return final, 26 + len(contents)
@@ -454,9 +459,11 @@ def test_canonical_fingerprint_covers_the_whole_dependency_chain(assembled: tupl
         key.split(" ")[0] for key in settings
     }
     assert sum(key.startswith("slide ") for key in settings) == 26
-    # Appending slides changes neither the canonical slides nor the presentation settings.
-    assert assembly.presentation_settings(final, slide_count=26) == settings
-    assert assembly.canonical_fingerprints(final)[:26] == assembly.canonical_fingerprints(master.pptx_path)
+    # Adding the appendix changes neither the canonical slides nor the presentation settings.
+    canonical_ids = assembly.canonical_slide_rel_ids(master.pptx_path)
+    assert assembly.presentation_settings(final, slide_count=26, canonical_ids=canonical_ids) == settings
+    prints = assembly.canonical_fingerprints(final)
+    assert [*prints[:25], prints[-1]] == assembly.canonical_fingerprints(master.pptx_path)
     assembly.verify_canonical_preserved(master, final, expected_total=total)
 
 
@@ -588,7 +595,12 @@ def test_render_rejects_decks_that_are_not_a_complete_master_presentation() -> N
     with pytest.raises(BorekDeckRenderError, match="canonical slides in their original order"):
         render_deck_bundle(specs[1:], deck_kind=MASTER_V1)
     with pytest.raises(BorekDeckRenderError, match="no canonical master slides"):
-        render_deck_bundle(specs[26:], deck_kind=MASTER_V1)
+        render_deck_bundle([spec for spec in specs if spec["layoutId"] != CANONICAL_LAYOUT], deck_kind=MASTER_V1)
+    # The closing slide is never moved into the deck, duplicated or dropped.
+    moved = [*specs[:10], specs[-1], *specs[10:-1]]
+    for broken in (moved, [*specs, specs[-1]], specs[:-1]):
+        with pytest.raises(BorekDeckRenderError, match="closing slide last"):
+            render_deck_bundle(broken, deck_kind=MASTER_V1)
     foreign = copy.deepcopy(specs)
     foreign[3]["content"]["master_id"] = "another_master"
     with pytest.raises(BorekDeckRenderError, match="different master decks|Unknown master deck"):

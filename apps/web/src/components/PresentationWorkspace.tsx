@@ -317,7 +317,7 @@ function PresentationSession({ opportunityId, accessToken, live }: PresentationW
               <p className="discovery-preview-caption">{live ? "Live rendered previews of this version. Version changes detected during requests are rejected; the other ready versions of this presentation stay available for download below." : "Local content preview from approved Discovery, not a rendered presentation artifact."}</p>
               {live && liveReady && liveDeck?.source ? (
                 <p className="discovery-preview-caption" data-testid="master-presentation-summary">
-                  Master Presentation {liveDeck.source.product_version} ({liveDeck.source.product_stage === "pre_meeting" ? "pre-meeting" : liveDeck.source.product_stage}) · revision {liveDeck.source.revision} · slides 1–{liveDeck.source.canonical_slide_count}: the canonical Borek deck, unchanged · slides {liveDeck.source.canonical_slide_count + 1}–{totalSlides}: client appendix from the approved Discovery analysis.
+                  Master Presentation {liveDeck.source.product_version} ({liveDeck.source.product_stage === "pre_meeting" ? "pre-meeting" : liveDeck.source.product_stage}) · revision {liveDeck.source.revision} · {liveDeck.source.canonical_slide_count} slides of the canonical Borek deck, unchanged · {liveDeck.source.appendix_slide_count} client appendix slides from the approved Discovery analysis.
                 </p>
               ) : null}
               {live && liveReady && liveDeck?.source && approvedSourceId && approvedSourceId !== liveDeck.source.approved_discovery_version_id ? (

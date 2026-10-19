@@ -1,5 +1,5 @@
 import { ApiRequestError, apiFetch, apiFetchBlob, resolveBackendOpportunityId, type WorkflowStatusResponse } from "./api";
-import type { DeckResponse, DeckSource, SlideResponse, LiveSlide, LivePreviewState } from "./presentationLive";
+import { isAppendixSlide, type DeckResponse, type DeckSource, type SlideResponse, type LiveSlide, type LivePreviewState } from "./presentationLive";
 
 export type { LivePreviewState } from "./presentationLive";
 
@@ -82,7 +82,7 @@ export function adaptPostMeetingPresentation(identity: Identity, deck: DeckRespo
       id: slide.id, index: slide.slide_index,
       label: typeof title === "string" && title.trim() ? title.trim() : `Slide ${slide.slide_index + 1} - ${slide.layout_id}`,
       previewPath: preview?.preview_url === expected ? expected : null,
-      appendix: Boolean(deck.source) && slide.slide_index >= deck.source!.canonical_slide_count,
+      appendix: isAppendixSlide(deck.source, slide.slide_index, slide.layout_id),
     };
   });
   return {
