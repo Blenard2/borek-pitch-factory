@@ -3,55 +3,69 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { postMeetingError } from "@/lib/postMeeting";
-import { MISSING_TEXT, loadPresentationHeadline, opportunityStatement, type PresentationHeadline as Headline } from "@/lib/presentationHeadline";
+import {
+  MISSING_TEXT, SOURCE_TEXT, headlineRequestFor, loadPresentationHeadline, opportunityStatement,
+  type PresentationHeadline as Headline, type PresentationSource,
+} from "@/lib/presentationHeadline";
 
 /**
  * BAP-2: the Client Presentation heading - the client-specific title and the main opportunity
  * from the approved Discovery the presentation is built from.
  *
- * The Presentation page reports the Discovery version its deck was built from; until a deck
- * exists the latest approved Discovery is used.
+ * The Presentation page reports which Discovery its deck uses (see PresentationSource). Until it
+ * has, nothing is loaded: the latest approved Discovery is read only once it is known that no
+ * deck exists, and a deck pinned to a Discovery version always shows that version.
  */
-const SourceContext = createContext<{ versionId: string | null; setVersionId: (value: string | null) => void }>({
-  versionId: null,
-  setVersionId: () => {},
+const SourceContext = createContext<{ source: PresentationSource | null; setSource: (value: PresentationSource | null) => void }>({
+  source: null,
+  setSource: () => {},
 });
 
 export function PresentationSourceProvider({ children }: { children: ReactNode }) {
-  const [versionId, setVersionId] = useState<string | null>(null);
-  return <SourceContext.Provider value={{ versionId, setVersionId }}>{children}</SourceContext.Provider>;
+  const [source, setSource] = useState<PresentationSource | null>(null);
+  return <SourceContext.Provider value={{ source, setSource }}>{children}</SourceContext.Provider>;
 }
 
-/** Called by the Presentation page with the approved Discovery version of the shown deck. */
-export function useReportPresentationSource(versionId: string | null) {
-  const { setVersionId } = useContext(SourceContext);
+/** Called by the Presentation page with what it knows about its deck's Discovery. */
+export function useReportPresentationSource(source: PresentationSource | null) {
+  const { setSource } = useContext(SourceContext);
+  const signature = source ? JSON.stringify(source) : "";
   useEffect(() => {
-    setVersionId(versionId);
-    return () => setVersionId(null);
-  }, [versionId, setVersionId]);
+    setSource(signature ? (JSON.parse(signature) as PresentationSource) : null);
+    return () => setSource(null);
+  }, [signature, setSource]);
 }
 
-type View = { state: "loading" } | Headline | { state: "preview" };
+type View = { state: "loading" } | Headline | { state: "preview" } | { state: "legacy" } | { state: "unavailable" };
 
 export function PresentationHeadline({ opportunityId, kicker, fallbackTitle }: { opportunityId: string; kicker: string; fallbackTitle: string }) {
   const { accessToken, previewMode } = useAuth();
   const live = Boolean(accessToken) && !previewMode;
-  const { versionId } = useContext(SourceContext);
+  const { source } = useContext(SourceContext);
   const [result, setResult] = useState<{ key: string; view: View } | null>(null);
   const [attempt, setAttempt] = useState(0);
-  // A view belongs to one opportunity and one source version; another one is never shown, not even briefly.
-  const key = `${opportunityId}:${versionId ?? "latest"}:${attempt}`;
+  const request = headlineRequestFor(source, opportunityId);
+  // A loaded view belongs to exactly one opportunity, one Discovery request and one attempt. A
+  // response for an earlier key (navigation, regeneration, a slower request) is never shown.
+  const key = `${opportunityId}:${request.load === "version" ? `version:${request.versionId}` : request.load}:${attempt}`;
 
   useEffect(() => {
-    if (!live || !accessToken) return;
+    if (!live || !accessToken || request.load === "none") return;
     const controller = new AbortController();
+    const versionId = request.load === "version" ? request.versionId : null;
     void loadPresentationHeadline(accessToken, opportunityId, versionId, controller.signal)
       .then((view) => { if (!controller.signal.aborted) setResult({ key, view }); })
       .catch((cause) => { if (!controller.signal.aborted) setResult({ key, view: { state: "failed", message: postMeetingError(cause) } }); });
     return () => controller.abort();
-  }, [accessToken, live, opportunityId, versionId, key]);
+    // `key` covers the opportunity, the request and the attempt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken, live, key]);
 
-  const view: View = !live ? { state: "preview" } : result?.key === key ? result.view : { state: "loading" };
+  const view: View = !live
+    ? { state: "preview" }
+    : request.load === "none"
+      ? request.view === "loading" ? { state: "loading" } : { state: request.view }
+      : result?.key === key ? result.view : { state: "loading" };
 
   return (
     <div className="presentation-headline" data-testid="presentation-headline" data-state={view.state} aria-busy={view.state === "loading"}>
@@ -76,9 +90,11 @@ export function PresentationHeadline({ opportunityId, kicker, fallbackTitle }: {
               ? "Loading the client-specific title and main opportunity..."
               : view.state === "preview"
                 ? "The client-specific title and main opportunity are shown in a live session, from the approved Discovery analysis."
-                : view.state === "failed"
-                  ? `The client-specific title could not be loaded: ${view.message}`
-                  : MISSING_TEXT[view.reason]}
+                : view.state === "legacy" || view.state === "unavailable"
+                  ? SOURCE_TEXT[view.state]
+                  : view.state === "failed"
+                    ? `The client-specific title could not be loaded: ${view.message}`
+                    : MISSING_TEXT[view.reason]}
             {view.state === "failed" ? <> <button type="button" className="btn btn-secondary" onClick={() => setAttempt((value) => value + 1)}>Retry</button></> : null}
           </p>
         </>

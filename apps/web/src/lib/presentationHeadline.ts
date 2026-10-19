@@ -78,3 +78,48 @@ export const MISSING_TEXT: Record<Extract<PresentationHeadline, { state: "missin
   not_generated: "The approved Discovery has no generated title. Regenerate and approve the Discovery analysis.",
   earlier_format: "This Discovery is stored in the earlier format, which has no generated title. Generate a new Discovery analysis to show it.",
 };
+
+/**
+ * What the Client Presentation knows about the Discovery its deck was built from. The heading only
+ * loads a title once this is settled, so it never shows another Discovery than the deck's.
+ *
+ *   pending      the existing deck is still loading, or a deck is being generated
+ *   none         no deck exists (yet): the latest approved Discovery is the one a deck would use
+ *   pinned       the deck names the approved Discovery version it was built from
+ *   legacy       the deck predates source metadata: no Discovery can be matched to it
+ *   unavailable  the deck could not be loaded, so it is unknown which Discovery applies
+ */
+export type PresentationSource =
+  | { kind: "pending" | "none" | "legacy" | "unavailable"; opportunityId: string }
+  | { kind: "pinned"; opportunityId: string; versionId: string };
+
+export type DeckPhase = "loading" | "load-failed" | "idle" | "generating" | "ready" | "failed";
+
+/** The source the Presentation page reports for its current phase and deck. */
+export function presentationSourceFor(
+  opportunityId: string,
+  phase: DeckPhase,
+  deck: { source?: { approved_discovery_version_id?: string | null } | null } | null,
+): PresentationSource {
+  if (deck) {
+    const versionId = deck.source?.approved_discovery_version_id;
+    return versionId ? { kind: "pinned", opportunityId, versionId } : { kind: "legacy", opportunityId };
+  }
+  if (phase === "idle" || phase === "failed") return { kind: "none", opportunityId };
+  if (phase === "load-failed") return { kind: "unavailable", opportunityId };
+  return { kind: "pending", opportunityId };
+}
+
+/** Which Discovery the heading loads for a reported source: a version, the latest approved one, or none. */
+export function headlineRequestFor(source: PresentationSource | null, opportunityId: string): { load: "version"; versionId: string } | { load: "latest" } | { load: "none"; view: "loading" | "legacy" | "unavailable" } {
+  // A report of another opportunity (navigation in progress) is not this page's source.
+  if (!source || source.opportunityId !== opportunityId || source.kind === "pending") return { load: "none", view: "loading" };
+  if (source.kind === "pinned") return { load: "version", versionId: source.versionId };
+  if (source.kind === "none") return { load: "latest" };
+  return { load: "none", view: source.kind };
+}
+
+export const SOURCE_TEXT = {
+  legacy: "This presentation was created before decks recorded their Discovery version, so no generated title can be matched to it. Generate a new revision to show it.",
+  unavailable: "The presentation could not be loaded, so its Discovery version is unknown. The title appears once the presentation loads.",
+} as const;
