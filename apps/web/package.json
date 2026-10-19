@@ -15,7 +15,7 @@
     "test:ms41": "tsx src/lib/clientInformation.test.ts && tsx src/lib/intakeDraft.test.ts && tsx src/lib/optionalInputs.test.ts",
     "test:discovery": "tsx src/lib/discoveryAnalysis.test.ts",
     "test:ms42": "tsx src/lib/discoveryWorkspace.test.ts && tsx src/lib/liveDiscovery.test.ts && npm run test:discovery",
-    "test:premeeting": "tsx src/lib/previewJourney.test.ts && tsx src/lib/clientInformation.test.ts && tsx src/lib/intakeDraft.test.ts && tsx src/lib/opportunityResolution.test.ts && tsx src/lib/discoveryWorkspace.test.ts && tsx src/components/PresentationWorkspace.test.ts && tsx src/components/WorkflowArtifactTabs.test.ts && npm run test:premeeting:live",
+    "test:premeeting": "tsx src/lib/previewJourney.test.ts && tsx src/lib/clientInformation.test.ts && tsx src/lib/intakeDraft.test.ts && tsx src/lib/opportunityResolution.test.ts && tsx src/lib/discoveryWorkspace.test.ts && tsx src/components/PresentationWorkspace.test.ts && tsx src/components/WorkflowArtifactTabs.test.ts && tsx src/lib/presentationHeadline.test.ts && npm run test:premeeting:live",
     "test:premeeting:live": "tsx src/lib/liveDiscovery.test.ts && tsx src/lib/presentationLive.test.ts && tsx src/lib/ppt1Generation.test.ts && tsx src/lib/ownerFlowWiring.test.ts",
     "test:ms43": "npm run test:premeeting && tsx src/lib/clientDirectory.test.ts",
     "test:ms44": "tsx src/lib/postMeeting.test.ts",

@@ -12,6 +12,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { displayClientName } from "@/lib/clientInformation";
 import type { DiscoveryFirstWorkspaceFixture } from "@/lib/discoveryFirst";
 import { PostMeetingShell } from "@/components/PostMeetingShell";
+import { PresentationHeadline, PresentationSourceProvider } from "@/components/PresentationHeadline";
 
 interface OpportunityWorkflowShellProps {
   fixture: DiscoveryFirstWorkspaceFixture;
@@ -35,6 +36,7 @@ export function OpportunityWorkflowShell({ fixture, children }: OpportunityWorkf
   const workspaceProgress = pathname.endsWith("/presentations")
     ? `${preview?.presentation.slide_count ?? 0} slides ready`
     : preview?.discovery.document_state === "approved" ? "Discovery approved" : "Discovery in review";
+  const kicker = `${activeSection === "pre_meeting" ? copy.sidebar.preMeeting : copy.sidebar.postMeeting} · ${displayClientName(preview?.client.values.company_name ?? fixture.client_information.company_name, copy.clients.unnamed)}`;
   if (/\/(meeting|review|follow-up|post-meeting-discovery|post-meeting-presentation)$/.test(pathname)) {
     return <RequireAuth><PostMeetingShell opportunityId={fixture.opportunity_id}
       companyName={preview?.client.values.company_name ?? fixture.client_information.company_name}
@@ -44,15 +46,21 @@ export function OpportunityWorkflowShell({ fixture, children }: OpportunityWorkf
   }
   return (
     <RequireAuth>
+      <PresentationSourceProvider>
       <div className="app-workspace discovery-workflow-shell">
         <SiteHeader opportunityId={fixture.opportunity_id} activeSection={activeSection} />
         <main className="discovery-workflow-main">
           <div className="discovery-workflow-heading">
-            <div>
-              <p className="discovery-workflow-kicker">{activeSection === "pre_meeting" ? copy.sidebar.preMeeting : copy.sidebar.postMeeting} · {displayClientName(preview?.client.values.company_name ?? fixture.client_information.company_name, copy.clients.unnamed)}</p>
-              <h2>{copy.workflow.creating}</h2>
-              <p className="discovery-workflow-meta">{live ? "Live workspace · Progress is shown with each artifact below." : workspaceProgress}</p>
-            </div>
+            {/* BAP-2: the Client Presentation shows its generated title and main opportunity. */}
+            {pathname.endsWith("/presentations") ? (
+              <PresentationHeadline opportunityId={fixture.opportunity_id} kicker={kicker} fallbackTitle={copy.workflow.creating} />
+            ) : (
+              <div>
+                <p className="discovery-workflow-kicker">{kicker}</p>
+                <h2>{copy.workflow.creating}</h2>
+                <p className="discovery-workflow-meta">{live ? "Live workspace · Progress is shown with each artifact below." : workspaceProgress}</p>
+              </div>
+            )}
           </div>
           {activeSection === "post_meeting" ? (
             <DiscoveryWorkflowStepper
@@ -68,6 +76,7 @@ export function OpportunityWorkflowShell({ fixture, children }: OpportunityWorkf
           {children}
         </main>
       </div>
+      </PresentationSourceProvider>
     </RequireAuth>
   );
 }

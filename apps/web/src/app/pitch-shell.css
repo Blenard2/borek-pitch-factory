@@ -1485,6 +1485,49 @@ body:has(.app-workspace) {
   font-weight: 400;
 }
 
+/* BAP-2: the Client Presentation's generated title and main opportunity. Long texts wrap; nothing is cut. */
+.presentation-headline {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 72rem;
+}
+
+.presentation-headline h2 {
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+  line-height: 1.2;
+}
+
+.presentation-headline-opportunity {
+  margin: 8px 0 0;
+  max-width: 60rem;
+  color: var(--pitch-navy);
+  font-size: 1rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.presentation-headline-opportunity span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--pitch-gray-500);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.presentation-headline-note {
+  margin: 8px 0 0;
+  color: var(--pitch-gray-500);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .presentation-headline h2 { font-size: 1.5rem; }
+}
+
 .discovery-workflow-meta {
   margin: 6px 0 0;
   color: var(--pitch-gray-500);
