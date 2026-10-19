@@ -1102,6 +1102,8 @@ class MemoryDataStore:
             return copy.deepcopy(row)
 
     # ------------------------------------------------------------ BAP-3 email attachments
+    # In memory the bytes live in the row: removing the row removes the bytes, so there is
+    # nothing to queue. The same methods as the Supabase store, including the sweeper.
 
     def create_email_attachment(
         self,
@@ -1129,6 +1131,7 @@ class MemoryDataStore:
             "size_bytes": size_bytes,
             "sha256": sha256,
             "storage_path": storage_path,
+            "status": "ready",
             "created_by": user_id,
             "created_at": _now(),
             "content": bytes(content),
@@ -1140,7 +1143,7 @@ class MemoryDataStore:
         self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
         rows = [
             row for row in self.email_attachments.values()
-            if row["opportunity_id"] == opportunity_id and row["journey_stage"] == journey_stage
+            if row["opportunity_id"] == opportunity_id and row["journey_stage"] == journey_stage and row.get("status") == "ready"
         ]
         return [
             {key: copy.deepcopy(value) for key, value in row.items() if key != "content"}
@@ -1150,7 +1153,7 @@ class MemoryDataStore:
     def get_email_attachment(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> dict[str, Any]:
         self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
         row = self.email_attachments.get(attachment_id)
-        if row is None or row["opportunity_id"] != opportunity_id:
+        if row is None or row["opportunity_id"] != opportunity_id or row.get("status") != "ready":
             raise not_found("EMAIL_ATTACHMENT_NOT_FOUND", f"Attachment {attachment_id} was not found")
         return {key: copy.deepcopy(value) for key, value in row.items() if key != "content"}
 
@@ -1158,9 +1161,13 @@ class MemoryDataStore:
         self.get_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
         return bytes(self.email_attachments[attachment_id]["content"])
 
-    def delete_email_attachment(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> None:
+    def delete_email_attachment(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> dict[str, Any]:
         self.get_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
         del self.email_attachments[attachment_id]
+        return {"bytes_removed": True}
+
+    def process_email_attachment_cleanup(self, **_kwargs: Any) -> dict[str, int]:
+        return {"removed": 0, "failed": 0, "skipped": 0, "discarded_pending": 0}
 
     def create_framework_version(
         self,

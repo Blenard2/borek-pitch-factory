@@ -12,6 +12,7 @@ import email.policy
 import hashlib
 import io
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -399,81 +400,213 @@ def test_uploaded_files_stay_with_their_owner_and_opportunity(client: TestClient
 # ------------------------------------------------------------------ Supabase store and migration
 
 
-def test_the_supabase_store_keeps_rows_and_bytes_together(monkeypatch: pytest.MonkeyPatch) -> None:
-    rows: list[dict] = []
-    objects: dict[str, bytes] = {}
-    calls: list[tuple[str, str]] = []
-    fail_insert = {"value": False}
-    fail_object_delete = {"value": False}
+class FakeSupabase:
+    """PostgREST tables and Storage objects of the BAP-3 lifecycle, with the database trigger that
+    queues the storage path of every deleted email_attachments row. ``fail`` names operations
+    that fail once, e.g. {"DELETE email_attachments", "DELETE object"}."""
 
-    def request(self, method, table, *, json_body=None, params=None, headers=None):
-        assert table == "email_attachments"
+    def __init__(self) -> None:
+        self.rows: list[dict] = []
+        self.queue: list[dict] = []
+        self.objects: dict[str, bytes] = {}
+        self.fail: set[str] = set()
+        self.log: list[str] = []
+
+    def _failing(self, name: str) -> bool:
+        self.log.append(name)
+        if name in self.fail:
+            self.fail.discard(name)
+            return True
+        return False
+
+    @staticmethod
+    def _matches(row: dict, params: dict) -> bool:
+        for key, value in params.items():
+            if not isinstance(value, str) or key in {"select", "order", "limit"}:
+                continue
+            if value.startswith("eq.") and str(row.get(key)) != value[3:]:
+                return False
+            if value.startswith("lt.") and not str(row.get(key)) < value[3:]:
+                return False
+            if value.startswith("in.(") and str(row.get(key)) not in [item.strip('"') for item in value[4:-1].split(",")]:
+                return False
+        return True
+
+    def request(self, store, method, table, *, json_body=None, params=None, headers=None):
+        rows = self.rows if table == "email_attachments" else self.queue
         params = params or {}
-        matches = [row for row in rows if all(str(row.get(key)) == value.removeprefix("eq.") for key, value in params.items() if isinstance(value, str) and value.startswith("eq."))]
+        if self._failing(f"{method} {table}"):
+            return httpx.Response(500, json={"message": "database error"})
+        matched = [row for row in rows if self._matches(row, params)]
         if method == "POST":
-            if fail_insert["value"]:
-                return httpx.Response(500, json={"message": "insert failed"})
-            created = {**copy.deepcopy(json_body), "created_at": "2026-10-19T09:00:00+00:00"}
+            created = {**copy.deepcopy(json_body), "created_at": datetime.now(UTC).isoformat()}
             rows.append(created)
             return httpx.Response(201, json=[copy.deepcopy(created)])
         if method == "GET":
-            return httpx.Response(200, json=[copy.deepcopy(row) for row in matches])
+            limit = int(params.get("limit", len(matched) or 1))
+            return httpx.Response(200, json=[copy.deepcopy(row) for row in matched[:limit]])
+        if method == "PATCH":
+            for row in matched:
+                row.update(copy.deepcopy(json_body))
+            return httpx.Response(200, json=[copy.deepcopy(row) for row in matched])
         if method == "DELETE":
-            for row in matches:
+            for row in matched:
                 rows.remove(row)
+                if table == "email_attachments":  # the AFTER DELETE trigger of migration 045
+                    if not any(entry["storage_path"] == row["storage_path"] for entry in self.queue):
+                        self.queue.append({"storage_path": row["storage_path"], "opportunity_id": row["opportunity_id"], "queued_at": "2026-10-19T09:01:00+00:00", "attempts": 0, "last_error": None})
             return httpx.Response(204)
         raise AssertionError(method)
 
-    def storage(method, url, *, headers=None, content=None, **_kwargs):
+    def storage(self, method, url, *, headers=None, content=None, **_kwargs):
         path = url.split("/storage/v1/object/email_attachments/", 1)[1]
-        calls.append((method, path))
+        if self._failing(f"{method} object"):
+            return httpx.Response(500)
         if method == "POST":
-            objects[path] = content
+            self.objects[path] = content
             return httpx.Response(200, json={"Key": path})
         if method == "GET":
-            return httpx.Response(200, content=objects[path]) if path in objects else httpx.Response(404)
+            return httpx.Response(200, content=self.objects[path]) if path in self.objects else httpx.Response(404)
         if method == "DELETE":
-            if fail_object_delete["value"]:
-                return httpx.Response(500)
-            objects.pop(path, None)
-            return httpx.Response(200)
+            return httpx.Response(200) if self.objects.pop(path, None) is not None else httpx.Response(404)
         raise AssertionError(method)
 
+
+@pytest.fixture()
+def supabase(monkeypatch: pytest.MonkeyPatch) -> tuple[FakeSupabase, SupabaseDataStore]:
     import app.services.data.supabase_store as supabase_module
 
-    monkeypatch.setattr(SupabaseDataStore, "_request", request)
-    monkeypatch.setattr(supabase_module, "_request_with_retry", storage)
+    fake = FakeSupabase()
+    monkeypatch.setattr(SupabaseDataStore, "_request", lambda self, method, table, **kwargs: fake.request(self, method, table, **kwargs))
+    monkeypatch.setattr(supabase_module, "_request_with_retry", fake.storage)
     monkeypatch.setattr(SupabaseDataStore, "get_opportunity", lambda self, *, opportunity_id, user_id: {"id": opportunity_id})
-    store = SupabaseDataStore("test-token")
-    opportunity_id, attachment_id = uuid4(), uuid4()
-    content = pdf("stored")
-    arguments = dict(
-        opportunity_id=opportunity_id, user_id=OWNER, journey_stage="deepening", file_name="agenda.pdf", extension=".pdf",
-        mime_type="application/pdf", size_bytes=len(content), sha256=hashlib.sha256(content).hexdigest(), content=content,
+    return fake, SupabaseDataStore("test-token")
+
+
+def stored_attachment(store: SupabaseDataStore, opportunity_id: UUID, name: str = "agenda.pdf") -> tuple[UUID, str, bytes]:
+    attachment_id, content = uuid4(), pdf(name)
+    path = f"{opportunity_id}/{attachment_id}.pdf"
+    store.create_email_attachment(
+        opportunity_id=opportunity_id, user_id=OWNER, journey_stage="deepening", attachment_id=attachment_id, file_name=name, extension=".pdf",
+        mime_type="application/pdf", size_bytes=len(content), sha256=hashlib.sha256(content).hexdigest(), storage_path=path, content=content,
     )
-    created = store.create_email_attachment(**arguments, attachment_id=attachment_id, storage_path=f"{opportunity_id}/{attachment_id}.pdf")
-    assert created["id"] == attachment_id and created["size_bytes"] == len(content)
-    assert [row["file_name"] for row in store.list_email_attachments(opportunity_id=opportunity_id, user_id=OWNER, journey_stage="deepening")] == ["agenda.pdf"]
+    return attachment_id, path, content
+
+
+def listed(store: SupabaseDataStore, opportunity_id: UUID) -> list[str]:
+    return [row["file_name"] for row in store.list_email_attachments(opportunity_id=opportunity_id, user_id=OWNER, journey_stage="deepening")]
+
+
+def test_supabase_upload_creates_a_pending_row_then_bytes_then_ready(supabase) -> None:
+    fake, store = supabase
+    opportunity_id = uuid4()
+    attachment_id, path, content = stored_attachment(store, opportunity_id)
+    assert fake.log[:3] == ["POST email_attachments", "POST object", "PATCH email_attachments"], "the row exists before any byte"
+    assert fake.rows[0]["status"] == "ready" and fake.objects[path] == content
+    assert listed(store, opportunity_id) == ["agenda.pdf"]
     assert store.read_email_attachment_content(opportunity_id=opportunity_id, user_id=OWNER, attachment_id=attachment_id) == content
     with pytest.raises(HTTPException) as foreign:
         store.get_email_attachment(opportunity_id=uuid4(), user_id=OWNER, attachment_id=attachment_id)
     assert foreign.value.status_code == 404
-    # Bytes first: when they cannot be deleted, the row stays, so the file is still listed and removable.
-    fail_object_delete["value"] = True
-    with pytest.raises(HTTPException) as down:
-        store.delete_email_attachment(opportunity_id=opportunity_id, user_id=OWNER, attachment_id=attachment_id)
-    assert down.value.status_code == 503 and len(rows) == 1 and len(objects) == 1
-    fail_object_delete["value"] = False
-    store.delete_email_attachment(opportunity_id=opportunity_id, user_id=OWNER, attachment_id=attachment_id)
-    assert rows == [] and objects == {}, "row and bytes are removed together"
-    assert [method for method, _path in calls if method == "DELETE"] == ["DELETE", "DELETE"], "the object is deleted before the row"
 
-    # A failed row insert leaves no orphaned bytes behind.
-    fail_insert["value"] = True
-    second = uuid4()
+
+@pytest.mark.parametrize("failing", ["POST object", "PATCH email_attachments"], ids=["bytes-upload-fails", "ready-mark-fails"])
+def test_supabase_failed_uploads_leave_nothing_behind(supabase, failing: str) -> None:
+    fake, store = supabase
+    fake.fail = {failing}
+    with pytest.raises(HTTPException) as failed:
+        stored_attachment(store, uuid4())
+    assert failed.value.status_code == 503
+    assert fake.rows == [] and fake.objects == {} and fake.queue == [], "row discarded, its path queued and swept"
+
+
+def test_supabase_upload_rollback_whose_cleanup_fails_is_recovered_later(supabase) -> None:
+    fake, store = supabase
+    opportunity_id = uuid4()
+    # The bytes are stored, marking the row ready fails, and discarding the row fails as well.
+    fake.fail = {"PATCH email_attachments", "DELETE email_attachments"}
     with pytest.raises(HTTPException):
-        store.create_email_attachment(**arguments, attachment_id=second, storage_path=f"{opportunity_id}/{second}.pdf")
-    assert objects == {} and ("DELETE", f"{opportunity_id}/{second}.pdf") in calls
+        stored_attachment(store, opportunity_id)
+    (row,) = fake.rows
+    assert row["status"] == "pending" and len(fake.objects) == 1
+    assert listed(store, opportunity_id) == [], "an unfinished upload is never offered"
+    # The sweep discards the stale pending row; the trigger queues its path; the bytes are removed.
+    counts = store.process_email_attachment_cleanup(stale_after_seconds=-60)
+    assert counts["discarded_pending"] == 1 and counts["removed"] == 1
+    assert fake.rows == [] and fake.objects == {} and fake.queue == []
+
+
+def test_supabase_delete_db_failure_changes_nothing_and_can_be_retried(supabase) -> None:
+    fake, store = supabase
+    opportunity_id = uuid4()
+    attachment_id, path, content = stored_attachment(store, opportunity_id)
+    fake.fail = {"DELETE email_attachments"}
+    with pytest.raises(HTTPException) as failed:
+        store.delete_email_attachment(opportunity_id=opportunity_id, user_id=OWNER, attachment_id=attachment_id)
+    assert failed.value.status_code == 503
+    assert listed(store, opportunity_id) == ["agenda.pdf"] and fake.objects[path] == content, "still listed, still readable"
+    assert store.delete_email_attachment(opportunity_id=opportunity_id, user_id=OWNER, attachment_id=attachment_id) == {"bytes_removed": True}
+    assert fake.rows == [] and fake.objects == {} and fake.queue == []
+
+
+def test_supabase_storage_failure_after_the_row_is_gone_is_queued_and_swept(supabase) -> None:
+    fake, store = supabase
+    opportunity_id = uuid4()
+    attachment_id, path, _content = stored_attachment(store, opportunity_id)
+    fake.fail = {"DELETE object"}
+    assert store.delete_email_attachment(opportunity_id=opportunity_id, user_id=OWNER, attachment_id=attachment_id) == {"bytes_removed": False}
+    # The attachment is gone and nothing points at the bytes; the queue keeps them, with the error.
+    assert fake.rows == [] and listed(store, opportunity_id) == []
+    (entry,) = fake.queue
+    assert entry["storage_path"] == path and entry["attempts"] == 1 and "storage HTTP 500" in entry["last_error"]
+    assert path in fake.objects
+    # Retrying is safe: a second sweep removes the bytes and the entry.
+    assert store.process_email_attachment_cleanup()["removed"] == 1
+    assert fake.objects == {} and fake.queue == []
+    assert store.process_email_attachment_cleanup()["removed"] == 0, "nothing left to do"
+
+
+def test_supabase_queue_entry_that_survives_a_removed_object_is_dropped_on_the_next_sweep(supabase) -> None:
+    fake, store = supabase
+    opportunity_id = uuid4()
+    attachment_id, path, _content = stored_attachment(store, opportunity_id)
+    fake.fail = {"DELETE email_attachment_storage_cleanup"}
+    store.delete_email_attachment(opportunity_id=opportunity_id, user_id=OWNER, attachment_id=attachment_id)
+    assert fake.objects == {} and [entry["storage_path"] for entry in fake.queue] == [path]
+    assert store.process_email_attachment_cleanup()["removed"] == 1, "the object is already gone (404): the entry is dropped"
+    assert fake.queue == []
+
+
+def test_supabase_deleting_an_opportunity_removes_only_its_attachment_bytes(supabase) -> None:
+    fake, store = supabase
+    deleted, kept = uuid4(), uuid4()
+    first = stored_attachment(store, deleted, "a.pdf")
+    second = stored_attachment(store, deleted, "b.pdf")
+    other = stored_attachment(store, kept, "c.pdf")
+    # The opportunity is deleted in the database: ON DELETE CASCADE removes its rows, the trigger
+    # queues their paths. The API is not involved.
+    for row in [row for row in fake.rows if row["opportunity_id"] == str(deleted)]:
+        fake.request(store, "DELETE", "email_attachments", params={"id": f"eq.{row['id']}"})
+    assert sorted(entry["storage_path"] for entry in fake.queue) == sorted([first[1], second[1]])
+    # The first sweep fails for one object; the failure stays queued and the next sweep recovers.
+    fake.fail = {"DELETE object"}
+    first_sweep = store.process_email_attachment_cleanup()
+    assert (first_sweep["removed"], first_sweep["failed"]) == (1, 1) and len(fake.queue) == 1
+    assert store.process_email_attachment_cleanup()["removed"] == 1
+    assert fake.queue == [] and set(fake.objects) == {other[1]}, "the other opportunity's bytes are untouched"
+    assert listed(store, kept) == ["c.pdf"]
+
+
+def test_supabase_cleanup_never_deletes_a_foreign_or_malformed_path(supabase) -> None:
+    fake, store = supabase
+    opportunity_id, foreign = uuid4(), uuid4()
+    _attachment_id, path, _content = stored_attachment(store, foreign)
+    # A queue entry naming another opportunity's object, and one that is no attachment path at all.
+    fake.queue.append({"storage_path": path, "opportunity_id": str(opportunity_id), "attempts": 0, "last_error": None})
+    fake.queue.append({"storage_path": "../client_documents/secret.pdf", "opportunity_id": str(opportunity_id), "attempts": 0, "last_error": None})
+    counts = store.process_email_attachment_cleanup()
+    assert counts["skipped"] == 2 and counts["removed"] == 0
+    assert path in fake.objects and all(entry["attempts"] == 1 for entry in fake.queue)
 
 
 def test_the_migration_creates_an_owned_table_and_a_private_bucket() -> None:
@@ -482,3 +615,10 @@ def test_the_migration_creates_an_owned_table_and_a_private_bucket() -> None:
     assert "WHERE created_by = auth.uid()" in sql and "storage_path TEXT NOT NULL UNIQUE" in sql
     assert "VALUES ('email_attachments', 'email_attachments', false)" in sql and "bucket_id = 'email_attachments'" in sql
     assert "size_bytes <= 10485760" in sql
+    # The lifecycle: pending/ready rows and a durable cleanup queue filled by a trigger.
+    assert "status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ready'))" in sql
+    assert "CREATE TABLE IF NOT EXISTS public.email_attachment_storage_cleanup" in sql
+    assert "ALTER TABLE public.email_attachment_storage_cleanup ENABLE ROW LEVEL SECURITY" in sql
+    assert "CREATE POLICY" not in sql.split("email_attachment_storage_cleanup (", 1)[1].split("CREATE OR REPLACE FUNCTION", 1)[0], "service role only"
+    assert "SECURITY DEFINER" in sql and "AFTER DELETE ON public.email_attachments" in sql
+    assert "ON CONFLICT (storage_path) DO NOTHING" in sql

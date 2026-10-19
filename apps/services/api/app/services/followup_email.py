@@ -1016,6 +1016,8 @@ def upload_attachment(
     except Exception:
         store.delete_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
         raise
+    # Bytes of earlier removals or deleted opportunities that could not be removed at once.
+    store.process_email_attachment_cleanup(limit=10)
     return envelope(store, opportunity_id=opportunity_id, user_id=user_id, journey_stage=stored["journey_stage"], stored=saved)
 
 
@@ -1041,6 +1043,7 @@ def remove_attachment(
         opportunity_id=opportunity_id, user_id=user_id, journey_stage=stored["journey_stage"], draft=draft, expected_revision=expected_revision
     )
     store.delete_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+    store.process_email_attachment_cleanup(limit=10)
     return envelope(store, opportunity_id=opportunity_id, user_id=user_id, journey_stage=stored["journey_stage"], stored=saved)
 
 
