@@ -19,9 +19,9 @@
     "test:premeeting:live": "tsx src/lib/liveDiscovery.test.ts && tsx src/lib/presentationLive.test.ts && tsx src/lib/ppt1Generation.test.ts && tsx src/lib/ownerFlowWiring.test.ts",
     "test:ms43": "npm run test:premeeting && tsx src/lib/clientDirectory.test.ts",
     "test:ms44": "tsx src/lib/postMeeting.test.ts",
-    "test:ms47": "tsx src/lib/postMeetingEmail.test.ts",
+    "test:ms47": "tsx src/lib/postMeetingEmail.test.ts && tsx src/lib/emailAttachments.test.ts",
     "test:ms46": "tsx src/lib/firstMeetingHandoff.test.ts",
-    "test:postmeeting": "tsx src/lib/postMeeting.test.ts && tsx src/lib/postMeetingEmail.test.ts && tsx src/lib/ppt2Generation.test.ts && tsx src/lib/postMeetingPresentation.test.ts && tsx src/lib/masterPresentationV2.test.ts && tsx src/lib/uiReliability.test.ts && tsx src/lib/postMeetingDiscovery.test.ts && npm run test:ms46"
+    "test:postmeeting": "tsx src/lib/postMeeting.test.ts && tsx src/lib/postMeetingEmail.test.ts && tsx src/lib/ppt2Generation.test.ts && tsx src/lib/postMeetingPresentation.test.ts && tsx src/lib/masterPresentationV2.test.ts && tsx src/lib/uiReliability.test.ts && tsx src/lib/postMeetingDiscovery.test.ts && tsx src/lib/emailAttachments.test.ts && npm run test:ms46"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

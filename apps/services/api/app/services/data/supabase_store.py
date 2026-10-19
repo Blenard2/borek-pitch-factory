@@ -225,6 +225,17 @@ def _normalize_discovery2_version(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _normalize_email_attachment(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **row,
+        "id": UUID(str(row["id"])),
+        "opportunity_id": UUID(str(row["opportunity_id"])),
+        "created_by": UUID(str(row["created_by"])),
+        "size_bytes": int(row["size_bytes"]),
+        "created_at": _parse_timestamp(row["created_at"]) if row.get("created_at") else None,
+    }
+
+
 def _normalize_framework(row: dict[str, Any]) -> dict[str, Any]:
     return {
         **row,
@@ -1911,6 +1922,107 @@ class SupabaseDataStore:
         if response.status_code not in (200, 204) or not response.json():
             raise conflict("DISCOVERY2_STALE", "Discovery 2 changed after it was loaded. Reload it and try again.")
         return _normalize_discovery2_version(response.json()[0])
+
+    # ------------------------------------------------------------ BAP-3 email attachments
+
+    def _email_attachment_object(self, storage_path: str) -> str:
+        return f"{self._base_url}/storage/v1/object/email_attachments/{storage_path}"
+
+    def create_email_attachment(
+        self,
+        *,
+        opportunity_id: UUID,
+        user_id: UUID,
+        journey_stage: str,
+        attachment_id: UUID,
+        file_name: str,
+        extension: str,
+        mime_type: str,
+        size_bytes: int,
+        sha256: str,
+        storage_path: str,
+        content: bytes,
+    ) -> dict[str, Any]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        uploaded = _request_with_retry(
+            "POST",
+            self._email_attachment_object(storage_path),
+            headers={**self._storage_auth_headers(), "Content-Type": mime_type, "x-upsert": "false"},
+            content=content,
+        )
+        if uploaded.status_code not in (200, 201):
+            raise bad_request("EMAIL_ATTACHMENT_STORAGE_FAILED", "The file could not be stored. Try again.")
+        payload = {
+            "id": str(attachment_id),
+            "opportunity_id": str(opportunity_id),
+            "journey_stage": journey_stage,
+            "file_name": file_name,
+            "extension": extension,
+            "mime_type": mime_type,
+            "size_bytes": size_bytes,
+            "sha256": sha256,
+            "storage_path": storage_path,
+            "created_by": str(user_id),
+        }
+        response = self._request("POST", "email_attachments", json_body=payload)
+        if response.status_code not in (200, 201) or not response.json():
+            # No row, no file: the stored bytes are removed again so nothing is left orphaned.
+            self._delete_email_attachment_object(storage_path)
+            raise bad_request("EMAIL_ATTACHMENT_STORAGE_FAILED", "The file could not be stored. Try again.")
+        return _normalize_email_attachment(response.json()[0])
+
+    def list_email_attachments(self, *, opportunity_id: UUID, user_id: UUID, journey_stage: str) -> list[dict[str, Any]]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        response = self._request(
+            "GET",
+            "email_attachments",
+            params={"select": "*", "opportunity_id": f"eq.{opportunity_id}", "journey_stage": f"eq.{journey_stage}", "order": "created_at.asc,id.asc"},
+        )
+        if response.status_code != 200:
+            raise bad_request("EMAIL_ATTACHMENT_LIST_FAILED", response.text)
+        return [_normalize_email_attachment(row) for row in response.json()]
+
+    def get_email_attachment(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> dict[str, Any]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        response = self._request(
+            "GET",
+            "email_attachments",
+            params={"select": "*", "id": f"eq.{attachment_id}", "opportunity_id": f"eq.{opportunity_id}", "limit": "1"},
+        )
+        if response.status_code != 200 or not response.json():
+            raise not_found("EMAIL_ATTACHMENT_NOT_FOUND", f"Attachment {attachment_id} was not found")
+        return _normalize_email_attachment(response.json()[0])
+
+    def read_email_attachment_content(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> bytes:
+        row = self.get_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+        response = _request_with_retry("GET", self._email_attachment_object(str(row["storage_path"])), headers=self._storage_auth_headers())
+        if response.status_code != 200:
+            raise not_found("EMAIL_ATTACHMENT_NOT_FOUND", f"The file of attachment {attachment_id} is not available")
+        return response.content
+
+    def delete_email_attachment(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> None:
+        """Bytes first, then the row: a failure leaves the row in place, so the owner sees the file and
+        can remove it again - never bytes without a row that nothing points at."""
+        row = self.get_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+        if not self._delete_email_attachment_object(str(row["storage_path"])):
+            raise service_unavailable("EMAIL_ATTACHMENT_DELETE_FAILED", "The file could not be removed. Try again.")
+        response = self._request(
+            "DELETE",
+            "email_attachments",
+            params={"id": f"eq.{attachment_id}", "opportunity_id": f"eq.{opportunity_id}"},
+        )
+        if response.status_code not in (200, 204):
+            raise service_unavailable("EMAIL_ATTACHMENT_DELETE_FAILED", "The file could not be removed. Try again.")
+
+    def _delete_email_attachment_object(self, storage_path: str) -> bool:
+        """True when the object is gone (also when it was already gone)."""
+        if not storage_path:
+            return True
+        response = _request_with_retry("DELETE", self._email_attachment_object(storage_path), headers=self._storage_auth_headers())
+        if response.status_code not in (200, 204, 404):
+            logger.warning("Email attachment storage cleanup failed for %s: HTTP %s", storage_path, response.status_code)
+            return False
+        return True
 
     def update_latest_framework(
         self,

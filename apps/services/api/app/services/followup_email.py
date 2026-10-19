@@ -31,6 +31,7 @@ Who wrote the text is recorded with the draft and shown to the owner:
 from __future__ import annotations
 
 import hashlib
+import uuid
 import logging
 import os
 import re
@@ -45,7 +46,7 @@ from fastapi import HTTPException
 
 from app.config import settings
 from app.services import deck_center
-from app.services.api_errors import bad_request, conflict
+from app.services.api_errors import bad_request, conflict, not_found
 from llm.claude.client import ClaudeClientError, claude_credentials_problem, sonnet_model, structured_complete
 from services.followup import ai_writer
 from services.followup.finalized import (
@@ -62,6 +63,15 @@ from services.followup.rendering import draft_has_placeholders, followup_content
 from services.observability.llm_logger import run_logged_llm_call
 from services.presentation.master_deck.plan import MANIFEST_KIND_V2, MASTER_MANIFEST_KINDS
 from services.presentation.master_deck.v2 import snapshot_hash
+from services.followup.attachments import (
+    MAX_EMAIL_BYTES,
+    MAX_EXTERNAL_ATTACHMENTS,
+    ExternalAttachmentError,
+    attachments_fit,
+    encoded_size,
+    unique_names,
+    validate_external_attachment,
+)
 
 SOURCE_KIND_V2 = "master_presentation_v2"
 REVIEW_CHECKS = ("recipients", "dates_and_owners", "supported_statements", "review_flags", "tone", "attachments")
@@ -77,6 +87,17 @@ ATTACHMENTS: dict[str, tuple[str, str, str]] = {
     "discovery2_docx": ("discovery_2", "docx", "Discovery 2"),
 }
 ATTACHMENT_KEYS = tuple(ATTACHMENTS)
+# BAP-3: a file the owner uploaded is selected under "external:<attachment id>" - a stable id,
+# never the file name.
+EXTERNAL_PREFIX = "external:"
+
+
+def is_external_key(key: str) -> bool:
+    return isinstance(key, str) and key.startswith(EXTERNAL_PREFIX)
+
+
+def external_key(attachment_id: Any) -> str:
+    return f"{EXTERNAL_PREFIX}{attachment_id}"
 # The generated text says "Please find attached the presentation, which we updated after our
 # meeting": true only while a Master Presentation V2 file is attached, not for another document.
 PRESENTATION_KEYS = ("pptx", "pdf")
@@ -105,6 +126,13 @@ logger = logging.getLogger(__name__)
 
 def _now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _iso(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = value.isoformat() if hasattr(value, "isoformat") else str(value)
+    return text.replace("+00:00", "Z")
 
 
 def revision_of(stored: dict[str, Any]) -> int:
@@ -368,11 +396,13 @@ DEFAULT_ATTACHMENT_SELECTION = {key: key == "pdf" for key in ATTACHMENT_KEYS}
 def attachment_selection(existing: dict[str, Any] | None, source: dict[str, Any]) -> dict[str, bool]:
     """The owner's selection for this presentation version, or the default for a new one."""
     previous = (existing or {}).get("source") or {}
+    stored = (existing or {}).get("attachment_selection") or {}
+    # Uploaded files belong to the draft, not to a presentation version: their selection stays.
+    uploaded = {key: bool(value) for key, value in stored.items() if is_external_key(key)}
     if previous.get("presentation_version_id") == source["presentation_version_id"]:
-        stored = (existing or {}).get("attachment_selection") or {}
         # A selection saved before BAP-7 names the V2 files only; the other documents start unselected.
-        return {key: bool(stored.get(key, False)) for key in ATTACHMENT_KEYS}
-    return dict(DEFAULT_ATTACHMENT_SELECTION)
+        return {**{key: bool(stored.get(key, False)) for key in ATTACHMENT_KEYS}, **uploaded}
+    return {**DEFAULT_ATTACHMENT_SELECTION, **uploaded}
 
 
 def master_generation(
@@ -439,8 +469,16 @@ def _safe_name(value: str) -> str:
     return re.sub(r"\s*-[\s-]*", " - ", cleaned).strip(" -.") or "Master Presentation"
 
 
-def attachments_for(store: Any, *, stored: dict[str, Any], user_id: UUID, opportunity_id: UUID) -> list[dict[str, Any]]:
-    """The four generated documents of the finalized package, with the owner's persisted selection.
+def attachments_for(
+    store: Any, *, stored: dict[str, Any], user_id: UUID, opportunity_id: UUID, read_uploads: bool = False
+) -> list[dict[str, Any]]:
+    """The generated documents and the uploaded files of the draft, with the owner's selection.
+
+    BAP-3: after the six generated files come the files the owner uploaded for this email, in
+    upload order. ``read_uploads`` reads the stored bytes of the selected uploads (confirmation and
+    export): a file whose bytes cannot be read is reported as unavailable.
+
+    Generated files - the four generated documents of the finalized package:
 
     Discovery 1, Discovery 2, Master Presentation V1 and V2 - each exactly the version the
     finalized V2 was built from, never a newer one. A document that cannot be resolved for this
@@ -480,6 +518,8 @@ def attachments_for(store: Any, *, stored: dict[str, Any], user_id: UUID, opport
             "version_number": source.get("version_number") if artifact == "master_presentation_v2" else None,
             "product_version": label,
             "download_path": None,
+            "origin": "generated",
+            "uploaded_at": None,
         }
         if version_id:
             try:
@@ -492,7 +532,63 @@ def attachments_for(store: Any, *, stored: dict[str, Any], user_id: UUID, opport
                 item.pop("_path", None)
                 item.pop("_bytes", None)
         items.append(item)
+    items.extend(_uploaded_items(store, stored=stored, user_id=user_id, opportunity_id=opportunity_id, read=read_uploads))
     return items
+
+
+def _uploaded_items(store: Any, *, stored: dict[str, Any], user_id: UUID, opportunity_id: UUID, read: bool) -> list[dict[str, Any]]:
+    selection = stored.get("attachment_selection") or {}
+    items = []
+    for row in store.list_email_attachments(opportunity_id=opportunity_id, user_id=user_id, journey_stage=stored["journey_stage"]):
+        key = external_key(row["id"])
+        item: dict[str, Any] = {
+            "key": key,
+            "artifact": "external",
+            "format": str(row["extension"]).removeprefix("."),
+            "file_name": str(row["file_name"]),
+            "selected": bool(selection.get(key)),
+            "available": True,
+            "size_bytes": int(row["size_bytes"]),
+            "presentation_id": None,
+            "presentation_version_id": None,
+            "artifact_version_id": str(row["id"]),
+            "version_number": None,
+            "product_version": "Uploaded",
+            "download_path": f"/opportunities/{opportunity_id}/email-drafts/{stored['id']}/attachments/{row['id']}/download",
+            "origin": "external",
+            "uploaded_at": _iso(row.get("created_at")),
+            "_mime": str(row["mime_type"]),
+            "_sha256": str(row["sha256"]),
+        }
+        if read and item["selected"]:
+            try:
+                data = store.read_email_attachment_content(opportunity_id=opportunity_id, user_id=user_id, attachment_id=row["id"])
+                if hashlib.sha256(data).hexdigest() != item["_sha256"]:
+                    raise ValueError("stored bytes do not match the upload")
+                item["_bytes"] = data
+            except (HTTPException, ValueError, OSError):
+                item["available"] = False
+        items.append(item)
+    return items
+
+
+def selected_sizes(files: list[dict[str, Any]]) -> list[int]:
+    return [int(item.get("size_bytes") or 0) for item in files if item["selected"]]
+
+
+def _too_large(estimate: int) -> Any:
+    return bad_request(
+        "EMAIL_ATTACHMENTS_TOO_LARGE",
+        f"With the selected attachments the email would be about {estimate / (1024 * 1024):.1f} MB once encoded; "
+        f"it can be at most {MAX_EMAIL_BYTES // (1024 * 1024)} MB. Deselect a file.",
+    )
+
+
+def _require_total_size(files: list[dict[str, Any]], extra: int | None = None) -> None:
+    """The 25 MB policy applies to the email, so attachments count with their encoded size."""
+    sizes = selected_sizes(files) + ([extra] if extra is not None else [])
+    if not attachments_fit(sizes):
+        raise _too_large(sum(encoded_size(size) for size in sizes))
 
 
 def _presentation_file(store: Any, item: dict[str, Any], *, presentation_id: UUID, version_id: UUID, kind: str, user_id: UUID) -> None:
@@ -712,15 +808,25 @@ def update_draft(
         master = isinstance(stored.get("source"), dict) and stored["source"].get("kind") == SOURCE_KIND_V2
         if not master and any(attachments.values()):
             raise bad_request("EMAIL_ATTACHMENT_UNAVAILABLE", "This draft has no approved presentation version to attach.")
-        unknown = sorted(set(attachments) - set(ATTACHMENT_KEYS))
+        uploads = (
+            {external_key(row["id"]) for row in store.list_email_attachments(opportunity_id=opportunity_id, user_id=user_id, journey_stage=journey_stage)}
+            if master
+            else set()
+        )
+        unknown = sorted(set(attachments) - set(ATTACHMENT_KEYS) - uploads)
         if unknown:
             raise bad_request("INVALID_EMAIL_ATTACHMENT", f"Unknown attachment: {', '.join(unknown)}.")
         previous = stored.get("attachment_selection") or {}
         selection = (
-            {key: bool(attachments[key]) if attachments.get(key) is not None else bool(previous.get(key, False)) for key in ATTACHMENT_KEYS}
+            {
+                key: bool(attachments[key]) if attachments.get(key) is not None else bool(previous.get(key, False))
+                for key in (*ATTACHMENT_KEYS, *sorted(uploads))
+            }
             if master
             else {}
         )
+        if master:
+            _require_total_size(attachments_for(store, stored={**stored, "attachment_selection": selection}, user_id=user_id, opportunity_id=opportunity_id))
         if selection != (stored.get("attachment_selection") or {}):
             was_attached = presentation_attached(stored.get("attachment_selection"))
             draft["attachment_selection"] = selection
@@ -813,10 +919,11 @@ def confirm_draft(
         require_complete_statics(opportunity.get("followup_statics"))
         text = stored["lengths"][selected_length]
         _checked_text(selected_length, text["subject"], text["body"])
-        files = attachments_for(store, stored=stored, user_id=user_id, opportunity_id=opportunity_id)
+        files = attachments_for(store, stored=stored, user_id=user_id, opportunity_id=opportunity_id, read_uploads=True)
         missing_files = [item["file_name"] for item in files if item["selected"] and not item["available"]]
         if missing_files:
             raise conflict("EMAIL_ATTACHMENT_UNAVAILABLE", f"A selected attachment is not available: {', '.join(missing_files)}.")
+        _require_total_size(files)
         # An email that announces a file it does not carry is wrong whoever wrote the sentence.
         if not any(item["selected"] for item in files) and announces_attachment(str(text["body"])):
             raise bad_request(
@@ -840,6 +947,120 @@ def confirm_draft(
         opportunity_id=opportunity_id, user_id=user_id, journey_stage=journey_stage, draft=draft, expected_revision=expected_revision
     )
     return envelope(store, opportunity_id=opportunity_id, user_id=user_id, journey_stage=journey_stage, stored=saved, opportunity=opportunity)
+
+
+# ----------------------------------------------------------------------------- uploaded attachments (BAP-3)
+
+
+def _uploads_allowed(stored: dict[str, Any]) -> None:
+    source = stored.get("source")
+    if not isinstance(source, dict) or source.get("kind") != SOURCE_KIND_V2:
+        raise bad_request("EMAIL_ATTACHMENT_UNAVAILABLE", "Files can be attached to the follow-up email of a finalized Master Presentation package only.")
+
+
+def _withdrawn(draft: dict[str, Any]) -> dict[str, Any]:
+    """What was reviewed no longer exists in this form: the confirmation is withdrawn."""
+    draft.update({"status": "draft", "confirmed_at": None, "confirmed_revision": None, "confirmed_by": None, "review": None, "recipients": None})
+    return draft
+
+
+def upload_attachment(
+    store: Any,
+    *,
+    opportunity_id: UUID,
+    user_id: UUID,
+    draft_id: UUID,
+    expected_revision: int,
+    file_name: str | None,
+    mime_type: str | None,
+    content: bytes,
+) -> dict[str, Any]:
+    """Store one uploaded file and select it for the email. The draft's revision moves on.
+
+    Checked before anything is stored: the revision the upload was made on, the number of
+    uploads, the file itself and the total size of the selected attachments. If the draft
+    changed in the meantime, the stored file is removed again.
+    """
+    stored = store.get_email_draft_by_id(opportunity_id=opportunity_id, user_id=user_id, draft_id=draft_id)
+    _require_revision(stored, expected_revision)
+    _uploads_allowed(stored)
+    existing = store.list_email_attachments(opportunity_id=opportunity_id, user_id=user_id, journey_stage=stored["journey_stage"])
+    if len(existing) >= MAX_EXTERNAL_ATTACHMENTS:
+        raise bad_request("EMAIL_ATTACHMENT_LIMIT", f"An email can carry at most {MAX_EXTERNAL_ATTACHMENTS} uploaded files. Remove one first.")
+    try:
+        checked = validate_external_attachment(file_name, mime_type, content)
+    except ExternalAttachmentError as exc:
+        raise bad_request(exc.code, exc.user_message) from exc
+    _require_total_size(attachments_for(store, stored=stored, user_id=user_id, opportunity_id=opportunity_id), extra=checked.size_bytes)
+    attachment_id = uuid.uuid4()
+    store.create_email_attachment(
+        opportunity_id=opportunity_id,
+        user_id=user_id,
+        journey_stage=stored["journey_stage"],
+        attachment_id=attachment_id,
+        file_name=checked.file_name,
+        extension=checked.extension,
+        mime_type=checked.mime_type,
+        size_bytes=checked.size_bytes,
+        sha256=checked.sha256,
+        # The stored name is the id, never the uploaded name: no path can be smuggled in.
+        storage_path=f"{opportunity_id}/{attachment_id}{checked.extension}",
+        content=content,
+    )
+    draft = _withdrawn(_carry(stored))
+    draft["attachment_selection"] = {**(stored.get("attachment_selection") or {}), external_key(attachment_id): True}
+    try:
+        saved = store.save_email_draft(
+            opportunity_id=opportunity_id, user_id=user_id, journey_stage=stored["journey_stage"], draft=draft, expected_revision=expected_revision
+        )
+    except Exception:
+        store.delete_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+        raise
+    return envelope(store, opportunity_id=opportunity_id, user_id=user_id, journey_stage=stored["journey_stage"], stored=saved)
+
+
+def remove_attachment(
+    store: Any,
+    *,
+    opportunity_id: UUID,
+    user_id: UUID,
+    draft_id: UUID,
+    attachment_id: UUID,
+    expected_revision: int,
+) -> dict[str, Any]:
+    """Remove an uploaded file. The draft no longer names it; a confirmation is withdrawn."""
+    stored = store.get_email_draft_by_id(opportunity_id=opportunity_id, user_id=user_id, draft_id=draft_id)
+    _require_revision(stored, expected_revision)
+    row = store.get_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+    if row["journey_stage"] != stored["journey_stage"]:
+        raise not_found("EMAIL_ATTACHMENT_NOT_FOUND", f"Attachment {attachment_id} was not found")
+    draft = _withdrawn(_carry(stored))
+    draft["attachment_selection"] = {key: value for key, value in (stored.get("attachment_selection") or {}).items() if key != external_key(attachment_id)}
+    # The draft stops naming the file first, so it never points at a file that is gone.
+    saved = store.save_email_draft(
+        opportunity_id=opportunity_id, user_id=user_id, journey_stage=stored["journey_stage"], draft=draft, expected_revision=expected_revision
+    )
+    store.delete_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+    return envelope(store, opportunity_id=opportunity_id, user_id=user_id, journey_stage=stored["journey_stage"], stored=saved)
+
+
+def list_attachments(store: Any, *, opportunity_id: UUID, user_id: UUID, draft_id: UUID) -> list[dict[str, Any]]:
+    stored = store.get_email_draft_by_id(opportunity_id=opportunity_id, user_id=user_id, draft_id=draft_id)
+    return [
+        {key: value for key, value in item.items() if not key.startswith("_")}
+        for item in attachments_for(store, stored=stored, user_id=user_id, opportunity_id=opportunity_id)
+    ]
+
+
+def download_attachment(store: Any, *, opportunity_id: UUID, user_id: UUID, draft_id: UUID, attachment_id: UUID) -> dict[str, Any]:
+    stored = store.get_email_draft_by_id(opportunity_id=opportunity_id, user_id=user_id, draft_id=draft_id)
+    row = store.get_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+    if row["journey_stage"] != stored["journey_stage"]:
+        raise not_found("EMAIL_ATTACHMENT_NOT_FOUND", f"Attachment {attachment_id} was not found")
+    content = store.read_email_attachment_content(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+    if hashlib.sha256(content).hexdigest() != row["sha256"]:
+        raise conflict("EMAIL_ATTACHMENT_UNAVAILABLE", f"The stored file of {row['file_name']} is not the uploaded one.")
+    return {"file_name": str(row["file_name"]), "media_type": str(row["mime_type"]), "content": content}
 
 
 # ----------------------------------------------------------------------------- export
@@ -883,18 +1104,20 @@ def export_eml(store: Any, *, opportunity_id: UUID, user_id: UUID, draft_id: UUI
     message["X-Borek-Draft-Revision"] = str(current)
     message.set_content(str(text["body"]) + "\n", subtype="plain", charset="utf-8", cte="quoted-printable")
     attached = []
-    for item in attachments_for(store, stored=stored, user_id=user_id, opportunity_id=opportunity_id):
-        if not item["selected"]:
-            continue
-        if not item["available"]:
-            raise conflict("EMAIL_ATTACHMENT_UNAVAILABLE", f"A selected attachment is not available: {item['file_name']}.")
+    selected = [item for item in attachments_for(store, stored=stored, user_id=user_id, opportunity_id=opportunity_id, read_uploads=True) if item["selected"]]
+    missing = [item["file_name"] for item in selected if not item["available"]]
+    if missing:
+        raise conflict("EMAIL_ATTACHMENT_UNAVAILABLE", f"A selected attachment is not available: {', '.join(missing)}.")
+    _require_total_size(selected)
+    # Two files of the same name stay two files: the later one is renamed "name (2).ext".
+    for item, file_name in zip(selected, unique_names([item["file_name"] for item in selected]), strict=True):
         data = item["_bytes"] if "_bytes" in item else item["_path"].read_bytes()
-        maintype, subtype = MEDIA_TYPES[item["format"]]
-        message.add_attachment(data, maintype=maintype, subtype=subtype, filename=item["file_name"])
+        maintype, subtype = (item["_mime"].split("/", 1) if "_mime" in item else MEDIA_TYPES[item["format"]])
+        message.add_attachment(data, maintype=maintype, subtype=subtype, filename=file_name)
         attached.append(
             {
                 "format": item["format"],
-                "file_name": item["file_name"],
+                "file_name": file_name,
                 "size_bytes": len(data),
                 "sha256": hashlib.sha256(data).hexdigest(),
                 "key": item["key"],
@@ -907,9 +1130,13 @@ def export_eml(store: Any, *, opportunity_id: UUID, user_id: UUID, draft_id: UUI
     if presentations:
         message["X-Borek-Presentation-Version-Id"] = presentations[0]
     project = str((opportunity.get("followup_statics") or {}).get("project_name") or "follow-up")
+    content = message.as_bytes()
+    # The estimate decided the selection; the exported message itself is the final check.
+    if len(content) > MAX_EMAIL_BYTES:
+        raise _too_large(len(content))
     return {
         "file_name": f"{_safe_name(project)} - follow-up email.eml",
-        "content": message.as_bytes(),
+        "content": content,
         "revision": current,
         "attachments": attached,
     }

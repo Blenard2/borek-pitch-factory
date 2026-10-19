@@ -137,6 +137,7 @@ class MemoryDataStore:
     framework_versions: dict[UUID, dict[str, Any]] = field(default_factory=dict)
     discovery_paper_versions: dict[UUID, dict[str, Any]] = field(default_factory=dict)
     post_meeting_discovery_versions: dict[UUID, dict[str, Any]] = field(default_factory=dict)
+    email_attachments: dict[UUID, dict[str, Any]] = field(default_factory=dict)
     presentation_plans: dict[UUID, dict[str, Any]] = field(default_factory=dict)
     presentations: dict[UUID, dict[str, Any]] = field(default_factory=dict)
     presentation_versions: dict[UUID, dict[str, Any]] = field(default_factory=dict)
@@ -1099,6 +1100,67 @@ class MemoryDataStore:
             row.update(updates)
             row["updated_at"] = _now()
             return copy.deepcopy(row)
+
+    # ------------------------------------------------------------ BAP-3 email attachments
+
+    def create_email_attachment(
+        self,
+        *,
+        opportunity_id: UUID,
+        user_id: UUID,
+        journey_stage: str,
+        attachment_id: UUID,
+        file_name: str,
+        extension: str,
+        mime_type: str,
+        size_bytes: int,
+        sha256: str,
+        storage_path: str,
+        content: bytes,
+    ) -> dict[str, Any]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        row = {
+            "id": attachment_id,
+            "opportunity_id": opportunity_id,
+            "journey_stage": journey_stage,
+            "file_name": file_name,
+            "extension": extension,
+            "mime_type": mime_type,
+            "size_bytes": size_bytes,
+            "sha256": sha256,
+            "storage_path": storage_path,
+            "created_by": user_id,
+            "created_at": _now(),
+            "content": bytes(content),
+        }
+        self.email_attachments[attachment_id] = row
+        return {key: copy.deepcopy(value) for key, value in row.items() if key != "content"}
+
+    def list_email_attachments(self, *, opportunity_id: UUID, user_id: UUID, journey_stage: str) -> list[dict[str, Any]]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        rows = [
+            row for row in self.email_attachments.values()
+            if row["opportunity_id"] == opportunity_id and row["journey_stage"] == journey_stage
+        ]
+        return [
+            {key: copy.deepcopy(value) for key, value in row.items() if key != "content"}
+            for row in sorted(rows, key=lambda item: (item["created_at"], str(item["id"])))
+        ]
+
+    def get_email_attachment(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> dict[str, Any]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        row = self.email_attachments.get(attachment_id)
+        if row is None or row["opportunity_id"] != opportunity_id:
+            raise not_found("EMAIL_ATTACHMENT_NOT_FOUND", f"Attachment {attachment_id} was not found")
+        return {key: copy.deepcopy(value) for key, value in row.items() if key != "content"}
+
+    def read_email_attachment_content(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> bytes:
+        self.get_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+        return bytes(self.email_attachments[attachment_id]["content"])
+
+    def delete_email_attachment(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> None:
+        self.get_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+        del self.email_attachments[attachment_id]
 
     def create_framework_version(
         self,

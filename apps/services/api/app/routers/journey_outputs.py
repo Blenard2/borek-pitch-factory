@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.auth import get_current_user
@@ -131,16 +132,20 @@ class EmailLengthEdits(BaseModel):
     extensive: EmailLengthEdit | None = None
 
 
-class EmailAttachmentSelection(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+_GENERATED_ATTACHMENT_KEYS = frozenset({"pptx", "pdf", "v1_pptx", "v1_pdf", "discovery1_docx", "discovery2_docx"})
+# BAP-3: an uploaded file is selected by its stable id, never by its name.
+_EXTERNAL_ATTACHMENT_KEY = re.compile(r"^external:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
-    pptx: bool | None = None
-    pdf: bool | None = None
-    # BAP-7: the other generated documents of the package.
-    v1_pptx: bool | None = None
-    v1_pdf: bool | None = None
-    discovery1_docx: bool | None = None
-    discovery2_docx: bool | None = None
+
+def _checked_selection(value: dict[str, bool] | None) -> dict[str, bool] | None:
+    if value is None:
+        return None
+    if len(value) > 30:
+        raise ValueError("Too many attachments in one request")
+    unknown = [key for key in value if key not in _GENERATED_ATTACHMENT_KEYS and not _EXTERNAL_ATTACHMENT_KEY.match(key)]
+    if unknown:
+        raise ValueError(f"Unknown attachment: {', '.join(sorted(unknown))}")
+    return value
 
 
 class EmailUpdateRequest(BaseModel):
@@ -151,7 +156,14 @@ class EmailUpdateRequest(BaseModel):
     expected_revision: int = Field(..., ge=1)
     selected_length: Literal["short", "medium", "extensive"] | None = None
     lengths: EmailLengthEdits | None = None
-    attachments: EmailAttachmentSelection | None = None
+    # The six generated files (pptx, pdf, v1_pptx, v1_pdf, discovery1_docx, discovery2_docx) and
+    # the uploaded files as "external:<id>"; whether an uploaded id exists is checked by the service.
+    attachments: dict[str, bool] | None = None
+
+    @model_validator(mode="after")
+    def _attachment_keys(self) -> "EmailUpdateRequest":
+        _checked_selection(self.attachments)
+        return self
 
 
 class DiscoveryPaperPageEdit(BaseModel):
@@ -1007,7 +1019,7 @@ def patch_email_draft(
         expected_revision=body.expected_revision,
         selected_length=body.selected_length,
         lengths=body.lengths.model_dump(exclude_none=True) if body.lengths else None,
-        attachments=body.attachments.model_dump(exclude_none=True) if body.attachments else None,
+        attachments=dict(body.attachments) if body.attachments is not None else None,
     )
     record_audit_event(
         store,
@@ -1049,6 +1061,77 @@ def get_email_export(
             "Cache-Control": "no-store",
         },
     )
+
+
+# ------------------------------------------------------------------ BAP-3 uploaded email attachments
+
+
+@router.post("/{opportunity_id}/email-drafts/{draft_id}/attachments")
+async def post_email_attachment(
+    opportunity_id: UUID,
+    draft_id: UUID,
+    user: AuthUserDep,
+    store: DataStoreDep,
+    file: UploadFile = File(...),
+    expected_revision: int = Form(..., ge=1),
+) -> dict:
+    """Upload one additional attachment and select it. The draft's revision moves on."""
+    from services.followup.attachments import MAX_EXTERNAL_ATTACHMENT_BYTES
+
+    # At most one byte past the limit is read, so an oversized upload is never held whole.
+    content = await file.read(MAX_EXTERNAL_ATTACHMENT_BYTES + 1)
+    saved = followup_email.upload_attachment(
+        store,
+        opportunity_id=opportunity_id,
+        user_id=user.id,
+        draft_id=draft_id,
+        expected_revision=expected_revision,
+        file_name=file.filename,
+        mime_type=file.content_type,
+        content=content,
+    )
+    record_audit_event(
+        store, actor_id=user.id, action=AuditAction.EMAIL_ATTACHMENT_UPLOAD, object_type=AuditObjectType.OPPORTUNITY, object_id=opportunity_id
+    )
+    return saved
+
+
+@router.get("/{opportunity_id}/email-drafts/{draft_id}/attachments")
+def get_email_attachments(opportunity_id: UUID, draft_id: UUID, user: AuthUserDep, store: DataStoreDep) -> dict:
+    return {"attachments": followup_email.list_attachments(store, opportunity_id=opportunity_id, user_id=user.id, draft_id=draft_id)}
+
+
+@router.get("/{opportunity_id}/email-drafts/{draft_id}/attachments/{attachment_id}/download")
+def get_email_attachment_download(
+    opportunity_id: UUID, draft_id: UUID, attachment_id: UUID, user: AuthUserDep, store: DataStoreDep
+) -> Response:
+    exported = followup_email.download_attachment(
+        store, opportunity_id=opportunity_id, user_id=user.id, draft_id=draft_id, attachment_id=attachment_id
+    )
+    ascii_name = exported["file_name"].encode("ascii", "ignore").decode().replace('"', "") or "attachment"
+    return Response(
+        content=exported["content"],
+        media_type=exported["media_type"],
+        headers={"Content-Disposition": f'attachment; filename="{ascii_name}"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.delete("/{opportunity_id}/email-drafts/{draft_id}/attachments/{attachment_id}")
+def delete_email_attachment(
+    opportunity_id: UUID,
+    draft_id: UUID,
+    attachment_id: UUID,
+    user: AuthUserDep,
+    store: DataStoreDep,
+    expected_revision: int = Query(..., ge=1),
+) -> dict:
+    saved = followup_email.remove_attachment(
+        store, opportunity_id=opportunity_id, user_id=user.id, draft_id=draft_id, attachment_id=attachment_id, expected_revision=expected_revision
+    )
+    record_audit_event(
+        store, actor_id=user.id, action=AuditAction.EMAIL_ATTACHMENT_REMOVE, object_type=AuditObjectType.OPPORTUNITY, object_id=opportunity_id
+    )
+    return saved
 
 
 @router.post("/{opportunity_id}/email-drafts/{draft_id}/confirm")

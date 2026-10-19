@@ -268,6 +268,12 @@
 .root .packageAttachments .emailAttachment { padding: 4px 12px; margin-bottom: 8px; background: var(--pitch-gray-50); border-radius: var(--pitch-control-radius); color: var(--pitch-navy); }
 .emailAttachment .check { margin: 8px 0; }
 .emailAttachment span { font-weight: var(--pitch-weight-medium); overflow-wrap: anywhere; }
+/* BAP-3: generated documents and the owner's own files, as two labelled groups. */
+.attachmentGroup { margin: 16px 0 8px; font-size: var(--pitch-text-label); font-weight: var(--pitch-weight-semibold); color: var(--pitch-navy); }
+.attachmentActions { display: inline-flex; flex-wrap: wrap; gap: 12px; }
+.attachmentHint { display: block; margin: 6px 0; }
+.attachmentTotal { margin: 12px 0 4px; font-size: var(--pitch-text-label); color: var(--pitch-navy); }
+.emailAttachment[data-upload="failed"] small { color: var(--pitch-red, #b42318); }
 .packageDocument { background: color-mix(in srgb, var(--pitch-teal) 10%, white); }
 .root .packageSidebar .packageExport :global(.btn-primary) { background: var(--pitch-teal); border-color: var(--pitch-teal); }
 .root .packageSidebar .packageExport :global(.btn-secondary) { width: 100%; margin-top: 10px; }

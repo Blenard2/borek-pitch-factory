@@ -234,7 +234,7 @@
     "Attachment": {
       "type": "object",
       "additionalProperties": false,
-      "description": "One generated document of the finalized package (BAP-7): Discovery 1, Discovery 2, Master Presentation V1 or V2, pinned to the version the finalized V2 was built from.",
+      "description": "One attachment the email can carry: a generated document of the finalized package (BAP-7: Discovery 1, Discovery 2, Master Presentation V1 or V2, pinned to the version the finalized V2 was built from), or a file the owner uploaded for this email (BAP-3, origin external, key external:<id>).",
       "required": [
         "key",
         "artifact",
@@ -248,12 +248,19 @@
         "artifact_version_id",
         "version_number",
         "product_version",
-        "download_path"
+        "download_path",
+        "origin",
+        "uploaded_at"
       ],
       "properties": {
-        "key": { "enum": ["pdf", "pptx", "v1_pdf", "v1_pptx", "discovery1_docx", "discovery2_docx"] },
-        "artifact": { "enum": ["master_presentation_v2", "master_presentation_v1", "discovery_1", "discovery_2"] },
-        "format": { "type": "string", "enum": ["pptx", "pdf", "docx"] },
+        "key": {
+          "anyOf": [
+            { "enum": ["pdf", "pptx", "v1_pdf", "v1_pptx", "discovery1_docx", "discovery2_docx"] },
+            { "type": "string", "pattern": "^external:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }
+          ]
+        },
+        "artifact": { "enum": ["master_presentation_v2", "master_presentation_v1", "discovery_1", "discovery_2", "external"] },
+        "format": { "type": "string", "enum": ["pptx", "pdf", "docx", "xlsx", "png", "jpg", "jpeg", "txt", "csv"] },
         "file_name": { "type": "string", "minLength": 1 },
         "selected": { "type": "boolean" },
         "available": { "type": "boolean" },
@@ -262,8 +269,10 @@
         "presentation_version_id": { "type": ["string", "null"], "format": "uuid" },
         "artifact_version_id": { "type": ["string", "null"], "format": "uuid" },
         "version_number": { "type": ["integer", "null"] },
-        "product_version": { "enum": ["V1", "V2", "Discovery 1", "Discovery 2"] },
-        "download_path": { "type": ["string", "null"] }
+        "product_version": { "enum": ["V1", "V2", "Discovery 1", "Discovery 2", "Uploaded"] },
+        "download_path": { "type": ["string", "null"] },
+        "origin": { "enum": ["generated", "external"], "description": "generated: a document of the package. external: uploaded by the owner; never evidence for a statement in the email." },
+        "uploaded_at": { "type": ["string", "null"] }
       }
     }
   }
