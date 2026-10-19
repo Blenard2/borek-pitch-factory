@@ -122,6 +122,14 @@ class Settings(BaseSettings):
         default="fixture",
         description="fixture for deterministic local/test runs; live invokes configured LLM providers",
     )
+    WEBSITE_RESEARCH_ENABLED: bool = Field(
+        default=True,
+        description=(
+            "BAP-5: read the client's public website (homepage and a few relevant pages, bounded and "
+            "SSRF-protected) for the Discovery analysis. Off in unit tests; when off, Discovery uses the "
+            "user's input only and says so"
+        ),
+    )
     FOLLOWUP_AI_WRITER_ENABLED: bool = Field(
         default=False,
         description=(

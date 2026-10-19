@@ -66,7 +66,91 @@
           "required": ["roles_employees", "decision_map", "system_interfaces"],
           "properties": {"roles_employees": {"type": "boolean"}, "decision_map": {"type": "boolean"}, "system_interfaces": {"type": "boolean"}}
         },
-        "stages": {"type": "array", "items": {"$ref": "#/$defs/Stage"}}
+        "stages": {"type": "array", "items": {"$ref": "#/$defs/Stage"}},
+        "website_research": {"$ref": "#/$defs/WebsiteResearch"}
+      }
+    },
+    "WebsiteResearch": {
+      "type": "object",
+      "description": "BAP-5: what the research of the client's website found and why it is incomplete. Facts are quoted verbatim with their source (SOURCE_FACT); signals are interpretations to validate (AI_INFERENCE). Absent in analyses generated without a research provider.",
+      "additionalProperties": false,
+      "required": ["schema_version", "status", "requested_url", "summary", "pages", "facts", "signals", "errors"],
+      "properties": {
+        "schema_version": {"const": "1.0"},
+        "status": {"type": "string", "enum": ["complete", "partial", "failed", "not_provided"]},
+        "requested_url": {"type": ["string", "null"]},
+        "final_url": {"type": ["string", "null"]},
+        "site": {"type": ["string", "null"]},
+        "researched_at": {"type": "string"},
+        "user_agent": {"type": "string"},
+        "summary": {"$ref": "#/$defs/Text"},
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url", "role", "status"],
+            "properties": {
+              "url": {"type": "string"},
+              "role": {"type": "string"},
+              "status": {"type": "string", "enum": ["pending", "ok", "failed", "requires_javascript", "blocked_by_robots", "skipped"]},
+              "title": {"type": "string"},
+              "chars": {"type": "integer", "minimum": 0},
+              "error": {"type": "string"}
+            }
+          }
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "label", "value", "origin", "source_url", "locator", "excerpt"],
+            "properties": {
+              "kind": {"type": "string"},
+              "label": {"$ref": "#/$defs/Text"},
+              "value": {"$ref": "#/$defs/Text"},
+              "origin": {"const": "SOURCE_FACT"},
+              "source_url": {"$ref": "#/$defs/Text"},
+              "locator": {"$ref": "#/$defs/Text"},
+              "excerpt": {"$ref": "#/$defs/Text"}
+            }
+          }
+        },
+        "signals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "topic", "origin", "status", "statement", "evidence"],
+            "properties": {
+              "key": {"type": "string"},
+              "topic": {"$ref": "#/$defs/Text"},
+              "origin": {"const": "AI_INFERENCE"},
+              "status": {"const": "to_validate"},
+              "statement": {"$ref": "#/$defs/Text"},
+              "mentions": {"type": "integer", "minimum": 0},
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["source_url", "excerpt"],
+                  "properties": {"source_url": {"type": "string"}, "excerpt": {"type": "string"}}
+                }
+              }
+            }
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "url", "message"],
+            "properties": {"code": {"type": "string"}, "url": {"type": "string"}, "message": {"type": "string"}}
+          }
+        }
       }
     },
     "KnownFact": {

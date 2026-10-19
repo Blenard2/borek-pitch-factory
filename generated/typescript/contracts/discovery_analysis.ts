@@ -58,6 +58,7 @@ export interface Generation {
     system_interfaces: boolean;
   };
   stages: Stage[];
+  website_research?: WebsiteResearch;
 }
 export interface Stage {
   key:
@@ -72,6 +73,53 @@ export interface Stage {
     | "layout";
   label: Text;
   status: "waiting" | "generating" | "ready" | "failed" | "skipped";
+}
+/**
+ * BAP-5: what the research of the client's website found and why it is incomplete. Facts are quoted verbatim with their source (SOURCE_FACT); signals are interpretations to validate (AI_INFERENCE). Absent in analyses generated without a research provider.
+ */
+export interface WebsiteResearch {
+  schema_version: "1.0";
+  status: "complete" | "partial" | "failed" | "not_provided";
+  requested_url: string | null;
+  final_url?: string | null;
+  site?: string | null;
+  researched_at?: string;
+  user_agent?: string;
+  summary: Text;
+  pages: {
+    url: string;
+    role: string;
+    status: "pending" | "ok" | "failed" | "requires_javascript" | "blocked_by_robots" | "skipped";
+    title?: string;
+    chars?: number;
+    error?: string;
+  }[];
+  facts: {
+    kind: string;
+    label: Text;
+    value: Text;
+    origin: "SOURCE_FACT";
+    source_url: Text;
+    locator: Text;
+    excerpt: Text;
+  }[];
+  signals: {
+    key: string;
+    topic: Text;
+    origin: "AI_INFERENCE";
+    status: "to_validate";
+    statement: Text;
+    mentions?: number;
+    evidence: {
+      source_url: string;
+      excerpt: string;
+    }[];
+  }[];
+  errors: {
+    code: string;
+    url: string;
+    message: string;
+  }[];
 }
 export interface Analysis {
   research: Research;
