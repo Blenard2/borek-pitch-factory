@@ -169,8 +169,14 @@ export interface PostMeetingReview {
     status: "none" | "current" | "stale"; stale_reasons: string[]; confirmed_at: string | null;
     items: Record<ExtractionCategory, ReviewedFinding[]> | null; confirmed_count: number; excluded_count: number;
   };
+  /** BAP-7: Discovery 2, generated from the confirmed meeting and approved before V2. */
+  discovery2?: {
+    status: "not_generated" | "generating" | "failed" | "draft" | "approved" | "stale"; can_generate: boolean;
+    latest_version: { version_id: string; version_number: number; status: string } | null;
+    approved_version: { version_id: string; version_number: number } | null; stale_reasons: string[];
+  };
   readiness: { ready_for_v2: boolean; blockers: string[] };
-  v2_sources: { presentation_id: string; source_hash: string } | null;
+  v2_sources: { presentation_id: string; source_hash: string; discovery2_version_id?: string } | null;
 }
 
 export const FINDING_SOURCE_LABEL: Record<FindingSource, string> = {
@@ -198,6 +204,9 @@ const BLOCKER_TEXT: Record<string, string> = {
   MEETING_REVIEW_STALE: "Confirm the findings again: a source changed.",
   MEETING_FINDINGS_EMPTY: "The analysis found no findings. Master Presentation V2 needs at least one confirmed finding.",
   MEETING_FINDINGS_NONE_CONFIRMED: "No finding is confirmed. Include at least one finding and confirm again.",
+  DISCOVERY2_MISSING: "Generate Discovery 2 from the confirmed meeting information.",
+  DISCOVERY2_NOT_APPROVED: "Review and approve Discovery 2.",
+  DISCOVERY2_STALE: "Generate Discovery 2 again: the meeting information changed after it was generated.",
 };
 
 export const staleReasonText = (code: string) => STALE_REASON_TEXT[code] ?? "A source changed.";
@@ -296,6 +305,7 @@ export function reviewHeadline(review: PostMeetingReview, v2State?: string | nul
   if (review.readiness.ready_for_v2 && v2State === "generating") return "Generating Master Presentation V2";
   if (review.readiness.ready_for_v2 && v2State === "outdated") return "Master Presentation V2 needs a new revision";
   if (review.readiness.ready_for_v2) return "Ready for Master Presentation V2";
+  if ((review.readiness.blockers ?? []).some((code) => code.startsWith("DISCOVERY2_"))) return "Next: Discovery 2";
   if (review.confirmation.status === "stale") return "Confirmation is out of date";
   if (review.extraction.status === "stale") return "Analysis is out of date";
   if (review.extraction.status === "current" && review.extraction.item_count === 0) return "No findings to confirm";

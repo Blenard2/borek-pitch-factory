@@ -73,6 +73,8 @@ export interface FinalizedSource {
   snapshot_hash: string;
   generation_fingerprint?: string | null;
   approved_discovery_version_id?: string | null;
+  approved_discovery2_version_id?: string | null;
+  base_presentation_version_id?: string | null;
   transcript_id?: string | null;
   transcript_revision?: string | null;
   meeting_review_confirmed_at?: string | null;
@@ -101,16 +103,23 @@ export interface Person {
   name: string | null;
   email: string;
 }
+/**
+ * One generated document of the finalized package (BAP-7): Discovery 1, Discovery 2, Master Presentation V1 or V2, pinned to the version the finalized V2 was built from.
+ */
 export interface Attachment {
-  format: "pptx" | "pdf";
+  key: "pdf" | "pptx" | "v1_pdf" | "v1_pptx" | "discovery1_docx" | "discovery2_docx";
+  artifact: "master_presentation_v2" | "master_presentation_v1" | "discovery_1" | "discovery_2";
+  format: "pptx" | "pdf" | "docx";
   file_name: string;
   selected: boolean;
   available: boolean;
   size_bytes: number | null;
-  presentation_id: string;
-  presentation_version_id: string;
+  presentation_id: string | null;
+  presentation_version_id: string | null;
+  artifact_version_id: string | null;
   version_number: number | null;
-  product_version: "V2";
+  product_version: "V1" | "V2" | "Discovery 1" | "Discovery 2";
+  download_path: string | null;
 }
 export interface Writer {
   /**

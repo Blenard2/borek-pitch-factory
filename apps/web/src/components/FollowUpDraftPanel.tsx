@@ -9,7 +9,7 @@ import { PostMeetingPhaseNav, usePostMeeting } from "@/components/PostMeetingShe
 import { isMasterJourney } from "@/lib/discoveryFirst";
 import { loadPostMeetingWorkflow, postMeetingError } from "@/lib/postMeeting";
 import {
-  EMAIL_LENGTHS, EMAIL_LENGTH_LABEL, EMAIL_REVIEW_CHECKS, EMAIL_STATE_LABEL, advancedReviewUi, approvalFor, attachmentMismatch, canPreparePostMeetingEmail, clipboardText,
+  ATTACHMENT_ARTIFACT_LABEL, EMAIL_LENGTHS, EMAIL_LENGTH_LABEL, EMAIL_REVIEW_CHECKS, EMAIL_STATE_LABEL, advancedReviewUi, approvalFor, attachmentMismatch, canPreparePostMeetingEmail, clipboardText,
   confirmPostMeetingEmail, contentWordCount, downloadEmailAttachment, emailError, emailExportable, emailState,
   exportPostMeetingEmail, formatFileSize, generatePostMeetingEmail, isEmailConflict, isEmailHasEdits, isStaticsMissing,
   loadFollowupStatics, loadPostMeetingEmail, openReviewFlags, personLabel, saveFollowupStatics, savePostMeetingEmail, staticsFormFrom,
@@ -182,7 +182,7 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
 
   const toggleAttachment = (attachment: EmailAttachment) => run("saving", async (token) => {
     if (!draft) return;
-    const saved = await savePostMeetingEmail(token, opportunityId, draft, { attachments: { [attachment.format]: !attachment.selected } });
+    const saved = await savePostMeetingEmail(token, opportunityId, draft, { attachments: { [attachment.key]: !attachment.selected } });
     if (!alive.current) return;
     // The API keeps generated text true to the selection; a text the owner edited is theirs and stays.
     const rewritten = EMAIL_LENGTHS.filter((name) => saved.lengths[name].body !== draft.lengths[name].body);
@@ -386,11 +386,11 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
         <header>
           <h3 className={styles.packageLabel}>Updated presentation</h3>
           {!master && !draft?.source ? <StandalonePresentationCard opportunityId={opportunityId} token={live ? accessToken : null} reviewHref={`${root}/post-meeting-presentation`} /> : <div className={styles.packageDocument} data-testid="email-presentation">
-            <strong>{draft?.source ? (draft.attachments[0]?.fileName.replace(/\.(pptx|pdf)$/, "") ?? "Master Presentation V2") : master ? "Master Presentation V2" : "Updated presentation"}</strong>
+            <strong>{draft?.source ? (draft.attachments.find((item) => item.artifact === "master_presentation_v2")?.fileName.replace(/\.(pptx|pdf)$/, "") ?? "Master Presentation V2") : master ? "Master Presentation V2" : "Updated presentation"}</strong>
             <small>{draft?.source ? `Master Presentation V2 · version ${draft.source.versionNumber} · reviewed and finalized` : eligible ? "Finalized · prepare the email to pin this version" : "Not finalized yet"}</small>
             <div className={styles.packageDocumentActions}>
               <Link className="btn btn-secondary" href={`${root}/${master ? "post-meeting-presentation" : "review"}`}>Open in Deck Center</Link>
-              {draft?.attachments.map((item) => <button key={item.format} className="btn btn-secondary" type="button" disabled={!item.available || working} onClick={() => void download(item)}>{item.format.toUpperCase()}</button>)}
+              {draft?.attachments.filter((item) => item.artifact === "master_presentation_v2").map((item) => <button key={item.key} className="btn btn-secondary" type="button" disabled={!item.available || working} onClick={() => void download(item)}>{item.format.toUpperCase()}</button>)}
             </div>
             {draft?.source ? <small>Downloads are the reviewed version {draft.source.versionNumber}, never a newer one.</small> : null}
           </div>}
@@ -404,9 +404,10 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
         <section className={styles.packageAttachments}>
           <h3 className={styles.packageLabel}>Email attachments</h3>
           {draft?.attachments.length ? <ul aria-label="Approved email attachments" data-testid="email-attachments">
-            {draft.attachments.map((item) => <li key={item.format} className={styles.emailAttachment}>
-              <label className={styles.check}><input type="checkbox" checked={item.selected} disabled={working || conflict} data-testid={`email-attach-${item.format}`} onChange={() => void toggleAttachment(item)} />
-                <span>{item.fileName}<small>{item.available ? `${formatFileSize(item.sizeBytes)} · approved version ${item.versionNumber ?? ""}` : "Not available — this file cannot be attached"}</small></span></label>
+            {draft.attachments.map((item) => <li key={item.key} className={styles.emailAttachment} data-artifact={item.artifact}>
+              <label className={styles.check}><input type="checkbox" checked={item.selected} disabled={working || conflict} data-testid={`email-attach-${item.key}`} onChange={() => void toggleAttachment(item)} />
+                <span>{item.fileName}<small>{ATTACHMENT_ARTIFACT_LABEL[item.artifact]} · {item.available ? `${item.format.toUpperCase()} · ${formatFileSize(item.sizeBytes)} · approved version ${item.versionNumber ?? ""}` : "Not available — this file cannot be attached"}</small></span></label>
+              {item.available ? <button type="button" className={styles.emailLink} disabled={working} onClick={() => void download(item)}>Download</button> : null}
             </li>)}
           </ul> : <p>{draft ? "This draft has no approved presentation version to attach." : "Available after the email draft is prepared."}</p>}
           {draft?.attachments.length ? <small>Selected files are packed into the exported email file. A file that is not selected is not attached.</small> : null}

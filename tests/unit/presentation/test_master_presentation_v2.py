@@ -11,6 +11,8 @@ import pytest
 from pptx import Presentation
 
 from services.framework.discovery_analysis.pipeline import generate_discovery_analysis
+from services.meeting.discovery2 import CATEGORIES as DISCOVERY2_CATEGORIES
+from services.meeting.discovery2 import Discovery2Error, content_hash, generate_discovery2
 from services.presentation.master_deck import appendix, appendix_v2, assembly, office, registry, v2
 from services.presentation.master_deck.appendix import AppendixPlanError
 from services.presentation.master_deck.plan import is_master_manifest, is_master_plan
@@ -80,6 +82,55 @@ def approved_row(**overrides: Any) -> dict[str, Any]:
     return row
 
 
+VERIFIED = {"transcript", "personal_notes", "both"}
+
+
+def discovery2_row(items: dict[str, list[dict[str, str]]], approved: dict[str, Any] | None = None) -> dict[str, Any]:
+    """BAP-7: the approved Discovery 2 the fixture generator makes from these reviewed findings.
+
+    Its meeting items are the confirmed findings word for word. A finding without a verified
+    source keeps that source, so the snapshot can refuse it.
+    """
+    usable = {category: [{**item, "source": item["source"] if item["source"] in VERIFIED else "transcript"} for item in items.get(category, [])] for category in DISCOVERY2_CATEGORIES}
+    arguments = dict(
+        opportunity=OPPORTUNITY,
+        document_id="77777777-7777-4777-8777-777777777777",
+        generated_at="2026-10-08T11:10:00Z",
+        # Generated from the same approved Discovery 1; a row V2 refuses anyway falls back to the default.
+        discovery1=approved if approved and approved.get("status") == "approved" and approved.get("opportunity_id") == OPPORTUNITY["id"]
+        and (approved.get("paper_json") or {}).get("schema_version") == "2.0" else approved_row(),
+        transcript={"transcript_id": "66666666-6666-4666-8666-666666666666", "revision": "a" * 64, "file_name": "meeting.txt", "text": "meeting"},
+        personal_notes={"updated_at": "2026-10-08T10:30:00Z", "text": f"Opportunity: {OBSERVATION}"},
+        extraction={"generated_at": "2026-10-08T11:00:00Z", "execution_mode": "fixture"},
+        basis="d" * 64,
+        live=False,
+    )
+    try:
+        document = generate_discovery2(**arguments, confirmation={"items": usable, "confirmed_at": "2026-10-08T11:05:00Z"})
+    except Discovery2Error:
+        # Nothing confirmed: a Discovery 2 without meeting items.
+        placeholder = {**usable, "decisions": [finding("Placeholder.")]}
+        document = generate_discovery2(**arguments, confirmation={"items": placeholder, "confirmed_at": "2026-10-08T11:05:00Z"})
+        for section in document["sections"]:
+            section["items"] = [item for item in section["items"] if item["origin"] == "discovery1"]
+    for section in document["sections"]:
+        unverified = {item["text"] for item in items.get(section["key"], []) if item["source"] not in VERIFIED}
+        for item in section["items"]:
+            if item["origin"] == "meeting" and item["text"] in unverified:
+                item["source"] = "unverified"
+    return {
+        "id": "88888888-8888-4888-8888-888888888888",
+        "opportunity_id": OPPORTUNITY["id"],
+        "document_id": document["document_id"],
+        "version_number": 1,
+        "status": "approved",
+        "document_json": document,
+        "content_hash": content_hash(document),
+        "basis_hash": "d" * 64,
+        "approved_at": "2026-10-08T11:15:00Z",
+    }
+
+
 def snapshot_for(items: dict[str, list[dict[str, str]]] | None = None, **overrides: Any) -> dict[str, Any]:
     arguments: dict[str, Any] = {
         "opportunity_id": OPPORTUNITY["id"],
@@ -99,6 +150,7 @@ def snapshot_for(items: dict[str, list[dict[str, str]]] | None = None, **overrid
         },
     }
     arguments.update(overrides)
+    arguments.setdefault("approved_discovery2", discovery2_row(arguments["reviewed_items"], arguments["approved_discovery"]))
     return v2.build_snapshot(**arguments)
 
 
@@ -313,9 +365,9 @@ def test_recommendations_need_clear_support_in_what_the_client_said() -> None:
     assert recommendation["content"]["notes"][1]["text"] == appendix.BENCHMARK_NOTE
 
     # One shared word is a coincidence: every recommended opportunity shares at least two subject words.
-    matches = appendix_v2._matching_opportunities(analysis, appendix_v2.confirmed_findings(snapshot))
+    matches = appendix_v2._matching_opportunities(analysis, appendix_v2.confirmed_findings(snapshot), snapshot["approved_discovery2"])
     recommended = appendix_v2._recommended(matches)
-    assert [match["item"]["title"] for match in recommended] == [row["title"] for row in rows]
+    assert [match["title"] for match in recommended] == [row["title"] for row in rows]
     assert all(len(match["shared_terms"]) >= 2 for match in recommended)
     assert not {"every", "system", "team", "data"} & {term for match in matches for term in match["shared_terms"]}, "generic words carry no support"
     assert appendix_v2._keywords("Quotes and quoting processes for every team") == {"quote", "quot"} or "quote" in appendix_v2._keywords("Quotes for every team")

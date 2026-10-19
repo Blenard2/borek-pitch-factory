@@ -45,6 +45,16 @@ from app.services.meeting_extraction import (
     personal_notes_view,
 )
 from app.services.master_presentation_v2 import build_master_v2_status, enqueue_master_presentation_v2
+from app.services.post_meeting_discovery import (
+    approve_post_meeting_discovery,
+    discovery1_docx,
+    discovery2_docx,
+    edit_post_meeting_discovery,
+    generate_post_meeting_discovery,
+    get_post_meeting_discovery,
+    get_post_meeting_discovery_version,
+    list_post_meeting_discovery_versions,
+)
 from app.services.post_meeting_review import build_post_meeting_review, confirm_meeting_review
 from app.services.ppt2_context import build_ppt2_context
 from app.services.workflow_status import (
@@ -126,6 +136,11 @@ class EmailAttachmentSelection(BaseModel):
 
     pptx: bool | None = None
     pdf: bool | None = None
+    # BAP-7: the other generated documents of the package.
+    v1_pptx: bool | None = None
+    v1_pdf: bool | None = None
+    discovery1_docx: bool | None = None
+    discovery2_docx: bool | None = None
 
 
 class EmailUpdateRequest(BaseModel):
@@ -187,6 +202,50 @@ class DiscoveryPaperGenerateRequest(BaseModel):
     roles_employees: bool = False
     decision_map: bool = False
     system_interfaces: bool = False
+
+
+class Discovery2ItemEdit(BaseModel):
+    """One item in its new position. Without ``id`` it is a new item written by the owner."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str | None = Field(default=None, max_length=80)
+    text: str = Field(max_length=4000)
+
+
+class Discovery2SectionEdit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: Literal[
+        "context", "requirements", "challenges", "priorities", "opportunities", "discussed_solutions", "decisions", "follow_ups", "open_questions"
+    ]
+    items: list[Discovery2ItemEdit] = Field(max_length=60)
+
+
+class Discovery2EditRequest(BaseModel):
+    """``expected_version_id`` and ``expected_content_hash`` name the version the edit was made on."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    expected_version_id: UUID
+    expected_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    sections: list[Discovery2SectionEdit] = Field(min_length=1, max_length=9)
+
+
+class Discovery2ApproveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_version_id: UUID
+    expected_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+def _docx_response(exported: dict) -> Response:
+    ascii_name = exported["file_name"].encode("ascii", "ignore").decode() or "discovery.docx"
+    return Response(
+        content=exported["content"],
+        media_type=exported["media_type"],
+        headers={"Content-Disposition": f'attachment; filename="{ascii_name}"', "Cache-Control": "no-store"},
+    )
 
 
 class EmailConfirmRequest(BaseModel):
@@ -369,6 +428,104 @@ def get_opportunity_discovery_paper_version(
         version_id=version_id,
         user_id=user.id,
     )
+
+
+@router.get("/{opportunity_id}/discovery-paper/versions/{version_id}/download/docx")
+def get_opportunity_discovery_paper_docx(
+    opportunity_id: UUID,
+    version_id: UUID,
+    user: AuthUserDep,
+    store: DataStoreDep,
+) -> Response:
+    """BAP-7: the Discovery 1 version as a Word file (attachable to the follow-up email)."""
+    return _docx_response(discovery1_docx(store, opportunity_id=opportunity_id, version_id=version_id, user_id=user.id))
+
+
+# ------------------------------------------------------------------ BAP-7 Discovery 2
+
+
+@router.get("/{opportunity_id}/post-meeting-discovery")
+def get_opportunity_post_meeting_discovery(opportunity_id: UUID, user: AuthUserDep, store: DataStoreDep) -> dict:
+    return get_post_meeting_discovery(store, opportunity_id=opportunity_id, user_id=user.id)
+
+
+@router.post("/{opportunity_id}/post-meeting-discovery/generate")
+def post_opportunity_post_meeting_discovery_generate(opportunity_id: UUID, user: AuthUserDep, store: DataStoreDep) -> dict:
+    result = generate_post_meeting_discovery(store, opportunity_id=opportunity_id, user_id=user.id)
+    record_audit_event(
+        store,
+        actor_id=user.id,
+        action=AuditAction.DISCOVERY2_GENERATE,
+        object_type=AuditObjectType.OPPORTUNITY,
+        object_id=opportunity_id,
+        version_id=UUID(result["generated_version_id"]),
+    )
+    return result
+
+
+@router.patch("/{opportunity_id}/post-meeting-discovery")
+def patch_opportunity_post_meeting_discovery(
+    opportunity_id: UUID, body: Discovery2EditRequest, user: AuthUserDep, store: DataStoreDep
+) -> dict:
+    result = edit_post_meeting_discovery(
+        store,
+        opportunity_id=opportunity_id,
+        user_id=user.id,
+        expected_version_id=body.expected_version_id,
+        expected_content_hash=body.expected_content_hash,
+        sections=[section.model_dump() for section in body.sections],
+    )
+    current = result.get("current_version") or {}
+    record_audit_event(
+        store,
+        actor_id=user.id,
+        action=AuditAction.DISCOVERY2_EDIT,
+        object_type=AuditObjectType.OPPORTUNITY,
+        object_id=opportunity_id,
+        version_id=UUID(current["id"]) if current.get("id") else None,
+    )
+    return result
+
+
+@router.post("/{opportunity_id}/post-meeting-discovery/approve")
+def post_opportunity_post_meeting_discovery_approve(
+    opportunity_id: UUID, body: Discovery2ApproveRequest, user: AuthUserDep, store: DataStoreDep
+) -> dict:
+    result = approve_post_meeting_discovery(
+        store,
+        opportunity_id=opportunity_id,
+        user_id=user.id,
+        expected_version_id=body.expected_version_id,
+        expected_content_hash=body.expected_content_hash,
+    )
+    record_audit_event(
+        store,
+        actor_id=user.id,
+        action=AuditAction.DISCOVERY2_APPROVE,
+        object_type=AuditObjectType.OPPORTUNITY,
+        object_id=opportunity_id,
+        version_id=body.expected_version_id,
+    )
+    return result
+
+
+@router.get("/{opportunity_id}/post-meeting-discovery/versions")
+def get_opportunity_post_meeting_discovery_versions(opportunity_id: UUID, user: AuthUserDep, store: DataStoreDep) -> dict:
+    return {"versions": list_post_meeting_discovery_versions(store, opportunity_id=opportunity_id, user_id=user.id)}
+
+
+@router.get("/{opportunity_id}/post-meeting-discovery/versions/{version_id}")
+def get_opportunity_post_meeting_discovery_version(
+    opportunity_id: UUID, version_id: UUID, user: AuthUserDep, store: DataStoreDep
+) -> dict:
+    return get_post_meeting_discovery_version(store, opportunity_id=opportunity_id, version_id=version_id, user_id=user.id)
+
+
+@router.get("/{opportunity_id}/post-meeting-discovery/versions/{version_id}/download/docx")
+def get_opportunity_post_meeting_discovery_docx(
+    opportunity_id: UUID, version_id: UUID, user: AuthUserDep, store: DataStoreDep
+) -> Response:
+    return _docx_response(discovery2_docx(store, opportunity_id=opportunity_id, version_id=version_id, user_id=user.id))
 
 
 @router.get("/{opportunity_id}/stage2-outputs")

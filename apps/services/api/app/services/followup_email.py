@@ -65,10 +65,29 @@ from services.presentation.master_deck.v2 import snapshot_hash
 
 SOURCE_KIND_V2 = "master_presentation_v2"
 REVIEW_CHECKS = ("recipients", "dates_and_owners", "supported_statements", "review_flags", "tone", "attachments")
-ATTACHMENT_FORMATS = ("pptx", "pdf")
+# BAP-7: the four generated documents of the package, each pinned to the version the finalized
+# Master Presentation V2 was built from. key -> (artifact, file format, product label).
+# "pptx" and "pdf" keep naming the V2 files, as drafts stored before BAP-7 do.
+ATTACHMENTS: dict[str, tuple[str, str, str]] = {
+    "pptx": ("master_presentation_v2", "pptx", "V2"),
+    "pdf": ("master_presentation_v2", "pdf", "V2"),
+    "v1_pptx": ("master_presentation_v1", "pptx", "V1"),
+    "v1_pdf": ("master_presentation_v1", "pdf", "V1"),
+    "discovery1_docx": ("discovery_1", "docx", "Discovery 1"),
+    "discovery2_docx": ("discovery_2", "docx", "Discovery 2"),
+}
+ATTACHMENT_KEYS = tuple(ATTACHMENTS)
+# The generated text says "Please find attached the presentation, which we updated after our
+# meeting": true only while a Master Presentation V2 file is attached, not for another document.
+PRESENTATION_KEYS = ("pptx", "pdf")
+
+
+def presentation_attached(selection: dict[str, Any] | None) -> bool:
+    return any(bool((selection or {}).get(key)) for key in PRESENTATION_KEYS)
 MEDIA_TYPES = {
     "pptx": ("application", "vnd.openxmlformats-officedocument.presentationml.presentation"),
     "pdf": ("application", "pdf"),
+    "docx": ("application", "vnd.openxmlformats-officedocument.wordprocessingml.document"),
 }
 MAX_SUBJECT_CHARS = 200
 MAX_BODY_CHARS = 20000
@@ -159,6 +178,8 @@ def resolve_finalized_source(store: Any, *, opportunity: dict[str, Any], opportu
         "snapshot_hash": str(manifest["snapshot_hash"]),
         "generation_fingerprint": manifest.get("generation_fingerprint"),
         "approved_discovery_version_id": manifest.get("approved_discovery_version_id"),
+        "approved_discovery2_version_id": manifest.get("approved_discovery2_version_id"),
+        "base_presentation_version_id": manifest.get("base_presentation_version_id"),
         "transcript_id": manifest.get("transcript_id"),
         "transcript_revision": manifest.get("transcript_revision"),
         "meeting_review_confirmed_at": manifest.get("meeting_review_confirmed_at"),
@@ -341,14 +362,16 @@ def public_writer(stored: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-DEFAULT_ATTACHMENT_SELECTION = {"pptx": False, "pdf": True}
+DEFAULT_ATTACHMENT_SELECTION = {key: key == "pdf" for key in ATTACHMENT_KEYS}
 
 
 def attachment_selection(existing: dict[str, Any] | None, source: dict[str, Any]) -> dict[str, bool]:
     """The owner's selection for this presentation version, or the default for a new one."""
     previous = (existing or {}).get("source") or {}
     if previous.get("presentation_version_id") == source["presentation_version_id"]:
-        return dict((existing or {}).get("attachment_selection") or {})
+        stored = (existing or {}).get("attachment_selection") or {}
+        # A selection saved before BAP-7 names the V2 files only; the other documents start unselected.
+        return {key: bool(stored.get(key, False)) for key in ATTACHMENT_KEYS}
     return dict(DEFAULT_ATTACHMENT_SELECTION)
 
 
@@ -376,7 +399,7 @@ def master_generation(
     statics = require_complete_statics(opportunity.get("followup_statics"))
     if attachment is None:
         existing = store.get_email_draft(opportunity_id=opportunity_id, user_id=user_id, journey_stage=journey_stage)
-        attachment = any(attachment_selection(existing, source).values())
+        attachment = presentation_attached(attachment_selection(existing, source))
     try:
         content = content_from_snapshot(frozen)
         variants, written_by = write_variants(
@@ -416,46 +439,94 @@ def _safe_name(value: str) -> str:
     return re.sub(r"\s*-[\s-]*", " - ", cleaned).strip(" -.") or "Master Presentation"
 
 
-def attachments_for(store: Any, *, stored: dict[str, Any], user_id: UUID) -> list[dict[str, Any]]:
-    """The approved files of the pinned V2 version, with the owner's persisted selection.
+def attachments_for(store: Any, *, stored: dict[str, Any], user_id: UUID, opportunity_id: UUID) -> list[dict[str, Any]]:
+    """The four generated documents of the finalized package, with the owner's persisted selection.
 
-    Only the version named by the finalized source is offered - never a newer one.
+    Discovery 1, Discovery 2, Master Presentation V1 and V2 - each exactly the version the
+    finalized V2 was built from, never a newer one. A document that cannot be resolved for this
+    opportunity is listed as unavailable. Files are read (or, for Discovery, rendered) only from
+    those pinned versions.
     """
     source = stored.get("source")
     if not isinstance(source, dict) or source.get("kind") != SOURCE_KIND_V2:
         return []
     selection = stored.get("attachment_selection") or {}
     presentation_id = UUID(str(source["presentation_id"]))
-    version_id = UUID(str(source["presentation_version_id"]))
     try:
         title = str(store.get_presentation(presentation_id=presentation_id, user_id=user_id).get("name") or "")
     except HTTPException:
         title = ""
-    base = f"{_safe_name(title or 'Master Presentation')} - V2"
+    presentation_name = _safe_name(title or "Master Presentation")
+    pinned = {
+        "master_presentation_v2": source.get("presentation_version_id"),
+        "master_presentation_v1": source.get("base_presentation_version_id"),
+        "discovery_1": source.get("approved_discovery_version_id"),
+        "discovery_2": source.get("approved_discovery2_version_id"),
+    }
     items = []
-    for kind in ATTACHMENT_FORMATS:
-        item = {
+    for key, (artifact, kind, label) in ATTACHMENTS.items():
+        version_id = pinned[artifact]
+        item: dict[str, Any] = {
+            "key": key,
+            "artifact": artifact,
             "format": kind,
-            "file_name": f"{base}.{kind}",
-            "selected": bool(selection.get(kind)),
+            "file_name": f"{presentation_name} - {label}.{kind}",
+            "selected": bool(selection.get(key)),
             "available": False,
             "size_bytes": None,
-            "presentation_id": str(presentation_id),
-            "presentation_version_id": str(version_id),
-            "version_number": source.get("version_number"),
-            "product_version": "V2",
+            "presentation_id": str(presentation_id) if artifact.startswith("master_") else None,
+            "presentation_version_id": None,
+            "artifact_version_id": str(version_id) if version_id else None,
+            "version_number": source.get("version_number") if artifact == "master_presentation_v2" else None,
+            "product_version": label,
+            "download_path": None,
         }
-        try:
-            path = deck_center.resolve_deck_file_path(
-                store, presentation_id=presentation_id, user_id=user_id, kind=kind, presentation_version_id=version_id
-            )
-            item["available"] = True
-            item["size_bytes"] = path.stat().st_size
-            item["_path"] = path
-        except (HTTPException, OSError):
-            pass
+        if version_id:
+            try:
+                if artifact.startswith("master_"):
+                    _presentation_file(store, item, presentation_id=presentation_id, version_id=UUID(str(version_id)), kind=kind, user_id=user_id)
+                else:
+                    _discovery_file(store, item, artifact=artifact, version_id=UUID(str(version_id)), opportunity_id=opportunity_id, user_id=user_id)
+            except (HTTPException, OSError, ValueError, KeyError):
+                item["available"] = False
+                item.pop("_path", None)
+                item.pop("_bytes", None)
         items.append(item)
     return items
+
+
+def _presentation_file(store: Any, item: dict[str, Any], *, presentation_id: UUID, version_id: UUID, kind: str, user_id: UUID) -> None:
+    item["presentation_version_id"] = str(version_id)
+    if item["artifact"] == "master_presentation_v1":
+        version = store.get_presentation_version(presentation_version_id=version_id, user_id=user_id)
+        if str(version.get("presentation_id")) != str(presentation_id):
+            raise ValueError("The V1 version belongs to another presentation")
+        item["version_number"] = version.get("version_number")
+    path = deck_center.resolve_deck_file_path(store, presentation_id=presentation_id, user_id=user_id, kind=kind, presentation_version_id=version_id)
+    item["available"] = True
+    item["size_bytes"] = path.stat().st_size
+    item["download_path"] = f"/presentations/{presentation_id}/versions/{version_id}/download/{kind}"
+    item["_path"] = path
+
+
+def _discovery_file(store: Any, item: dict[str, Any], *, artifact: str, version_id: UUID, opportunity_id: UUID, user_id: UUID) -> None:
+    from app.services.post_meeting_discovery import discovery1_docx, discovery2_docx
+
+    if artifact == "discovery_1":
+        exported = discovery1_docx(store, opportunity_id=opportunity_id, version_id=version_id, user_id=user_id)
+        row = store.get_discovery_paper_version(version_id=version_id, user_id=user_id)
+        item["download_path"] = f"/opportunities/{opportunity_id}/discovery-paper/versions/{version_id}/download/docx"
+    else:
+        exported = discovery2_docx(store, opportunity_id=opportunity_id, version_id=version_id, user_id=user_id)
+        row = store.get_discovery2_version(version_id=version_id, user_id=user_id)
+        item["download_path"] = f"/opportunities/{opportunity_id}/post-meeting-discovery/versions/{version_id}/download/docx"
+    if str(row.get("status")) != "approved":
+        raise ValueError("Only an approved Discovery version is attached")
+    item["version_number"] = row.get("version_number")
+    item["file_name"] = exported["file_name"]
+    item["available"] = True
+    item["size_bytes"] = len(exported["content"])
+    item["_bytes"] = exported["content"]
 
 
 def source_status(store: Any, *, stored: dict[str, Any], opportunity: dict[str, Any], opportunity_id: UUID, user_id: UUID) -> str:
@@ -476,7 +547,10 @@ def source_status(store: Any, *, stored: dict[str, Any], opportunity: dict[str, 
 def public_fields(store: Any, *, stored: dict[str, Any], opportunity: dict[str, Any], opportunity_id: UUID, user_id: UUID) -> dict[str, Any]:
     """Everything the envelope shows beyond the three texts."""
     confirmed = stored.get("status") == "confirmed"
-    attachments = [{key: value for key, value in item.items() if not key.startswith("_")} for item in attachments_for(store, stored=stored, user_id=user_id)]
+    attachments = [
+        {key: value for key, value in item.items() if not key.startswith("_")}
+        for item in attachments_for(store, stored=stored, user_id=user_id, opportunity_id=opportunity_id)
+    ]
     return {
         "revision": revision_of(stored),
         "confirmed_revision": stored.get("confirmed_revision") if confirmed else None,
@@ -638,13 +712,21 @@ def update_draft(
         master = isinstance(stored.get("source"), dict) and stored["source"].get("kind") == SOURCE_KIND_V2
         if not master and any(attachments.values()):
             raise bad_request("EMAIL_ATTACHMENT_UNAVAILABLE", "This draft has no approved presentation version to attach.")
-        selection = {kind: bool(attachments.get(kind, (stored.get("attachment_selection") or {}).get(kind))) for kind in ATTACHMENT_FORMATS} if master else {}
+        unknown = sorted(set(attachments) - set(ATTACHMENT_KEYS))
+        if unknown:
+            raise bad_request("INVALID_EMAIL_ATTACHMENT", f"Unknown attachment: {', '.join(unknown)}.")
+        previous = stored.get("attachment_selection") or {}
+        selection = (
+            {key: bool(attachments[key]) if attachments.get(key) is not None else bool(previous.get(key, False)) for key in ATTACHMENT_KEYS}
+            if master
+            else {}
+        )
         if selection != (stored.get("attachment_selection") or {}):
-            was_attached = any((stored.get("attachment_selection") or {}).values())
+            was_attached = presentation_attached(stored.get("attachment_selection"))
             draft["attachment_selection"] = selection
             changed = True
-            if master and any(selection.values()) != was_attached:
-                _follow_attachment_selection(store, draft=draft, stored=stored, opportunity_id=opportunity_id, user_id=user_id, attached=any(selection.values()))
+            if master and presentation_attached(selection) != was_attached:
+                _follow_attachment_selection(store, draft=draft, stored=stored, opportunity_id=opportunity_id, user_id=user_id, attached=presentation_attached(selection))
     if not changed:
         return envelope(store, opportunity_id=opportunity_id, user_id=user_id, journey_stage=journey_stage, stored=stored)
     # What was reviewed no longer exists in this form: the confirmation is withdrawn.
@@ -731,7 +813,7 @@ def confirm_draft(
         require_complete_statics(opportunity.get("followup_statics"))
         text = stored["lengths"][selected_length]
         _checked_text(selected_length, text["subject"], text["body"])
-        files = attachments_for(store, stored=stored, user_id=user_id)
+        files = attachments_for(store, stored=stored, user_id=user_id, opportunity_id=opportunity_id)
         missing_files = [item["file_name"] for item in files if item["selected"] and not item["available"]]
         if missing_files:
             raise conflict("EMAIL_ATTACHMENT_UNAVAILABLE", f"A selected attachment is not available: {', '.join(missing_files)}.")
@@ -801,12 +883,12 @@ def export_eml(store: Any, *, opportunity_id: UUID, user_id: UUID, draft_id: UUI
     message["X-Borek-Draft-Revision"] = str(current)
     message.set_content(str(text["body"]) + "\n", subtype="plain", charset="utf-8", cte="quoted-printable")
     attached = []
-    for item in attachments_for(store, stored=stored, user_id=user_id):
+    for item in attachments_for(store, stored=stored, user_id=user_id, opportunity_id=opportunity_id):
         if not item["selected"]:
             continue
         if not item["available"]:
             raise conflict("EMAIL_ATTACHMENT_UNAVAILABLE", f"A selected attachment is not available: {item['file_name']}.")
-        data = item["_path"].read_bytes()
+        data = item["_bytes"] if "_bytes" in item else item["_path"].read_bytes()
         maintype, subtype = MEDIA_TYPES[item["format"]]
         message.add_attachment(data, maintype=maintype, subtype=subtype, filename=item["file_name"])
         attached.append(
@@ -815,11 +897,15 @@ def export_eml(store: Any, *, opportunity_id: UUID, user_id: UUID, draft_id: UUI
                 "file_name": item["file_name"],
                 "size_bytes": len(data),
                 "sha256": hashlib.sha256(data).hexdigest(),
+                "key": item["key"],
+                "artifact": item["artifact"],
+                "artifact_version_id": item["artifact_version_id"],
                 "presentation_version_id": item["presentation_version_id"],
             }
         )
-    if attached:
-        message["X-Borek-Presentation-Version-Id"] = attached[0]["presentation_version_id"]
+    presentations = [item["presentation_version_id"] for item in attached if item["artifact"] == "master_presentation_v2"]
+    if presentations:
+        message["X-Borek-Presentation-Version-Id"] = presentations[0]
     project = str((opportunity.get("followup_statics") or {}).get("project_name") or "follow-up")
     return {
         "file_name": f"{_safe_name(project)} - follow-up email.eml",

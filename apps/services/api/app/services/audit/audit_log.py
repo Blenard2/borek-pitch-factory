@@ -56,6 +56,9 @@ class AuditAction(StrEnum):
     DISCOVERY_PAPER_GENERATE = "discovery_paper.generate"
     DISCOVERY_PAPER_EDIT = "discovery_paper.edit"
     DISCOVERY_PAPER_APPROVE = "discovery_paper.approve"
+    DISCOVERY2_GENERATE = "discovery2.generate"
+    DISCOVERY2_EDIT = "discovery2.edit"
+    DISCOVERY2_APPROVE = "discovery2.approve"
     CLIENT_DOCUMENT_UPLOAD = "client_document.upload"
     CLIENT_DOCUMENT_DELETE = "client_document.delete"
 

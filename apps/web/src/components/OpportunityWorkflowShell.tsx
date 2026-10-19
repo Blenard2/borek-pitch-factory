@@ -35,7 +35,7 @@ export function OpportunityWorkflowShell({ fixture, children }: OpportunityWorkf
   const workspaceProgress = pathname.endsWith("/presentations")
     ? `${preview?.presentation.slide_count ?? 0} slides ready`
     : preview?.discovery.document_state === "approved" ? "Discovery approved" : "Discovery in review";
-  if (/\/(meeting|review|follow-up|post-meeting-presentation)$/.test(pathname)) {
+  if (/\/(meeting|review|follow-up|post-meeting-discovery|post-meeting-presentation)$/.test(pathname)) {
     return <RequireAuth><PostMeetingShell opportunityId={fixture.opportunity_id}
       companyName={preview?.client.values.company_name ?? fixture.client_information.company_name}
       contactPerson={preview?.client.values.contact_person ?? fixture.client_information.contact_person}>

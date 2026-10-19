@@ -156,6 +156,8 @@
         "snapshot_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "generation_fingerprint": { "type": ["string", "null"] },
         "approved_discovery_version_id": { "type": ["string", "null"] },
+        "approved_discovery2_version_id": { "type": ["string", "null"] },
+        "base_presentation_version_id": { "type": ["string", "null"] },
         "transcript_id": { "type": ["string", "null"] },
         "transcript_revision": { "type": ["string", "null"] },
         "meeting_review_confirmed_at": { "type": ["string", "null"] },
@@ -232,7 +234,10 @@
     "Attachment": {
       "type": "object",
       "additionalProperties": false,
+      "description": "One generated document of the finalized package (BAP-7): Discovery 1, Discovery 2, Master Presentation V1 or V2, pinned to the version the finalized V2 was built from.",
       "required": [
+        "key",
+        "artifact",
         "format",
         "file_name",
         "selected",
@@ -240,19 +245,25 @@
         "size_bytes",
         "presentation_id",
         "presentation_version_id",
+        "artifact_version_id",
         "version_number",
-        "product_version"
+        "product_version",
+        "download_path"
       ],
       "properties": {
-        "format": { "type": "string", "enum": ["pptx", "pdf"] },
+        "key": { "enum": ["pdf", "pptx", "v1_pdf", "v1_pptx", "discovery1_docx", "discovery2_docx"] },
+        "artifact": { "enum": ["master_presentation_v2", "master_presentation_v1", "discovery_1", "discovery_2"] },
+        "format": { "type": "string", "enum": ["pptx", "pdf", "docx"] },
         "file_name": { "type": "string", "minLength": 1 },
         "selected": { "type": "boolean" },
         "available": { "type": "boolean" },
         "size_bytes": { "type": ["integer", "null"], "minimum": 0 },
-        "presentation_id": { "type": "string", "format": "uuid" },
-        "presentation_version_id": { "type": "string", "format": "uuid" },
+        "presentation_id": { "type": ["string", "null"], "format": "uuid" },
+        "presentation_version_id": { "type": ["string", "null"], "format": "uuid" },
+        "artifact_version_id": { "type": ["string", "null"], "format": "uuid" },
         "version_number": { "type": ["integer", "null"] },
-        "product_version": { "const": "V2" }
+        "product_version": { "enum": ["V1", "V2", "Discovery 1", "Discovery 2"] },
+        "download_path": { "type": ["string", "null"] }
       }
     }
   }

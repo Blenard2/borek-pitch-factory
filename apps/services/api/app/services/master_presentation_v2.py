@@ -46,6 +46,9 @@ _BLOCKER_TEXT = {
     "MEETING_REVIEW_STALE": "confirm the meeting findings again",
     "MEETING_FINDINGS_EMPTY": "provide a transcript or notes with at least one finding",
     "MEETING_FINDINGS_NONE_CONFIRMED": "confirm at least one meeting finding",
+    "DISCOVERY2_MISSING": "generate Discovery 2",
+    "DISCOVERY2_NOT_APPROVED": "approve Discovery 2",
+    "DISCOVERY2_STALE": "generate Discovery 2 again from the current meeting information and approve it",
 }
 # The generation lock every V2 job takes. The store admits one active job per opportunity and
 # key (a partial unique index in the database), so competing requests are decided there and
@@ -96,6 +99,7 @@ def _public_version(row: dict[str, Any]) -> dict[str, Any]:
         "meeting_review_confirmed_at": manifest.get("meeting_review_confirmed_at"),
         "base_presentation_version_id": manifest.get("base_presentation_version_id"),
         "approved_discovery_version_id": manifest.get("approved_discovery_version_id"),
+        "approved_discovery2_version_id": manifest.get("approved_discovery2_version_id"),
         "confirmed_finding_count": manifest.get("confirmed_finding_count"),
     }
 
@@ -301,6 +305,14 @@ def _freeze(store: DataStore, *, opportunity_id: UUID, user_id: UUID, review: di
     extraction = review["extraction"]
     if confirmation["status"] != "current" or confirmation["items"] is None:
         raise SnapshotError("The meeting findings are not confirmed")
+    # BAP-7: the approved Discovery 2 the review names is the authoritative post-meeting source.
+    discovery2 = store.get_discovery2_version(version_id=UUID(sources["discovery2_version_id"]), user_id=user_id)
+    if (
+        discovery2["status"] != "approved"
+        or discovery2["content_hash"] != sources["discovery2_content_hash"]
+        or discovery2["opportunity_id"] != opportunity_id
+    ):
+        raise SnapshotError("The approved Discovery 2 changed after the review was read")
     return build_snapshot(
         opportunity_id=str(opportunity_id),
         presentation_id=sources["presentation_id"],
@@ -325,6 +337,7 @@ def _freeze(store: DataStore, *, opportunity_id: UUID, user_id: UUID, review: di
             "review_fingerprint": review["review_fingerprint"],
             "source_hash": sources["source_hash"],
         },
+        approved_discovery2=discovery2,
     )
 
 

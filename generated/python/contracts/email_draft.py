@@ -72,6 +72,8 @@ class FinalizedSource(BaseModel):
     snapshot_hash: str = Field(..., pattern='^[0-9a-f]{64}$')
     generation_fingerprint: str | None = None
     approved_discovery_version_id: str | None = None
+    approved_discovery2_version_id: str | None = None
+    base_presentation_version_id: str | None = None
     transcript_id: str | None = None
     transcript_revision: str | None = None
     meeting_review_confirmed_at: str | None = None
@@ -155,24 +157,52 @@ class Recipients(BaseModel):
     sender: Sender
 
 
+class Key(Enum):
+    pdf = 'pdf'
+    pptx = 'pptx'
+    v1_pdf = 'v1_pdf'
+    v1_pptx = 'v1_pptx'
+    discovery1_docx = 'discovery1_docx'
+    discovery2_docx = 'discovery2_docx'
+
+
+class Artifact(Enum):
+    master_presentation_v2 = 'master_presentation_v2'
+    master_presentation_v1 = 'master_presentation_v1'
+    discovery_1 = 'discovery_1'
+    discovery_2 = 'discovery_2'
+
+
 class Format(Enum):
     pptx = 'pptx'
     pdf = 'pdf'
+    docx = 'docx'
+
+
+class ProductVersion(Enum):
+    V1 = 'V1'
+    V2 = 'V2'
+    Discovery_1 = 'Discovery 1'
+    Discovery_2 = 'Discovery 2'
 
 
 class Attachment(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
+    key: Key
+    artifact: Artifact
     format: Format
     file_name: str = Field(..., min_length=1)
     selected: bool
     available: bool
     size_bytes: int | None = Field(..., ge=0)
-    presentation_id: UUID
-    presentation_version_id: UUID
+    presentation_id: UUID | None
+    presentation_version_id: UUID | None
+    artifact_version_id: UUID | None
     version_number: int | None
-    product_version: Literal['V2']
+    product_version: ProductVersion
+    download_path: str | None
 
 
 class Lengths(BaseModel):

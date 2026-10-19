@@ -91,7 +91,7 @@ test("post-meeting scope retains staged edits during token rotation and leaves t
   assert.match(meeting, /!accessToken \|\| loaded.current/);
   assert.match(meeting, /prepareMeetingEvidence\(token, opportunityId, transcriptId, notes, baseline/);
   assert.match(meeting, /if \(initial\) setNotes\(value.personal_notes.text \?\? ""\)/, "a refresh never overwrites typed notes");
-  assert.match(boundary, /meeting\|review\|follow-up\|post-meeting-presentation/);
+  assert.match(boundary, /meeting\|review\|follow-up\|post-meeting-discovery\|post-meeting-presentation/);
   assert.match(shell, /step.id === "ppt_2_generated" \? "post-meeting-presentation"/);
 });
 
@@ -412,14 +412,16 @@ test("Figma post-meeting layout: tabs keep both inputs, findings are grouped, th
   assert.ok(source.includes('disabled={editingDisabled || state !== "current"} onChange={() => toggle(key, item.text)}'), "the include box keeps its gate");
   // Sidebar: a status list from real state and exactly one primary action for the current state.
   const action = source.slice(source.indexOf('data-testid="primary-action"'), source.indexOf("{confirmedCurrent ? <p><small>Confirmed"));
-  for (const label of ["Open follow-up email", "Generating Master Presentation V2...", ">Upload transcript<", ">Save notes<", "Analyse meeting", "Confirm meeting information", "Open Master Presentation V2", "Generate Master Presentation V2"]) {
+  for (const label of ["Open follow-up email", "Generating Master Presentation V2...", ">Upload transcript<", ">Save notes<", "Analyse meeting", "Confirm meeting information", "Continue to Discovery 2", "Open Master Presentation V2", "Generate Master Presentation V2"]) {
     assert.ok(action.includes(label), label);
   }
-  assert.equal(action.match(/ \? </g)?.length ?? 0, 10, "one branch per state: the actions are alternatives, never shown together");
+  // BAP-7 adds one state: confirmed, but Discovery 2 is not approved yet.
+  assert.equal(action.match(/ \? </g)?.length ?? 0, 11, "one branch per state: the actions are alternatives, never shown together");
+  assert.ok(action.includes('discovery2Pending ? <Link className="btn btn-primary" data-testid="open-discovery2" href={`${root}/post-meeting-discovery`}>'), "after the confirmation, Discovery 2 comes before V2");
   assert.ok(action.indexOf("v2Generating ?") < action.indexOf("!transcript ?"), "a running job shows a disabled progress button before anything else can be started");
-  assert.equal(source.match(/className="btn btn-primary"/g)?.length, 10, "primary buttons exist only in that one slot");
+  assert.equal(source.match(/className="btn btn-primary"/g)?.length, 11, "primary buttons exist only in that one slot");
   assert.ok(action.includes('disabled={editingDisabled || !v2.can_generate} onClick={() => void generateV2()}'), "generation keeps the server's gate");
-  assert.ok(source.includes('{ key: "v2", label: "Master Presentation V2", value: confirmedCurrent && review.readiness.ready_for_v2 ? v2Label : "After confirmation"'), "never shown as ready before it is");
+  assert.ok(source.includes('{ key: "v2", label: "Master Presentation V2", value: confirmedCurrent && review.readiness.ready_for_v2 ? v2Label : confirmedCurrent && discovery2Pending ? "After Discovery 2" : "After confirmation"'), "never shown as ready before it is");
   // Layout: main column and compact card on desktop, stacked with the status first on smaller screens.
   assert.match(css, /\.inputTabs button \{[^}]*min-width: 168px/);
   assert.match(css, /@media \(max-width: 960px\) \{\s+\.meetingSummary \{ order: -1; display: flex; flex-direction: column; \}/);
@@ -475,7 +477,7 @@ test("compact readiness summary at 960px and below; the desktop card is unchange
   assert.ok(source.indexOf('id="readiness-title"') < source.indexOf('data-testid="readiness-summary"'), "the status headline comes first");
   // Still exactly one action slot, with the same gates; the toggle is not a primary button and starts nothing.
   assert.equal(source.match(/data-testid="primary-action"/g)?.length, 1);
-  assert.equal(source.match(/className="btn btn-primary"/g)?.length, 10);
+  assert.equal(source.match(/className="btn btn-primary"/g)?.length, 11);
   const toggle = source.slice(source.indexOf('data-testid="readiness-toggle"'), source.indexOf("</button>", source.indexOf('data-testid="readiness-toggle"')));
   assert.doesNotMatch(toggle, /analyse|confirm\(|generateV2|saveNotes|fileInput/);
   // CSS: hidden toggle and always-open checklist on desktop; collapsed parts hidden only at 960px and below.
@@ -496,7 +498,8 @@ test("optional personal notes are not a required step in the readiness progress"
   assert.ok(source.includes("const requiredSteps = readiness.filter((row) => !row.optional);"));
   assert.equal(source.match(/optional: true/g)?.length, 1, "only the notes are optional; every other row still counts");
   assert.doesNotMatch(source, /\{readiness\.length\} steps complete/, "the total is the required steps, not all rows");
-  assert.equal(source.match(/\{ key: "/g)?.length, 8, "all eight rows are still shown");
+  assert.equal(source.match(/\{ key: "/g)?.length, 9, "all nine rows are still shown, Discovery 2 included (BAP-7)");
+  assert.ok(source.includes('{ key: "discovery2", label: "Discovery 2", value: discovery2Label, mark: discovery2Mark, testid: "discovery2-row" }'));
   assert.ok(source.includes('row.mark === "optional" ? "–" : ""'));
   assert.match(css, /\.readiness li\[data-mark="optional"\] \.readinessMark, \.readiness li\[data-mark="optional"\] strong \{ color: var\(--pitch-gray-500\); \}/);
   // Whether V2 can be generated still comes from the API, not from this counter.
@@ -514,6 +517,9 @@ test("an analysis without findings is explained and cannot be confirmed or gener
   assert.equal(reviewHeadline(review()), "Review the findings", "with findings the headline is unchanged");
   assert.match(blockerText("MEETING_FINDINGS_EMPTY"), /found no findings.*at least one confirmed finding/);
   assert.match(blockerText("MEETING_FINDINGS_NONE_CONFIRMED"), /Include at least one finding/);
+  assert.match(blockerText("DISCOVERY2_MISSING"), /Generate Discovery 2/);
+  assert.match(blockerText("DISCOVERY2_NOT_APPROVED"), /approve Discovery 2/);
+  assert.match(blockerText("DISCOVERY2_STALE"), /meeting information changed/);
 
   const source = readFileSync(new URL("../components/MeetingEvidencePanel.tsx", import.meta.url), "utf8");
   // The status line does not call an empty result a match, and the explanation names the labelled format.

@@ -20,6 +20,7 @@
     "approved_discovery",
     "master_presentation",
     "confirmation",
+    "discovery2",
     "readiness",
     "v2_sources"
   ],
@@ -76,6 +77,9 @@
     },
     "confirmation": {
       "$ref": "#/$defs/Confirmation"
+    },
+    "discovery2": {
+      "$ref": "#/$defs/Discovery2"
     },
     "readiness": {
       "$ref": "#/$defs/Readiness"
@@ -975,7 +979,10 @@
               "MEETING_REVIEW_NOT_CONFIRMED",
               "MEETING_REVIEW_STALE",
               "MEETING_FINDINGS_EMPTY",
-              "MEETING_FINDINGS_NONE_CONFIRMED"
+              "MEETING_FINDINGS_NONE_CONFIRMED",
+              "DISCOVERY2_MISSING",
+              "DISCOVERY2_NOT_APPROVED",
+              "DISCOVERY2_STALE"
             ]
           }
         }
@@ -998,6 +1005,8 @@
         "personal_notes_updated_at",
         "selected_use_case_ids",
         "meeting_review_confirmed_at",
+        "discovery2_version_id",
+        "discovery2_content_hash",
         "source_hash"
       ],
       "properties": {
@@ -1054,10 +1063,74 @@
           "type": "string",
           "format": "date-time"
         },
+        "discovery2_version_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "discovery2_content_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
         "source_hash": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         }
+      }
+    },
+    "Discovery2": {
+      "description": "BAP-7: the post-meeting Discovery document (Discovery 2). V2 is generated only from its latest version, and only when that version is approved and was generated from the current meeting basis.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "working_status", "error", "basis_hash", "can_generate", "latest_version", "approved_version", "stale_reasons"],
+      "properties": {
+        "status": {
+          "enum": ["not_generated", "generating", "failed", "draft", "approved", "stale"]
+        },
+        "working_status": {
+          "enum": ["not_generated", "generating", "ready", "failed"]
+        },
+        "error": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["code", "message"],
+              "properties": { "code": { "type": "string" }, "message": { "type": "string" } }
+            }
+          ]
+        },
+        "basis_hash": {
+          "description": "The current meeting basis; null until the meeting findings are confirmed.",
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "can_generate": { "type": "boolean" },
+        "latest_version": {
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/Discovery2Version" }]
+        },
+        "approved_version": {
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/Discovery2Version" }]
+        },
+        "stale_reasons": {
+          "type": "array",
+          "items": { "enum": ["BASIS_CHANGED", "NEWER_DRAFT"] }
+        }
+      }
+    },
+    "Discovery2Version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version_id", "version_number", "status", "content_hash", "basis_hash", "created_at", "approved_at", "generation_mode"],
+      "properties": {
+        "version_id": { "type": "string", "format": "uuid" },
+        "version_number": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["draft", "approved"] },
+        "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "basis_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "created_at": { "type": "string" },
+        "approved_at": { "type": ["string", "null"] },
+        "generation_mode": { "enum": ["fixture", "live"] }
       }
     },
     "MeetingReviewRecord": {

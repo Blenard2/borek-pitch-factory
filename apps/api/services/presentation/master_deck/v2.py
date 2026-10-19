@@ -5,9 +5,12 @@ followed by a new appendix. Everything a V2 generation uses is frozen in one sna
 generation is requested:
 
     approved Discovery v2   exact version id and the content the appendix may draw on
+    approved Discovery 2    BAP-7: the authoritative post-meeting Discovery version - its meeting
+                            items, its carried-forward opportunities and its open questions
     Master Presentation     canonical master identity and the V1 version V2 follows
     transcript              id and content revision (the appendix uses the confirmed findings)
-    confirmed findings      text and source of every finding the owner confirmed - no excluded one
+    meeting findings        text and source of every meeting item of the approved Discovery 2;
+                            an item the owner wrote or reworded has the source "owner"
     personal notes          revision and text, kept as the owner's own source
     Borek use cases         the selected approved reference facts with their corpus identities
     meeting review          who confirmed when, the review fingerprint and its source hash
@@ -23,6 +26,8 @@ import hashlib
 import json
 from typing import Any
 
+from services.meeting.discovery2 import content_hash as discovery2_content_hash
+from services.meeting.discovery2 import meeting_items as discovery2_meeting_items
 from services.presentation.borek_deck.deck_plan import PLAN_ENGINE
 from services.presentation.master_deck.appendix import AppendixPlanError, DISCOVERY_SCHEMA_VERSION, appendix_source_hash
 from services.presentation.master_deck.appendix_v2 import (
@@ -38,7 +43,11 @@ from services.presentation.master_deck.registry import DEFAULT_MASTER_ID, Master
 SNAPSHOT_KIND = "master_presentation_v2_snapshot"
 PRODUCT_VERSION = "V2"
 PRODUCT_STAGE = "post_meeting"
-FINDING_SOURCES = frozenset({"transcript", "personal_notes", "both"})
+# "owner": written or reworded by the owner while reviewing Discovery 2 - neither a transcript
+# statement nor a note, and never presented as one.
+FINDING_SOURCES = frozenset({"transcript", "personal_notes", "both", "owner"})
+# The parts of an approved Discovery 2 item the appendix may show.
+DISCOVERY2_ITEM_FIELDS = ("id", "text", "origin", "status", "source", "discovery1_ref", "edited")
 
 
 class SnapshotError(ValueError):
@@ -82,6 +91,11 @@ def generation_fingerprint(snapshot: dict[str, Any]) -> str:
         "personal_notes_sha256": None if notes in (None, "") else hashlib.sha256(str(notes).encode("utf-8")).hexdigest(),
         "findings": snapshot["findings"],
         "excluded_findings": sorted(snapshot["excluded_findings"]),
+        # Absent only in snapshots frozen before Discovery 2 existed.
+        "approved_discovery2": None
+        if snapshot.get("approved_discovery2") is None
+        # Content, not version: regenerating Discovery 2 into the same document is no new input.
+        else {"content_hash": snapshot["approved_discovery2"]["content_hash"]},
         "use_cases": [[item["fact_id"], item.get("document_version"), item.get("corpus_version"), item.get("statement")] for item in snapshot["use_cases"]],
     }
     return hashlib.sha256(canonical_json(inputs).encode("utf-8")).hexdigest()
@@ -99,9 +113,19 @@ def build_snapshot(
     reviewed_items: dict[str, list[dict[str, Any]]],
     use_cases: list[dict[str, Any]],
     meeting_review: dict[str, Any],
+    approved_discovery2: dict[str, Any],
     master: MasterDeck | None = None,
 ) -> dict[str, Any]:
-    """Freeze the sources of one V2 generation. Pure: it reads nothing but its arguments."""
+    """Freeze the sources of one V2 generation. Pure: it reads nothing but its arguments.
+
+    The meeting findings are the meeting items of the approved Discovery 2 (BAP-7), the
+    authoritative post-meeting Discovery: what the owner approved there - including an edited
+    wording or a removed item - is what V2 shows. A finding whose wording the owner changed or
+    added is the owner's statement (source "owner"): it is presented as reviewed by the owner,
+    never as a client statement and never as a personal note. The approved Discovery 2 also
+    supplies the carried-forward opportunities the appendix may recommend and the open questions
+    it lists, in their approved wording. Findings excluded in the meeting review stay excluded.
+    """
     master = master or get_master(DEFAULT_MASTER_ID)
     paper = approved_discovery.get("paper_json")
     if str(approved_discovery.get("status")) != "approved":
@@ -110,17 +134,29 @@ def build_snapshot(
         raise SnapshotError("Master Presentation V2 needs an approved Discovery analysis (schema 2.0)")
     if str(approved_discovery.get("opportunity_id")) != str(opportunity_id):
         raise SnapshotError("The approved Discovery version belongs to another opportunity")
+    discovery2 = approved_discovery2.get("document_json")
+    if str(approved_discovery2.get("status")) != "approved" or not isinstance(discovery2, dict):
+        raise SnapshotError("Master Presentation V2 needs an approved Discovery 2")
+    if str(approved_discovery2.get("opportunity_id")) != str(opportunity_id) or str(discovery2.get("opportunity_id")) != str(opportunity_id):
+        raise SnapshotError("The approved Discovery 2 belongs to another opportunity")
+    if discovery2_content_hash(discovery2) != str(approved_discovery2.get("content_hash")):
+        raise SnapshotError("The approved Discovery 2 does not match its recorded content")
+    if str((discovery2.get("sources") or {}).get("discovery1", {}).get("version_id")) != str(approved_discovery["id"]):
+        raise SnapshotError("The approved Discovery 2 was generated from another Discovery version")
     findings: dict[str, list[dict[str, str]]] = {}
+    for category, items in discovery2_meeting_items(discovery2).items():
+        findings[category] = []
+        for item in items:
+            source = "owner" if item["origin"] == "owner" or item.get("edited") else str(item["source"])
+            if source not in FINDING_SOURCES:
+                # A finding whose origin cannot be shown is never presented as a fact.
+                raise SnapshotError("A Discovery 2 meeting item has no verified source; generate Discovery 2 again")
+            findings[category].append({"text": str(item["text"]), "source": source})
+    shown = {item["text"] for items in findings.values() for item in items}
     excluded: list[str] = []
     for category in CATEGORIES:
-        findings[category] = []
         for item in reviewed_items.get(category, []):
-            if item.get("source") not in FINDING_SOURCES:
-                # A finding whose origin cannot be shown is never presented as a fact.
-                raise SnapshotError("A confirmed finding has no verified source; analyse the meeting again")
-            if item.get("status") == "confirmed":
-                findings[category].append({"text": str(item["text"]), "source": str(item["source"])})
-            else:
+            if item.get("status") != "confirmed" and str(item["text"]) not in shown:
                 excluded.append(str(item["text"]))
     unresolved = [item["fact_id"] for item in use_cases if item.get("status") != "resolved"]
     if unresolved:
@@ -169,6 +205,31 @@ def build_snapshot(
             "review_fingerprint": str(meeting_review["review_fingerprint"]),
             "source_hash": str(meeting_review["source_hash"]),
         },
+        "approved_discovery2": {
+            "version_id": str(approved_discovery2["id"]),
+            "document_id": str(approved_discovery2.get("document_id") or discovery2.get("document_id") or ""),
+            "version_number": approved_discovery2.get("version_number"),
+            "content_hash": str(approved_discovery2["content_hash"]),
+            "basis_hash": str(approved_discovery2.get("basis_hash") or ""),
+            "approved_at": None if approved_discovery2.get("approved_at") is None else str(approved_discovery2["approved_at"]),
+            "generation_mode": (discovery2.get("generation") or {}).get("mode"),
+            "content": discovery2_content(discovery2),
+        },
+    }
+
+
+def discovery2_content(document: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """What the appendix takes from Discovery 2 besides the findings, in its approved wording.
+
+    opportunities   the Discovery 1 opportunities Discovery 2 carries forward (as approved,
+                    possibly edited); one removed in Discovery 2 is no longer offered
+    open_questions  every question Discovery 2 lists as still open
+    """
+    sections = {section["key"]: section["items"] for section in document.get("sections") or []}
+    pick = lambda item: {key: copy.deepcopy(item.get(key)) for key in DISCOVERY2_ITEM_FIELDS}  # noqa: E731
+    return {
+        "opportunities": [pick(item) for item in sections.get("opportunities", []) if item.get("origin") == "discovery1"],
+        "open_questions": [pick(item) for item in sections.get("open_questions", [])],
     }
 
 
@@ -199,6 +260,8 @@ def generation_manifest(snapshot: dict[str, Any]) -> dict[str, Any]:
         "meeting_review_confirmed_at": snapshot["meeting_review"]["confirmed_at"],
         "review_fingerprint": snapshot["meeting_review"]["review_fingerprint"],
         "source_hash": snapshot["meeting_review"]["source_hash"],
+        "approved_discovery2_version_id": (snapshot.get("approved_discovery2") or {}).get("version_id"),
+        "discovery2_content_hash": (snapshot.get("approved_discovery2") or {}).get("content_hash"),
         "generation_fingerprint": generation_fingerprint(snapshot),
         "snapshot_hash": snapshot_hash(snapshot),
         "confirmed_finding_count": len(confirmed_findings(snapshot)),

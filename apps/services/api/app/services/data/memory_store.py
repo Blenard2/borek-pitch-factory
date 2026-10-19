@@ -64,6 +64,8 @@ def _now() -> datetime:
 _GENERATION_LOCK_GUARD = threading.Lock()
 # One email draft write at a time: the revision check and the write are one step.
 _EMAIL_DRAFT_GUARD = threading.Lock()
+# Discovery 2 version numbers and conditional draft writes (BAP-7).
+_DISCOVERY2_GUARD = threading.Lock()
 
 
 def _version_lineage_sort(row: dict[str, Any]) -> tuple:
@@ -134,6 +136,7 @@ class MemoryDataStore:
     client_logos: dict[UUID, dict[str, Any]] = field(default_factory=dict)
     framework_versions: dict[UUID, dict[str, Any]] = field(default_factory=dict)
     discovery_paper_versions: dict[UUID, dict[str, Any]] = field(default_factory=dict)
+    post_meeting_discovery_versions: dict[UUID, dict[str, Any]] = field(default_factory=dict)
     presentation_plans: dict[UUID, dict[str, Any]] = field(default_factory=dict)
     presentations: dict[UUID, dict[str, Any]] = field(default_factory=dict)
     presentation_versions: dict[UUID, dict[str, Any]] = field(default_factory=dict)
@@ -995,6 +998,107 @@ class MemoryDataStore:
         if status == "approved":
             row["approved_at"] = now
         return copy.deepcopy(row)
+
+    # ------------------------------------------------------------ BAP-7 Discovery 2 versions
+
+    def create_discovery2_version(
+        self,
+        *,
+        opportunity_id: UUID,
+        user_id: UUID,
+        document_id: UUID,
+        document_json: dict[str, Any],
+        content_hash: str,
+        basis_hash: str,
+        discovery1_version_id: UUID,
+    ) -> dict[str, Any]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        with _DISCOVERY2_GUARD:
+            existing = [row for row in self.post_meeting_discovery_versions.values() if row["opportunity_id"] == opportunity_id]
+            version_number = max((row["version_number"] for row in existing), default=0) + 1
+            now = _now()
+            row = {
+                "id": uuid.uuid4(),
+                "opportunity_id": opportunity_id,
+                "version_number": version_number,
+                "document_id": document_id,
+                "status": "draft",
+                "document_json": copy.deepcopy(document_json),
+                "content_hash": content_hash,
+                "basis_hash": basis_hash,
+                "discovery1_version_id": discovery1_version_id,
+                "created_by": user_id,
+                "created_at": now,
+                "updated_at": now,
+                "approved_at": None,
+                "approved_by": None,
+            }
+            self.post_meeting_discovery_versions[row["id"]] = row
+            return copy.deepcopy(row)
+
+    def get_discovery2_version(self, *, version_id: UUID, user_id: UUID) -> dict[str, Any]:
+        row = self.post_meeting_discovery_versions.get(version_id)
+        if row is None:
+            raise not_found("DISCOVERY2_VERSION_NOT_FOUND", f"Discovery 2 version {version_id} was not found")
+        self.get_opportunity(opportunity_id=row["opportunity_id"], user_id=user_id)
+        return copy.deepcopy(row)
+
+    def list_discovery2_versions(self, *, opportunity_id: UUID, user_id: UUID) -> list[dict[str, Any]]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        rows = [row for row in self.post_meeting_discovery_versions.values() if row["opportunity_id"] == opportunity_id]
+        return [copy.deepcopy(row) for row in sorted(rows, key=lambda item: item["version_number"])]
+
+    def update_discovery2_draft(
+        self,
+        *,
+        version_id: UUID,
+        user_id: UUID,
+        document_json: dict[str, Any],
+        content_hash: str,
+        expected_content_hash: str,
+    ) -> dict[str, Any]:
+        return self._write_discovery2_version(
+            version_id=version_id,
+            user_id=user_id,
+            expected_content_hash=expected_content_hash,
+            updates={"document_json": copy.deepcopy(document_json), "content_hash": content_hash},
+        )
+
+    def approve_discovery2_version(
+        self,
+        *,
+        version_id: UUID,
+        user_id: UUID,
+        expected_content_hash: str,
+    ) -> dict[str, Any]:
+        now = _now()
+        return self._write_discovery2_version(
+            version_id=version_id,
+            user_id=user_id,
+            expected_content_hash=expected_content_hash,
+            updates={"status": "approved", "approved_at": now, "approved_by": user_id},
+        )
+
+    def _write_discovery2_version(
+        self,
+        *,
+        version_id: UUID,
+        user_id: UUID,
+        expected_content_hash: str,
+        updates: dict[str, Any],
+    ) -> dict[str, Any]:
+        with _DISCOVERY2_GUARD:
+            row = self.post_meeting_discovery_versions.get(version_id)
+            if row is None:
+                raise not_found("DISCOVERY2_VERSION_NOT_FOUND", f"Discovery 2 version {version_id} was not found")
+            self.get_opportunity(opportunity_id=row["opportunity_id"], user_id=user_id)
+            if row["status"] != "draft":
+                raise conflict("DISCOVERY2_VERSION_IMMUTABLE", "Approved Discovery 2 versions are immutable")
+            if row["content_hash"] != expected_content_hash:
+                raise conflict("DISCOVERY2_STALE", "Discovery 2 changed after it was loaded. Reload it and try again.")
+            row.update(updates)
+            row["updated_at"] = _now()
+            return copy.deepcopy(row)
 
     def create_framework_version(
         self,

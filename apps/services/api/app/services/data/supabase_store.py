@@ -209,6 +209,22 @@ def _normalize_discovery_paper_version(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _normalize_discovery2_version(row: dict[str, Any]) -> dict[str, Any]:
+    approved_at = row.get("approved_at")
+    return {
+        **row,
+        "id": UUID(str(row["id"])),
+        "opportunity_id": UUID(str(row["opportunity_id"])),
+        "document_id": UUID(str(row["document_id"])),
+        "discovery1_version_id": UUID(str(row["discovery1_version_id"])),
+        "created_by": UUID(str(row["created_by"])),
+        "approved_by": UUID(str(row["approved_by"])) if row.get("approved_by") else None,
+        "created_at": _parse_timestamp(row["created_at"]),
+        "updated_at": _parse_timestamp(row["updated_at"]),
+        "approved_at": _parse_timestamp(approved_at) if approved_at else None,
+    }
+
+
 def _normalize_framework(row: dict[str, Any]) -> dict[str, Any]:
     return {
         **row,
@@ -1775,6 +1791,126 @@ class SupabaseDataStore:
                 "Approved Discovery Paper versions are immutable",
             )
         return _normalize_discovery_paper_version(response.json()[0])
+
+    # ------------------------------------------------------------ BAP-7 Discovery 2 versions
+
+    def create_discovery2_version(
+        self,
+        *,
+        opportunity_id: UUID,
+        user_id: UUID,
+        document_id: UUID,
+        document_json: dict[str, Any],
+        content_hash: str,
+        basis_hash: str,
+        discovery1_version_id: UUID,
+    ) -> dict[str, Any]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        latest = self._request(
+            "GET",
+            "post_meeting_discovery_versions",
+            params={"select": "version_number", "opportunity_id": f"eq.{opportunity_id}", "order": "version_number.desc", "limit": "1"},
+        )
+        if latest.status_code != 200:
+            raise bad_request("DISCOVERY2_VERSION_CREATE_FAILED", latest.text)
+        version_number = int(latest.json()[0]["version_number"]) + 1 if latest.json() else 1
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        payload = {
+            "opportunity_id": str(opportunity_id),
+            "version_number": version_number,
+            "document_id": str(document_id),
+            "status": "draft",
+            "document_json": copy.deepcopy(document_json),
+            "content_hash": content_hash,
+            "basis_hash": basis_hash,
+            "discovery1_version_id": str(discovery1_version_id),
+            "created_by": str(user_id),
+            "created_at": now,
+            "updated_at": now,
+            "approved_at": None,
+            "approved_by": None,
+        }
+        response = self._request("POST", "post_meeting_discovery_versions", json_body=payload)
+        if response.status_code == 409:
+            # The unique (opportunity_id, version_number) index decided a race between requests.
+            raise conflict("DISCOVERY2_CONCURRENT_UPDATE", "Discovery 2 was changed by another request. Reload it and try again.")
+        if response.status_code not in (200, 201) or not response.json():
+            raise bad_request("DISCOVERY2_VERSION_CREATE_FAILED", response.text)
+        return _normalize_discovery2_version(response.json()[0])
+
+    def get_discovery2_version(self, *, version_id: UUID, user_id: UUID) -> dict[str, Any]:
+        response = self._request(
+            "GET",
+            "post_meeting_discovery_versions",
+            params={"select": "*", "id": f"eq.{version_id}", "limit": "1"},
+        )
+        if response.status_code != 200 or not response.json():
+            raise not_found("DISCOVERY2_VERSION_NOT_FOUND", f"Discovery 2 version {version_id} was not found")
+        row = _normalize_discovery2_version(response.json()[0])
+        self.get_opportunity(opportunity_id=row["opportunity_id"], user_id=user_id)
+        return row
+
+    def list_discovery2_versions(self, *, opportunity_id: UUID, user_id: UUID) -> list[dict[str, Any]]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        response = self._request(
+            "GET",
+            "post_meeting_discovery_versions",
+            params={"select": "*", "opportunity_id": f"eq.{opportunity_id}", "order": "version_number.asc"},
+        )
+        if response.status_code != 200:
+            raise bad_request("DISCOVERY2_VERSION_LIST_FAILED", response.text)
+        return [_normalize_discovery2_version(row) for row in response.json()]
+
+    def update_discovery2_draft(
+        self,
+        *,
+        version_id: UUID,
+        user_id: UUID,
+        document_json: dict[str, Any],
+        content_hash: str,
+        expected_content_hash: str,
+    ) -> dict[str, Any]:
+        return self._write_discovery2_version(
+            version_id=version_id,
+            user_id=user_id,
+            expected_content_hash=expected_content_hash,
+            updates={"document_json": copy.deepcopy(document_json), "content_hash": content_hash},
+        )
+
+    def approve_discovery2_version(self, *, version_id: UUID, user_id: UUID, expected_content_hash: str) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        return self._write_discovery2_version(
+            version_id=version_id,
+            user_id=user_id,
+            expected_content_hash=expected_content_hash,
+            updates={"status": "approved", "approved_at": now, "approved_by": str(user_id)},
+        )
+
+    def _write_discovery2_version(
+        self,
+        *,
+        version_id: UUID,
+        user_id: UUID,
+        expected_content_hash: str,
+        updates: dict[str, Any],
+    ) -> dict[str, Any]:
+        current = self.get_discovery2_version(version_id=version_id, user_id=user_id)
+        if current["status"] != "draft":
+            raise conflict("DISCOVERY2_VERSION_IMMUTABLE", "Approved Discovery 2 versions are immutable")
+        if current["content_hash"] != expected_content_hash:
+            raise conflict("DISCOVERY2_STALE", "Discovery 2 changed after it was loaded. Reload it and try again.")
+        payload = {**updates, "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z")}
+        # Conditional on the draft state and the content the caller saw: a concurrent edit or an
+        # approval in between matches no row, and nothing is overwritten.
+        response = self._request(
+            "PATCH",
+            "post_meeting_discovery_versions",
+            params={"id": f"eq.{version_id}", "status": "eq.draft", "content_hash": f"eq.{expected_content_hash}"},
+            json_body=payload,
+        )
+        if response.status_code not in (200, 204) or not response.json():
+            raise conflict("DISCOVERY2_STALE", "Discovery 2 changed after it was loaded. Reload it and try again.")
+        return _normalize_discovery2_version(response.json()[0])
 
     def update_latest_framework(
         self,
