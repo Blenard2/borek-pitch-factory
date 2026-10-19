@@ -46,8 +46,21 @@ export interface LiveSlide {
   index: number;
   label: string;
   previewPath: string | null;
-  /** True for the client-specific slides that follow the canonical Borek deck. */
+  /** True for the client-specific slides added to the canonical Borek deck. */
   appendix?: boolean;
+}
+
+/** Layout id of the canonical master slides in a Master Presentation. */
+export const CANONICAL_LAYOUT = "CANONICAL";
+
+/**
+ * Whether a slide of a Master Presentation is an appendix slide. The closing canonical slide
+ * ("Let's talk") follows the appendix (BAP-4), so this is read from the slide's layout, never
+ * from its position. Without a layout the position is the only hint left.
+ */
+export function isAppendixSlide(source: DeckSource | null | undefined, index: number, layoutId: string | null | undefined): boolean {
+  if (!source) return false;
+  return layoutId ? layoutId !== CANONICAL_LAYOUT : index >= source.canonical_slide_count;
 }
 
 export interface LivePresentation extends FirstPitchResult {
@@ -107,7 +120,7 @@ export function adaptLivePresentation(
       label,
       // Only send credentials to the expected same-API slide endpoint.
       previewPath: preview?.preview_url === expectedPath ? expectedPath : null,
-      appendix: Boolean(source) && index >= source!.canonical_slide_count,
+      appendix: isAppendixSlide(source, index, slide?.layout_id ?? preview?.layout_id),
     };
   });
   return { ...identity, name: deck.presentation_name, versionNumber: deck.version_number, slides, source };

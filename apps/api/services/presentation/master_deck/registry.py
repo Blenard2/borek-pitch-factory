@@ -115,3 +115,38 @@ def verify_master(master: MasterDeck) -> dict:
 @lru_cache(maxsize=4)
 def canonical_slide_titles(master_id: str = DEFAULT_MASTER_ID) -> tuple[str, ...]:
     return tuple(str(slide["title"]) for slide in load_manifest(get_master(master_id))["slides"])
+
+
+# ---------------------------------------------------------------------------------- slide order (BAP-4)
+
+CLOSING_ROLE = "closing"
+# Identity of the slide order below; recorded with every generation so that a deck built in the
+# earlier order (closing slide before the appendix) is never reused as the current one.
+DECK_LAYOUT = "closing-last:v1"
+
+
+def closing_slide(master: MasterDeck) -> int | None:
+    """Number of the canonical slide that closes every Master Presentation, as the manifest declares it."""
+    numbers = [int(slide["number"]) for slide in load_manifest(master)["slides"] if slide.get("role") == CLOSING_ROLE]
+    if len(numbers) > 1:
+        raise MasterDeckError(f"Master deck {master.master_id} declares more than one closing slide")
+    return numbers[0] if numbers else None
+
+
+def deck_order(master: MasterDeck, appendix_count: int) -> list[tuple[str, int]]:
+    """The slides of a Master Presentation in order: ("canonical", master slide number) or ("appendix", index).
+
+    Every canonical slide in its original order, the appendix after them, and the closing slide
+    last - whatever the number of appendix slides. Each slide appears exactly once.
+    """
+    closing = closing_slide(master)
+    order = [("canonical", number) for number in range(1, master.slide_count + 1) if number != closing]
+    order.extend(("appendix", index) for index in range(appendix_count))
+    if closing is not None:
+        order.append(("canonical", closing))
+    return order
+
+
+def first_appendix_position(master: MasterDeck) -> int:
+    """1-based position of the first appendix slide in the deck."""
+    return next(position for position, (kind, _ref) in enumerate(deck_order(master, 1), start=1) if kind == "appendix")

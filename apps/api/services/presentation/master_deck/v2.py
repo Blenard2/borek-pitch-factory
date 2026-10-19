@@ -37,8 +37,15 @@ from services.presentation.master_deck.appendix_v2 import (
     plan_v2_appendix,
     shown_finding_references,
 )
-from services.presentation.master_deck.plan import CANONICAL_LAYOUT, MANIFEST_KIND_V2, MASTER_V2
-from services.presentation.master_deck.registry import DEFAULT_MASTER_ID, MasterDeck, get_master, verify_master
+from services.presentation.master_deck.plan import MANIFEST_KIND_V2, MASTER_V2, arrange_slides
+from services.presentation.master_deck.registry import (
+    DECK_LAYOUT,
+    DEFAULT_MASTER_ID,
+    MasterDeck,
+    first_appendix_position,
+    get_master,
+    verify_master,
+)
 
 SNAPSHOT_KIND = "master_presentation_v2_snapshot"
 PRODUCT_VERSION = "V2"
@@ -168,7 +175,9 @@ def build_snapshot(
         "planner_version": PLANNER_VERSION,
         "opportunity_id": str(opportunity_id),
         "client_name": str(brief.get("client_name") or "").strip(),
-        "master": {**master.identity(), "slide_count": master.slide_count},
+        # BAP-4: the slide order (closing slide last). Part of the generation fingerprint, so a V2
+        # built in the earlier order is generated again instead of being reused.
+        "master": {**master.identity(), "slide_count": master.slide_count, "deck_layout": DECK_LAYOUT},
         "presentation": {"presentation_id": str(presentation_id), "base_presentation_version_id": str(base_presentation_version_id)},
         "approved_discovery": {
             "version_id": str(approved_discovery["id"]),
@@ -245,6 +254,8 @@ def generation_manifest(snapshot: dict[str, Any]) -> dict[str, Any]:
         "master_version": snapshot["master"]["master_version"],
         "master_sha256": snapshot["master"]["master_sha256"],
         "master_slide_count": snapshot["master"]["slide_count"],
+        # Absent only in snapshots frozen before the closing slide was placed last.
+        **({"deck_layout": snapshot["master"]["deck_layout"]} if snapshot["master"].get("deck_layout") else {}),
         "presentation_id": snapshot["presentation"]["presentation_id"],
         "base_presentation_version_id": snapshot["presentation"]["base_presentation_version_id"],
         "approved_discovery_version_id": snapshot["approved_discovery"]["version_id"],
@@ -287,33 +298,19 @@ def same_source(left: Any, right: Any) -> bool:
 
 
 def build_plan(snapshot: dict[str, Any], master: MasterDeck | None = None) -> dict[str, Any]:
-    """The stored plan: the canonical slide references followed by the finished V2 appendix."""
+    """The stored plan: the canonical slides, the finished V2 appendix, the closing slide last.
+
+    A snapshot frozen before BAP-4 (no ``deck_layout``) keeps the order it was frozen with.
+    """
     master = master or get_master(snapshot["master"]["master_id"])
     if master.identity() != {key: snapshot["master"][key] for key in ("master_id", "master_version", "master_sha256")}:
         raise SnapshotError("The snapshot was frozen for a different canonical master deck")
     canonical = verify_master(master)
-    appendix = plan_v2_appendix(snapshot, first_order=master.slide_count + 1)
+    closing_last = snapshot["master"].get("deck_layout") == DECK_LAYOUT
+    first_slide = first_appendix_position(master) if closing_last else master.slide_count + 1
+    appendix = plan_v2_appendix(snapshot, first_order=first_slide)
     client = snapshot["client_name"]
-    slides: list[dict[str, Any]] = [
-        {
-            "order": slide["number"],
-            "purpose": f"canonical: {slide['title']}",
-            "layoutId": CANONICAL_LAYOUT,
-            "frameworkReferences": [],
-            "borekSlide": {"layout": "canonical", "master_id": master.master_id, "master_slide": slide["number"], "title": slide["title"]},
-        }
-        for slide in canonical["slides"]
-    ]
-    slides.extend(
-        {
-            "order": slide["order"],
-            "purpose": slide["purpose"],
-            "layoutId": slide["layout_id"],
-            "frameworkReferences": list(slide["source_references"]),
-            "borekSlide": copy.deepcopy(slide["content"]),
-        }
-        for slide in appendix
-    )
+    slides = arrange_slides(master, canonical["slides"], appendix, closing_last=closing_last)
     shown = shown_finding_references(appendix, snapshot)
     omitted = [
         f"finding:{category}:{position}"
@@ -330,8 +327,9 @@ def build_plan(snapshot: dict[str, Any], master: MasterDeck | None = None) -> di
         "lang": master.language.upper(),
         "title": f"Master Presentation — {client}" if client else "Master Presentation",
         "master": {**master.identity(), "slide_count": master.slide_count},
+        **({"deck_layout": DECK_LAYOUT} if closing_last else {}),
         "appendix": {
-            "first_slide": master.slide_count + 1,
+            "first_slide": first_slide,
             "slide_count": len(appendix),
             "source_hash": snapshot_hash(snapshot),
             "omitted_findings": omitted,

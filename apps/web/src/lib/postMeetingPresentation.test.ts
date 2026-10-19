@@ -305,3 +305,26 @@ test("separate route copies workspace structure, handles image decode errors and
   assert.doesNotMatch(source, /DISCOVERY_PAGE_CATALOG|presentationPreview|usePreviewJourney|generateAndAwait|WorkflowArtifactTabs|href=\{[^}]*\/discovery/);
   assert.match(route, /return <PostMeetingPresentationWorkspace opportunityId=\{opportunityId\}/);
 });
+
+test("BAP-4: a Master Presentation V2 marks its appendix by layout, with Let's talk as the last, canonical slide", () => {
+  const total = 30;
+  const layoutAt = (index: number) => (index < 25 || index === total - 1 ? "CANONICAL" : "L08");
+  const slides: SlideResponse[] = Array.from({ length: total }, (_, index) => ({
+    id: `v2-slide-${index}`, presentation_version_id: identity.presentationVersionId, slide_index: index,
+    layout_id: layoutAt(index), slide_spec: { title: index === total - 1 ? "Let’s talk" : `Title ${index + 1}` },
+  }));
+  const source = {
+    kind: "master_presentation_v2", product_version: "V2", product_stage: "post_meeting", revision: 2, master_id: "borek_ai_tech_en_v1",
+    master_version: "1.0", canonical_slide_count: 26, appendix_slide_count: 4, approved_discovery_version_id: "d", discovery_schema_version: "2.0",
+  };
+  const master: DeckResponse = {
+    ...deck, source,
+    slides: slides.map((slide) => ({ slide_id: slide.id, slide_index: slide.slide_index, layout_id: slide.layout_id, preview_url: `${prefix}/preview/slides/${slide.slide_index}.png` })),
+  };
+  const result = adaptPostMeetingPresentation(identity, master, slides);
+  assert.deepEqual(result.slides.filter((slide) => slide.appendix).map((slide) => slide.index), [25, 26, 27, 28]);
+  assert.equal(result.slides.at(-1)?.label, "Let’s talk");
+  assert.equal(result.slides.at(-1)?.appendix, false);
+  const workspace = readFileSync("src/components/PostMeetingPresentationWorkspace.tsx", "utf8");
+  assert.doesNotMatch(workspace, /slides 1–\{deck\.source\.canonical_slide_count\}/, "no fixed slide ranges");
+});

@@ -193,13 +193,14 @@ def test_v2_is_a_new_version_of_the_same_presentation_with_a_post_meeting_append
     v2_pptx = download(client, presentation_id, str(v2_row["id"]))
     canonical = assembly.canonical_fingerprints(registry.get_master().pptx_path)
     v1_prints, v2_prints = fingerprints(v1_files["pptx"], tmp_path), fingerprints(v2_pptx, tmp_path)
-    assert v1_prints[:26] == canonical and v2_prints[:26] == canonical
-    assert v2_prints[26:] != v1_prints[26:], "the appendix is new, not the V1 appendix again"
+    assert [*v1_prints[:25], v1_prints[-1]] == canonical and [*v2_prints[:25], v2_prints[-1]] == canonical
+    assert v2_prints[25:-1] != v1_prints[25:-1], "the appendix is new, not the V1 appendix again"
     v1_texts, v2_texts = slide_texts(v1_files["pptx"]), slide_texts(v2_pptx)
-    assert v2_texts[:26] == v1_texts[:26]
+    assert v2_texts[:25] == v1_texts[:25] and v2_texts[-1] == v1_texts[-1]
     total = len(v2_texts)
-    assert f"27 / {total}" in v2_texts[26] and f"{total} / {total}" in v2_texts[-1]
-    appendix = v2_texts[26:]
+    assert f"26 / {total}" in v2_texts[25] and f"{total - 1} / {total}" in v2_texts[-2]
+    assert any("Managing Partner & Co-CCO" in text for text in v2_texts[-1]), "Let’s talk is the last slide of V2"
+    appendix = v2_texts[25:-1]
     flat = [text for slide in appendix for text in slide]
     assert any("AFTER OUR FIRST MEETING" in text.upper() for text in appendix[0])
     for said in ("Quotes must go out within one day.", "Pricing data sits in three systems.", "Run a pilot with ten quotes."):

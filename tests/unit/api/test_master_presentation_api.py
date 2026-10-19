@@ -103,12 +103,15 @@ def test_v1_is_the_canonical_deck_plus_an_appendix_from_the_approved_analysis(cl
         "approved_discovery_document_id": approved["document_id"],
         "discovery_schema_version": "2.0",
         "appendix_source_hash": version["generation_source_manifest"]["appendix_source_hash"],
+        "deck_layout": "closing-last:v1",
     }
     specs = version["slides_json"]
     assert len(specs) > 26 and len(specs) > 8
-    assert [spec["layoutId"] for spec in specs[:26]] == ["CANONICAL"] * 26
-    assert [spec["title"] for spec in specs[:26]] == list(registry.canonical_slide_titles())
-    assert all(spec["layoutId"].startswith("L") and spec["sourceChapterIds"] for spec in specs[26:])
+    canonical_specs = [*specs[:25], specs[-1]]
+    assert [spec["layoutId"] for spec in canonical_specs] == ["CANONICAL"] * 26
+    assert [spec["title"] for spec in canonical_specs] == list(registry.canonical_slide_titles())
+    assert specs[-1]["title"] == "Let’s talk"
+    assert all(spec["layoutId"].startswith("L") and spec["sourceChapterIds"] for spec in specs[25:-1])
     assert len(version["preview_image_paths"]) == len(specs)
     assert version["pptx_storage_path"] and version["pdf_storage_path"]
 
@@ -125,7 +128,8 @@ def test_v1_is_the_canonical_deck_plus_an_appendix_from_the_approved_analysis(cl
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "deck.pptx"
         path.write_bytes(target.getvalue())
-        assert assembly.canonical_fingerprints(path)[:26] == assembly.canonical_fingerprints(master.pptx_path)
+        prints = assembly.canonical_fingerprints(path)
+        assert [*prints[:25], prints[-1]] == assembly.canonical_fingerprints(master.pptx_path)
     center = client.get(f"/presentations/{presentation_id}/deck", headers=headers()).json()
     assert center["source"] == {
         "kind": "master_presentation_v1",

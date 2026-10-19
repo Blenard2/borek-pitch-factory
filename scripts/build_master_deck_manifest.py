@@ -26,6 +26,9 @@ from services.presentation.master_deck.registry import (  # noqa: E402
 
 # Title text box per slide: the first text after the kicker; cover, dividers and closing differ.
 _TITLE_OVERRIDES = {1: "Your AI department. Delivered, not built.", 26: "Let’s talk"}
+# BAP-4: the slide that closes every Master Presentation, after any appendix. Declared here for
+# this master, so the generation never finds it by position.
+_ROLES = {26: "closing"}
 
 
 def slide_title(slide, number: int) -> str:
@@ -42,7 +45,10 @@ def main() -> None:
     deck = Presentation(str(master.pptx_path))
     slides = []
     for number, slide in enumerate(deck.slides, start=1):
-        slides.append({"number": number, "title": slide_title(slide, number)})
+        entry = {"number": number, "title": slide_title(slide, number)}
+        if number in _ROLES:
+            entry["role"] = _ROLES[number]
+        slides.append(entry)
     manifest = {
         "master_id": master.master_id,
         "master_version": master.master_version,
