@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/components/AuthProvider";
 import { usePreviewJourney } from "@/components/PreviewJourneyProvider";
+import { useReportPresentationSource } from "@/components/PresentationHeadline";
 import { WorkflowArtifactTabs } from "@/components/WorkflowArtifactTabs";
 import { FirstMeetingHandoff } from "@/components/FirstMeetingHandoff";
 import { DISCOVERY_PAGE_CATALOG } from "@/lib/discoveryFirst";
 import { canDownloadDiscoveryPdf } from "@/lib/discoveryWorkspace";
 import { generateAndAwaitFirstPitch, resumeFirstPitch } from "@/lib/ppt1Generation";
 import { presentationPreview } from "@/lib/presentationPreview";
+import { presentationSourceFor } from "@/lib/presentationHeadline";
 import {
   downloadLivePresentation, downloadPresentationVersion, livePresentationError, loadEarlierVersions, loadExistingFirstPitch, versionLabel,
   loadLivePresentation, requestLiveSlidePreview,
@@ -56,6 +58,9 @@ function PresentationSession({ opportunityId, accessToken, live }: PresentationW
   const [liveDeck, setLiveDeck] = useState<LivePresentation | null>(null);
   const [livePhase, setLivePhase] = useState<"loading" | "load-failed" | "idle" | "generating" | "ready" | "failed">("loading");
   const [approvedSourceId, setApprovedSourceId] = useState<string | null>(null);
+  // BAP-2: the heading shows the title and main opportunity of the Discovery this deck was built
+  // from. While the deck loads or is generated this is "pending", so no other Discovery is shown.
+  useReportPresentationSource(live ? presentationSourceFor(opportunityId, livePhase, liveDeck) : null);
   const [refresh, setRefresh] = useState(0);
   const [previewAttempt, setPreviewAttempt] = useState(0);
   const [preview, setPreview] = useState<{ key: string; value: LivePreviewState } | null>(null);
