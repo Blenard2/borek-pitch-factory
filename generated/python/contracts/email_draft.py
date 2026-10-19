@@ -166,17 +166,31 @@ class Key(Enum):
     discovery2_docx = 'discovery2_docx'
 
 
+class Key1(RootModel[str]):
+    root: str = Field(
+        ...,
+        pattern='^external:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    )
+
+
 class Artifact(Enum):
     master_presentation_v2 = 'master_presentation_v2'
     master_presentation_v1 = 'master_presentation_v1'
     discovery_1 = 'discovery_1'
     discovery_2 = 'discovery_2'
+    external = 'external'
 
 
 class Format(Enum):
     pptx = 'pptx'
     pdf = 'pdf'
     docx = 'docx'
+    xlsx = 'xlsx'
+    png = 'png'
+    jpg = 'jpg'
+    jpeg = 'jpeg'
+    txt = 'txt'
+    csv = 'csv'
 
 
 class ProductVersion(Enum):
@@ -184,13 +198,19 @@ class ProductVersion(Enum):
     V2 = 'V2'
     Discovery_1 = 'Discovery 1'
     Discovery_2 = 'Discovery 2'
+    Uploaded = 'Uploaded'
+
+
+class Origin(Enum):
+    generated = 'generated'
+    external = 'external'
 
 
 class Attachment(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    key: Key
+    key: Key | Key1
     artifact: Artifact
     format: Format
     file_name: str = Field(..., min_length=1)
@@ -203,6 +223,11 @@ class Attachment(BaseModel):
     version_number: int | None
     product_version: ProductVersion
     download_path: str | None
+    origin: Origin = Field(
+        ...,
+        description='generated: a document of the package. external: uploaded by the owner; never evidence for a statement in the email.',
+    )
+    uploaded_at: str | None
 
 
 class Lengths(BaseModel):

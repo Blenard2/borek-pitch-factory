@@ -5,9 +5,10 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import re
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -222,6 +223,22 @@ def _normalize_discovery2_version(row: dict[str, Any]) -> dict[str, Any]:
         "created_at": _parse_timestamp(row["created_at"]),
         "updated_at": _parse_timestamp(row["updated_at"]),
         "approved_at": _parse_timestamp(approved_at) if approved_at else None,
+    }
+
+
+# <opportunity id>/<attachment id><extension>: the only kind of object the cleanup ever deletes.
+_EMAIL_ATTACHMENT_PATH = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:pdf|docx|xlsx|pptx|png|jpg|jpeg|txt|csv)$"
+)
+
+def _normalize_email_attachment(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **row,
+        "id": UUID(str(row["id"])),
+        "opportunity_id": UUID(str(row["opportunity_id"])),
+        "created_by": UUID(str(row["created_by"])),
+        "size_bytes": int(row["size_bytes"]),
+        "created_at": _parse_timestamp(row["created_at"]) if row.get("created_at") else None,
     }
 
 
@@ -1911,6 +1928,206 @@ class SupabaseDataStore:
         if response.status_code not in (200, 204) or not response.json():
             raise conflict("DISCOVERY2_STALE", "Discovery 2 changed after it was loaded. Reload it and try again.")
         return _normalize_discovery2_version(response.json()[0])
+
+    # ------------------------------------------------------------ BAP-3 email attachments
+    #
+    # Lifecycle (the database never points at bytes it does not track, and no bytes are left
+    # without a record of where they are):
+    #
+    #   upload   row "pending" -> bytes -> row "ready". Only ready rows are listed. A failure after
+    #            the row exists discards the row; a row that cannot be discarded stays pending and
+    #            the sweeper discards it later.
+    #   delete   row first. A database trigger records the storage path of every deleted row -
+    #            also rows removed by the cascade of a deleted opportunity - in
+    #            email_attachment_storage_cleanup, in the same transaction. The bytes are then
+    #            removed from that queue: at once if possible, otherwise by a later sweep.
+    #   sweep    process_email_attachment_cleanup (service role): discards stale pending rows and
+    #            removes queued objects, idempotently (an object that is already gone counts as
+    #            removed); failures stay queued with the attempt count and the last error.
+
+    def _email_attachment_object(self, storage_path: str) -> str:
+        return f"{self._base_url}/storage/v1/object/email_attachments/{storage_path}"
+
+    def create_email_attachment(
+        self,
+        *,
+        opportunity_id: UUID,
+        user_id: UUID,
+        journey_stage: str,
+        attachment_id: UUID,
+        file_name: str,
+        extension: str,
+        mime_type: str,
+        size_bytes: int,
+        sha256: str,
+        storage_path: str,
+        content: bytes,
+    ) -> dict[str, Any]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        payload = {
+            "id": str(attachment_id),
+            "opportunity_id": str(opportunity_id),
+            "journey_stage": journey_stage,
+            "file_name": file_name,
+            "extension": extension,
+            "mime_type": mime_type,
+            "size_bytes": size_bytes,
+            "sha256": sha256,
+            "storage_path": storage_path,
+            "created_by": str(user_id),
+            "status": "pending",
+        }
+        # 1. The row exists before any byte is stored, so every stored byte is tracked.
+        created = self._request("POST", "email_attachments", json_body=payload)
+        if created.status_code not in (200, 201) or not created.json():
+            raise service_unavailable("EMAIL_ATTACHMENT_STORAGE_FAILED", "The file could not be stored. Try again.")
+        # 2. The bytes.
+        uploaded = _request_with_retry(
+            "POST",
+            self._email_attachment_object(storage_path),
+            headers={**self._storage_auth_headers(), "Content-Type": mime_type, "x-upsert": "false"},
+            content=content,
+        )
+        if uploaded.status_code not in (200, 201):
+            self._discard_email_attachment_row(attachment_id, opportunity_id)
+            raise service_unavailable("EMAIL_ATTACHMENT_STORAGE_FAILED", "The file could not be stored. Try again.")
+        # 3. Ready: from now on it is listed.
+        ready = self._request(
+            "PATCH",
+            "email_attachments",
+            params={"id": f"eq.{attachment_id}", "opportunity_id": f"eq.{opportunity_id}", "status": "eq.pending"},
+            json_body={"status": "ready"},
+        )
+        if ready.status_code not in (200, 204) or not ready.json():
+            self._discard_email_attachment_row(attachment_id, opportunity_id)
+            raise service_unavailable("EMAIL_ATTACHMENT_STORAGE_FAILED", "The file could not be stored. Try again.")
+        return _normalize_email_attachment(ready.json()[0])
+
+    def _discard_email_attachment_row(self, attachment_id: UUID, opportunity_id: UUID) -> None:
+        """Remove an unfinished row; its path is queued by the trigger. On failure the row stays
+        pending - never listed - and the sweeper discards it."""
+        response = self._request("DELETE", "email_attachments", params={"id": f"eq.{attachment_id}", "opportunity_id": f"eq.{opportunity_id}"})
+        if response.status_code not in (200, 204):
+            logger.error("Unfinished email attachment %s could not be discarded (HTTP %s); the sweeper will retry", attachment_id, response.status_code)
+            return
+        self.process_email_attachment_cleanup(limit=5)
+
+    def list_email_attachments(self, *, opportunity_id: UUID, user_id: UUID, journey_stage: str) -> list[dict[str, Any]]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        response = self._request(
+            "GET",
+            "email_attachments",
+            params={
+                "select": "*",
+                "opportunity_id": f"eq.{opportunity_id}",
+                "journey_stage": f"eq.{journey_stage}",
+                "status": "eq.ready",
+                "order": "created_at.asc,id.asc",
+            },
+        )
+        if response.status_code != 200:
+            raise bad_request("EMAIL_ATTACHMENT_LIST_FAILED", response.text)
+        return [_normalize_email_attachment(row) for row in response.json()]
+
+    def get_email_attachment(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> dict[str, Any]:
+        self.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+        response = self._request(
+            "GET",
+            "email_attachments",
+            params={"select": "*", "id": f"eq.{attachment_id}", "opportunity_id": f"eq.{opportunity_id}", "status": "eq.ready", "limit": "1"},
+        )
+        if response.status_code != 200 or not response.json():
+            raise not_found("EMAIL_ATTACHMENT_NOT_FOUND", f"Attachment {attachment_id} was not found")
+        return _normalize_email_attachment(response.json()[0])
+
+    def read_email_attachment_content(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> bytes:
+        row = self.get_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+        response = _request_with_retry("GET", self._email_attachment_object(str(row["storage_path"])), headers=self._storage_auth_headers())
+        if response.status_code != 200:
+            raise not_found("EMAIL_ATTACHMENT_NOT_FOUND", f"The file of attachment {attachment_id} is not available")
+        return response.content
+
+    def delete_email_attachment(self, *, opportunity_id: UUID, user_id: UUID, attachment_id: UUID) -> dict[str, Any]:
+        """Remove the attachment: the row (which queues its bytes), then the bytes if possible.
+
+        Returns ``{"bytes_removed": bool}``. False means the bytes are queued for the sweeper - the
+        attachment itself is gone and nothing points at the bytes any more. A failed row delete
+        raises and changes nothing, so the owner can simply retry.
+        """
+        row = self.get_email_attachment(opportunity_id=opportunity_id, user_id=user_id, attachment_id=attachment_id)
+        response = self._request(
+            "DELETE",
+            "email_attachments",
+            params={"id": f"eq.{attachment_id}", "opportunity_id": f"eq.{opportunity_id}"},
+        )
+        if response.status_code not in (200, 204):
+            raise service_unavailable("EMAIL_ATTACHMENT_DELETE_FAILED", "The file could not be removed. Try again.")
+        result = self.process_email_attachment_cleanup(storage_paths=[str(row["storage_path"])], include_stale_pending=False)
+        return {"bytes_removed": result["removed"] == 1}
+
+    def process_email_attachment_cleanup(
+        self,
+        *,
+        limit: int = 20,
+        storage_paths: list[str] | None = None,
+        stale_after_seconds: int = 3600,
+        include_stale_pending: bool = True,
+    ) -> dict[str, int]:
+        """Remove queued objects and discard stale unfinished uploads. Never raises.
+
+        Runs with the service role: the queue has no user policies, and the objects of a deleted
+        opportunity are no longer reachable under the owner's policies. Only paths of the form
+        <opportunity id>/<attachment id><extension> are ever deleted.
+        """
+        counts = {"removed": 0, "failed": 0, "skipped": 0, "discarded_pending": 0}
+        try:
+            service = SupabaseDataStore(settings.SUPABASE_SERVICE_ROLE_KEY)
+            if include_stale_pending:
+                cutoff = (datetime.now(UTC) - timedelta(seconds=stale_after_seconds)).isoformat().replace("+00:00", "Z")
+                stale = service._request(
+                    "GET",
+                    "email_attachments",
+                    params={"select": "id", "status": "eq.pending", "created_at": f"lt.{cutoff}", "limit": str(limit)},
+                )
+                for entry in stale.json() if stale.status_code == 200 else []:
+                    gone = service._request("DELETE", "email_attachments", params={"id": f"eq.{entry['id']}", "status": "eq.pending"})
+                    counts["discarded_pending"] += 1 if gone.status_code in (200, 204) else 0
+            params = {"select": "*", "order": "queued_at.asc", "limit": str(limit)}
+            if storage_paths:
+                params["storage_path"] = "in.(" + ",".join(f'"{path}"' for path in storage_paths) + ")"
+            queued = service._request("GET", "email_attachment_storage_cleanup", params=params)
+            if queued.status_code != 200:
+                logger.warning("Email attachment cleanup queue unavailable: HTTP %s", queued.status_code)
+                return counts
+            for entry in queued.json():
+                path = str(entry.get("storage_path") or "")
+                if not _EMAIL_ATTACHMENT_PATH.match(path) or not path.startswith(f"{entry.get('opportunity_id')}/"):
+                    counts["skipped"] += 1
+                    service._record_cleanup_failure(path, int(entry.get("attempts") or 0), "not an email attachment path")
+                    continue
+                deleted = _request_with_retry("DELETE", service._email_attachment_object(path), headers=service._storage_auth_headers())
+                if deleted.status_code not in (200, 204, 404):
+                    counts["failed"] += 1
+                    service._record_cleanup_failure(path, int(entry.get("attempts") or 0), f"storage HTTP {deleted.status_code}")
+                    continue
+                done = service._request("DELETE", "email_attachment_storage_cleanup", params={"storage_path": f"eq.{path}"})
+                if done.status_code in (200, 204):
+                    counts["removed"] += 1
+                else:
+                    # The object is gone; the entry stays and the next sweep finds the object already
+                    # removed (404) and drops the entry.
+                    counts["failed"] += 1
+        except Exception:  # cleanup must never break the request that triggered it
+            logger.exception("Email attachment cleanup failed; queued entries stay for the next sweep")
+        return counts
+
+    def _record_cleanup_failure(self, storage_path: str, attempts: int, error: str) -> None:
+        self._request(
+            "PATCH",
+            "email_attachment_storage_cleanup",
+            params={"storage_path": f"eq.{storage_path}"},
+            json_body={"attempts": attempts + 1, "last_error": error[:300], "last_attempt_at": datetime.now(UTC).isoformat().replace("+00:00", "Z")},
+        )
 
     def update_latest_framework(
         self,

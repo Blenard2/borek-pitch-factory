@@ -9,7 +9,8 @@ import { PostMeetingPhaseNav, usePostMeeting } from "@/components/PostMeetingShe
 import { isMasterJourney } from "@/lib/discoveryFirst";
 import { loadPostMeetingWorkflow, postMeetingError } from "@/lib/postMeeting";
 import {
-  ATTACHMENT_ARTIFACT_LABEL, EMAIL_LENGTHS, EMAIL_LENGTH_LABEL, EMAIL_REVIEW_CHECKS, EMAIL_STATE_LABEL, advancedReviewUi, approvalFor, attachmentMismatch, canPreparePostMeetingEmail, clipboardText,
+  ATTACHMENT_ARTIFACT_LABEL, EXTERNAL_ATTACHMENT_EXTENSIONS, MAX_EXTERNAL_ATTACHMENTS, MAX_EXTERNAL_ATTACHMENT_BYTES, MAX_EMAIL_BYTES, checkAttachmentFile, removeEmailAttachment, selectedAttachmentBytes, uploadEmailAttachment,
+  EMAIL_LENGTHS, EMAIL_LENGTH_LABEL, EMAIL_REVIEW_CHECKS, EMAIL_STATE_LABEL, advancedReviewUi, approvalFor, attachmentMismatch, canPreparePostMeetingEmail, clipboardText,
   confirmPostMeetingEmail, contentWordCount, downloadEmailAttachment, emailError, emailExportable, emailState,
   exportPostMeetingEmail, formatFileSize, generatePostMeetingEmail, isEmailConflict, isEmailHasEdits, isStaticsMissing,
   loadFollowupStatics, loadPostMeetingEmail, openReviewFlags, personLabel, saveFollowupStatics, savePostMeetingEmail, staticsFormFrom,
@@ -19,7 +20,9 @@ import {
 import { downloadPostMeetingPresentation, loadExistingPostMeetingPresentation, type PostMeetingPresentation } from "@/lib/postMeetingPresentation";
 import styles from "./post-meeting.module.css";
 
-type Busy = null | "loading" | "generating" | "saving" | "confirming" | "exporting" | "statics";
+type Busy = null | "loading" | "generating" | "saving" | "confirming" | "exporting" | "statics" | "uploading";
+/** A file on its way to the API, or one the API refused - shown until the owner dismisses it. */
+interface PendingUpload { id: string; name: string; size: number; status: "waiting" | "uploading" | "failed"; message: string | null }
 
 function saveBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -95,6 +98,8 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
   const [staticsError, setStaticsError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const lock = useRef(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<PendingUpload[]>([]);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
@@ -220,6 +225,46 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
     if (!draft) return;
     saveBlob(await exportPostMeetingEmail(token, opportunityId, draft), `${(form?.projectName || "follow-up").replace(/[^\w .()-]+/g, "-")} - follow-up email.eml`);
     if (alive.current) setNotice("The email file was downloaded. Open it in your mail program to send it yourself.");
+  });
+
+  /**
+   * BAP-3: upload the chosen files one after the other, each on the revision the previous one
+   * produced. Typed, unsaved text stays in the editor; a refused file is listed with the reason.
+   */
+  const uploadFiles = (files: File[]) => run("uploading", async (token) => {
+    if (!draft || !files.length) return;
+    const queue: PendingUpload[] = files.map((file, index) => ({ id: `${Date.now()}-${index}-${file.name}`, name: file.name, size: file.size, status: "waiting", message: null }));
+    setPending((current) => [...current.filter((item) => item.status === "failed"), ...queue]);
+    const mark = (id: string, change: Partial<PendingUpload> | null) => setPending((current) => change
+      ? current.map((item) => (item.id === id ? { ...item, ...change } : item))
+      : current.filter((item) => item.id !== id));
+    let current = draft;
+    let added = 0;
+    for (const [index, file] of files.entries()) {
+      const id = queue[index].id;
+      const problem = checkAttachmentFile(file, current);
+      if (problem) { mark(id, { status: "failed", message: problem }); continue; }
+      mark(id, { status: "uploading" });
+      try {
+        current = await uploadEmailAttachment(token, opportunityId, current, file);
+        if (!alive.current) return;
+        adopt(current, dirty);
+        mark(id, null);
+        added += 1;
+      } catch (cause) {
+        if (isEmailConflict(cause)) { mark(id, { status: "failed", message: "The draft changed elsewhere. Reload it, then upload again." }); throw cause; }
+        mark(id, { status: "failed", message: emailError(cause) });
+      }
+    }
+    if (added) setNotice(`${added} ${added === 1 ? "file was" : "files were"} uploaded and selected for the email.${current.status === "draft" && draft.status === "confirmed" ? " The email needs to be reviewed and confirmed again." : ""}`);
+  });
+
+  const removeFile = (attachment: EmailAttachment) => run("saving", async (token) => {
+    if (!draft) return;
+    const saved = await removeEmailAttachment(token, opportunityId, draft, attachment);
+    if (!alive.current) return;
+    adopt(saved, dirty);
+    setNotice(`${attachment.fileName} was removed.`);
   });
 
   const download = (attachment: EmailAttachment) => run("exporting", async (token) => {
@@ -403,13 +448,40 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
         </section>
         <section className={styles.packageAttachments}>
           <h3 className={styles.packageLabel}>Email attachments</h3>
-          {draft?.attachments.length ? <ul aria-label="Approved email attachments" data-testid="email-attachments">
-            {draft.attachments.map((item) => <li key={item.key} className={styles.emailAttachment} data-artifact={item.artifact}>
-              <label className={styles.check}><input type="checkbox" checked={item.selected} disabled={working || conflict} data-testid={`email-attach-${item.key}`} onChange={() => void toggleAttachment(item)} />
-                <span>{item.fileName}<small>{ATTACHMENT_ARTIFACT_LABEL[item.artifact]} · {item.available ? `${item.format.toUpperCase()} · ${formatFileSize(item.sizeBytes)} · approved version ${item.versionNumber ?? ""}` : "Not available — this file cannot be attached"}</small></span></label>
-              {item.available ? <button type="button" className={styles.emailLink} disabled={working} onClick={() => void download(item)}>Download</button> : null}
-            </li>)}
-          </ul> : <p>{draft ? "This draft has no approved presentation version to attach." : "Available after the email draft is prepared."}</p>}
+          {draft?.attachments.length ? <>
+            <h4 className={styles.attachmentGroup} id="generated-attachments">Generated documents</h4>
+            <ul aria-labelledby="generated-attachments" data-testid="email-attachments">
+              {draft.attachments.filter((item) => item.origin === "generated").map((item) => <li key={item.key} className={styles.emailAttachment} data-artifact={item.artifact}>
+                <label className={styles.check}><input type="checkbox" checked={item.selected} disabled={working || conflict} data-testid={`email-attach-${item.key}`} onChange={() => void toggleAttachment(item)} />
+                  <span>{item.fileName}<small>{ATTACHMENT_ARTIFACT_LABEL[item.artifact]} · {item.available ? `${item.format.toUpperCase()} · ${formatFileSize(item.sizeBytes)} · approved version ${item.versionNumber ?? ""}` : "Not available — this file cannot be attached"}</small></span></label>
+                {item.available ? <button type="button" className={styles.emailLink} disabled={working} onClick={() => void download(item)}>Download</button> : null}
+              </li>)}
+            </ul>
+            <h4 className={styles.attachmentGroup} id="uploaded-attachments">Additional attachments</h4>
+            <ul aria-labelledby="uploaded-attachments" data-testid="email-uploads">
+              {draft.attachments.filter((item) => item.origin === "external").map((item) => <li key={item.key} className={styles.emailAttachment} data-artifact="external">
+                <label className={styles.check}><input type="checkbox" checked={item.selected} disabled={working || conflict} data-testid={`email-attach-${item.key}`} onChange={() => void toggleAttachment(item)} />
+                  <span>{item.fileName}<small>{ATTACHMENT_ARTIFACT_LABEL.external} · {item.available ? `${item.format.toUpperCase()} · ${formatFileSize(item.sizeBytes)} · uploaded ${dateTime(item.uploadedAt)}` : "Not available — this file cannot be attached"}</small></span></label>
+                <span className={styles.attachmentActions}>
+                  {item.available ? <button type="button" className={styles.emailLink} disabled={working} onClick={() => void download(item)}>Download</button> : null}
+                  <button type="button" className={styles.emailLink} data-testid={`email-remove-${item.key}`} disabled={working || conflict} aria-label={`Remove ${item.fileName}`} onClick={() => void removeFile(item)}>Remove</button>
+                </span>
+              </li>)}
+              {pending.map((item) => <li key={item.id} className={styles.emailAttachment} data-upload={item.status} role={item.status === "failed" ? "alert" : "status"}>
+                <span>{item.name}<small>{item.status === "failed" ? item.message ?? "The file could not be uploaded." : item.status === "uploading" ? `Uploading... ${formatFileSize(item.size)}` : "Waiting to upload"}</small></span>
+                {item.status === "failed" ? <button type="button" className={styles.emailLink} onClick={() => setPending((current) => current.filter((entry) => entry.id !== item.id))}>Dismiss</button> : null}
+              </li>)}
+            </ul>
+            {!draft.attachments.some((item) => item.origin === "external") && !pending.length ? <p><small>No additional files. Add files the client should receive with this email; they are not used to write the text.</small></p> : null}
+            <input ref={fileInput} type="file" multiple hidden accept={EXTERNAL_ATTACHMENT_EXTENSIONS.join(",")} aria-label="Additional attachments"
+              data-testid="email-upload-input" onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; if (files.length) void uploadFiles(files); }} />
+            <button type="button" className="btn btn-secondary" data-testid="email-upload" disabled={working || conflict || !live} onClick={() => fileInput.current?.click()}>
+              {busy === "uploading" ? "Uploading..." : "Upload files"}</button>
+            <small className={styles.attachmentHint}>PDF, DOCX, XLSX, PPTX, PNG, JPG, TXT or CSV · up to {formatFileSize(MAX_EXTERNAL_ATTACHMENT_BYTES)} each, {MAX_EXTERNAL_ATTACHMENTS} files.</small>
+            <p className={styles.attachmentTotal} data-testid="email-attachment-total" aria-live="polite">
+              {selectedFiles.length} {selectedFiles.length === 1 ? "file" : "files"} selected · {formatFileSize(selectedAttachmentBytes(draft))} of {formatFileSize(MAX_EMAIL_BYTES)} in the email (encoded)
+            </p>
+          </> : <p>{draft ? "This draft has no approved presentation version to attach." : "Available after the email draft is prepared."}</p>}
           {draft?.attachments.length ? <small>Selected files are packed into the exported email file. A file that is not selected is not attached.</small> : null}
           {mismatch.length ? <p className={styles.error} role="status" data-testid="email-attachment-mismatch">No file is selected, but your edited {mismatch.map((name) => EMAIL_LENGTH_LABEL[name].toLowerCase()).join(", ")} {mismatch.length === 1 ? "text still says" : "texts still say"} that something is attached. Select a file or change that sentence: it cannot be approved like this.</p> : null}
         </section>

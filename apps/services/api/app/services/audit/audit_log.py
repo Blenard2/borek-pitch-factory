@@ -52,6 +52,8 @@ class AuditAction(StrEnum):
     EMAIL_DRAFT_CONFIRM = "email_draft.confirm"
     EMAIL_DRAFT_UPDATE = "email_draft.update"
     EMAIL_DRAFT_EXPORT = "email_draft.export"
+    EMAIL_ATTACHMENT_UPLOAD = "email_attachment.upload"
+    EMAIL_ATTACHMENT_REMOVE = "email_attachment.remove"
     CLIENT_PREPARATION_EMAIL_GENERATE = "client_preparation_email.generate"
     DISCOVERY_PAPER_GENERATE = "discovery_paper.generate"
     DISCOVERY_PAPER_EDIT = "discovery_paper.edit"

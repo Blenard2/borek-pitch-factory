@@ -104,12 +104,12 @@ export interface Person {
   email: string;
 }
 /**
- * One generated document of the finalized package (BAP-7): Discovery 1, Discovery 2, Master Presentation V1 or V2, pinned to the version the finalized V2 was built from.
+ * One attachment the email can carry: a generated document of the finalized package (BAP-7: Discovery 1, Discovery 2, Master Presentation V1 or V2, pinned to the version the finalized V2 was built from), or a file the owner uploaded for this email (BAP-3, origin external, key external:<id>).
  */
 export interface Attachment {
-  key: "pdf" | "pptx" | "v1_pdf" | "v1_pptx" | "discovery1_docx" | "discovery2_docx";
-  artifact: "master_presentation_v2" | "master_presentation_v1" | "discovery_1" | "discovery_2";
-  format: "pptx" | "pdf" | "docx";
+  key: ("pdf" | "pptx" | "v1_pdf" | "v1_pptx" | "discovery1_docx" | "discovery2_docx") | string;
+  artifact: "master_presentation_v2" | "master_presentation_v1" | "discovery_1" | "discovery_2" | "external";
+  format: "pptx" | "pdf" | "docx" | "xlsx" | "png" | "jpg" | "jpeg" | "txt" | "csv";
   file_name: string;
   selected: boolean;
   available: boolean;
@@ -118,8 +118,13 @@ export interface Attachment {
   presentation_version_id: string | null;
   artifact_version_id: string | null;
   version_number: number | null;
-  product_version: "V1" | "V2" | "Discovery 1" | "Discovery 2";
+  product_version: "V1" | "V2" | "Discovery 1" | "Discovery 2" | "Uploaded";
   download_path: string | null;
+  /**
+   * generated: a document of the package. external: uploaded by the owner; never evidence for a statement in the email.
+   */
+  origin: "generated" | "external";
+  uploaded_at: string | null;
 }
 export interface Writer {
   /**

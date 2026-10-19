@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  EMAIL_LENGTH_LABEL, EMAIL_REVIEW_CHECKS, emailReviewWarnings, formatFileSize, personLabel,
+  ATTACHMENT_ARTIFACT_LABEL, EMAIL_LENGTH_LABEL, EMAIL_REVIEW_CHECKS, emailReviewWarnings, formatFileSize, personLabel,
   type EmailLength, type PostMeetingEmail,
 } from "@/lib/postMeetingEmail";
 import styles from "./post-meeting.module.css";
@@ -65,7 +65,7 @@ export function FollowUpReviewDialog({ draft, length, companyName, busy, readOnl
         <div><dt>Subject</dt><dd>{text.subject}</dd></div>
         <div><dt>Length</dt><dd>{EMAIL_LENGTH_LABEL[length]} · {text.wordCount} of {draft.wordLimits[length]} content words · revision {draft.revision}</dd></div>
         <div><dt>Attachments</dt><dd data-testid="email-review-attachments">{files.length
-          ? files.map((item) => `${item.fileName} (${item.available ? `${formatFileSize(item.sizeBytes)}, approved version ${item.versionNumber ?? ""}` : "not available"})`).join(", ")
+          ? files.map((item) => `${item.fileName} (${ATTACHMENT_ARTIFACT_LABEL[item.artifact]}, ${item.available ? `${formatFileSize(item.sizeBytes)}${item.origin === "generated" ? `, approved version ${item.versionNumber ?? ""}` : ""}` : "not available"})`).join(", ")
           : "None selected"}</dd></div>
       </dl>
 

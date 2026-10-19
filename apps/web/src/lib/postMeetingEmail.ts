@@ -15,17 +15,59 @@ export interface EmailRecipients { to: EmailPerson[]; cc: EmailPerson[]; sender:
  * finalized V2 was built from. ``key`` is the stable selection key; "pptx" and "pdf" are the V2 files.
  */
 export const ATTACHMENT_KEYS = ["pptx", "pdf", "v1_pptx", "v1_pdf", "discovery1_docx", "discovery2_docx"] as const;
-export type AttachmentKey = (typeof ATTACHMENT_KEYS)[number];
-export type AttachmentArtifact = "master_presentation_v2" | "master_presentation_v1" | "discovery_1" | "discovery_2";
+export type GeneratedAttachmentKey = (typeof ATTACHMENT_KEYS)[number];
+/** BAP-3: a file the owner uploaded is selected by its stable id. */
+export type ExternalAttachmentKey = `external:${string}`;
+export type AttachmentKey = GeneratedAttachmentKey | ExternalAttachmentKey;
+export type AttachmentArtifact = "master_presentation_v2" | "master_presentation_v1" | "discovery_1" | "discovery_2" | "external";
 export const ATTACHMENT_ARTIFACT_LABEL: Record<AttachmentArtifact, string> = {
   discovery_1: "Discovery 1", discovery_2: "Discovery 2", master_presentation_v1: "Master Presentation 1", master_presentation_v2: "Master Presentation 2",
+  external: "Uploaded by you",
 };
+export type AttachmentFormat = "pptx" | "pdf" | "docx" | "xlsx" | "png" | "jpg" | "jpeg" | "txt" | "csv";
 export interface EmailAttachment {
-  key: AttachmentKey; artifact: AttachmentArtifact;
-  format: "pptx" | "pdf" | "docx"; fileName: string; selected: boolean; available: boolean; sizeBytes: number | null;
+  key: AttachmentKey; artifact: AttachmentArtifact; origin: "generated" | "external";
+  format: AttachmentFormat; fileName: string; selected: boolean; available: boolean; sizeBytes: number | null;
   presentationId: string | null; presentationVersionId: string | null; artifactVersionId: string | null;
-  versionNumber: number | null; downloadPath: string | null;
+  versionNumber: number | null; downloadPath: string | null; uploadedAt: string | null;
 }
+
+/** Same limits as the API (services/followup/attachments.py). */
+export const EXTERNAL_ATTACHMENT_EXTENSIONS = [".pdf", ".docx", ".xlsx", ".pptx", ".png", ".jpg", ".jpeg", ".txt", ".csv"] as const;
+export const MAX_EXTERNAL_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_EXTERNAL_ATTACHMENTS = 10;
+/**
+ * The 25 MB policy applies to the exported email: attachments count with their Base64-encoded
+ * size, about 4/3 of the file (same estimate as the API's ``encoded_size``).
+ */
+export const MAX_EMAIL_BYTES = 25 * 1024 * 1024;
+export const MAX_TOTAL_ATTACHMENT_BYTES = MAX_EMAIL_BYTES - 128 * 1024;
+export const encodedAttachmentSize = (raw: number) => {
+  const base64 = 4 * Math.floor((raw + 2) / 3);
+  return base64 + 2 * Math.floor((base64 + 75) / 76) + 1024;
+};
+const ATTACHMENT_FORMATS: readonly string[] = ["pptx", "pdf", "docx", "xlsx", "png", "jpg", "jpeg", "txt", "csv"];
+const EXTERNAL_KEY = /^external:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** A first check in the browser; the API checks the content again and decides. */
+export function checkAttachmentFile(file: { name: string; size: number }, draft: Pick<PostMeetingEmail, "attachments"> | null): string | null {
+  const extension = file.name.includes(".") ? `.${file.name.split(".").pop()!.toLowerCase()}` : "";
+  if (!(EXTERNAL_ATTACHMENT_EXTENSIONS as readonly string[]).includes(extension)) {
+    return `${file.name}: this file type cannot be attached. Supported: PDF, DOCX, XLSX, PPTX, PNG, JPG, TXT, CSV.`;
+  }
+  if (!file.size) return `${file.name} is empty.`;
+  if (file.size > MAX_EXTERNAL_ATTACHMENT_BYTES) return `${file.name} is larger than 10 MB.`;
+  const uploaded = draft?.attachments.filter((item) => item.origin === "external").length ?? 0;
+  if (uploaded >= MAX_EXTERNAL_ATTACHMENTS) return `An email can carry at most ${MAX_EXTERNAL_ATTACHMENTS} uploaded files. Remove one first.`;
+  if (draft && selectedAttachmentBytes(draft) + encodedAttachmentSize(file.size) > MAX_TOTAL_ATTACHMENT_BYTES) {
+    return `With ${file.name} the email would be larger than 25 MB once encoded. Deselect a file first.`;
+  }
+  return null;
+}
+
+/** What the selected attachments add to the email, encoded. */
+export const selectedAttachmentBytes = (draft: Pick<PostMeetingEmail, "attachments">) =>
+  draft.attachments.filter((item) => item.selected).reduce((total, item) => total + encodedAttachmentSize(item.sizeBytes ?? 0), 0);
 export interface EmailSource {
   presentationId: string; presentationVersionId: string; versionNumber: number; finalizedAt: string;
   extractionMode: string | null; confirmedFindings: number | null; excludedFindings: number | null;
@@ -91,9 +133,16 @@ const ERROR_TEXT: Record<string, string> = {
   EMAIL_BODY_INVALID: "The message is empty or too long.",
 };
 
+const UPLOAD_ERRORS = new Set([
+  "EMAIL_ATTACHMENT_INVALID", "EMAIL_ATTACHMENT_UNSUPPORTED_TYPE", "EMAIL_ATTACHMENT_EMPTY", "EMAIL_ATTACHMENT_TOO_LARGE",
+  "EMAIL_ATTACHMENT_CORRUPT", "EMAIL_ATTACHMENT_LIMIT", "EMAIL_ATTACHMENTS_TOO_LARGE", "EMAIL_ATTACHMENT_STORAGE_FAILED",
+]);
+
 export function emailError(error: unknown): string {
   if (error instanceof ApiRequestError) {
     if (error.code === "EMAIL_LENGTH_EXCEEDED") return error.message;
+    // BAP-3: the API names the file and what is wrong with it.
+    if (error.code && UPLOAD_ERRORS.has(error.code) && error.message) return error.message;
     if (error.code && ERROR_TEXT[error.code]) return ERROR_TEXT[error.code];
     if (error.status === 404) return "This email draft was not found.";
   }
@@ -196,13 +245,17 @@ export function parsePostMeetingEmail(value: unknown, opportunityId: string): Po
       : null,
     attachments: (Array.isArray(draft.attachments) ? draft.attachments : []).flatMap((item): EmailAttachment[] => {
       const file = item as Record<string, unknown>;
-      if ((file.format !== "pptx" && file.format !== "pdf" && file.format !== "docx") || !isString(file.file_name)) return [];
+      if (!ATTACHMENT_FORMATS.includes(String(file.format)) || !isString(file.file_name)) return [];
       // An envelope from before BAP-7 names the V2 files by format only.
-      const key = (ATTACHMENT_KEYS as readonly string[]).includes(String(file.key)) ? file.key as AttachmentKey : file.format === "docx" ? null : file.format;
+      const key = (ATTACHMENT_KEYS as readonly string[]).includes(String(file.key)) || EXTERNAL_KEY.test(String(file.key)) ? file.key as AttachmentKey
+        : file.format === "pptx" || file.format === "pdf" ? file.format : null;
       if (!key) return [];
-      const artifact = (["master_presentation_v2", "master_presentation_v1", "discovery_1", "discovery_2"] as const).find((name) => name === file.artifact) ?? "master_presentation_v2";
+      const external = key.startsWith("external:");
+      const artifact = external ? "external"
+        : (["master_presentation_v2", "master_presentation_v1", "discovery_1", "discovery_2"] as const).find((name) => name === file.artifact) ?? "master_presentation_v2";
       return [{
-        key, artifact, format: file.format, fileName: file.file_name, selected: file.selected === true, available: file.available === true,
+        key, artifact, origin: external ? "external" : "generated", uploadedAt: isString(file.uploaded_at) ? file.uploaded_at : null,
+        format: file.format as AttachmentFormat, fileName: file.file_name, selected: file.selected === true, available: file.available === true,
         sizeBytes: typeof file.size_bytes === "number" ? file.size_bytes : null,
         presentationId: isString(file.presentation_id) ? file.presentation_id : null,
         presentationVersionId: isString(file.presentation_version_id) ? file.presentation_version_id : null,
@@ -235,6 +288,25 @@ export interface EmailEdit {
   selectedLength?: EmailLength;
   lengths?: Partial<Record<EmailLength, { subject: string; body: string }>>;
   attachments?: Partial<Record<AttachmentKey, boolean>>;
+}
+
+/** BAP-3: upload one additional attachment on the saved revision; the API selects it. */
+export async function uploadEmailAttachment(token: string, opportunityId: string, draft: Pick<PostMeetingEmail, "id" | "revision">, file: File) {
+  const body = new FormData();
+  body.set("file", file);
+  body.set("expected_revision", String(draft.revision));
+  const saved = parsePostMeetingEmail(await apiFetch(draftsPath(opportunityId, `/${encodeURIComponent(draft.id)}/attachments`), token, { method: "POST", body }), opportunityId);
+  if (!saved) throw new Error("The saved email draft was not returned.");
+  return saved;
+}
+
+/** BAP-3: remove an uploaded file on the saved revision. */
+export async function removeEmailAttachment(token: string, opportunityId: string, draft: Pick<PostMeetingEmail, "id" | "revision">, attachment: EmailAttachment) {
+  if (attachment.origin !== "external" || !attachment.artifactVersionId) throw new Error("Only an uploaded file can be removed.");
+  const path = draftsPath(opportunityId, `/${encodeURIComponent(draft.id)}/attachments/${encodeURIComponent(attachment.artifactVersionId)}?expected_revision=${draft.revision}`);
+  const saved = parsePostMeetingEmail(await apiFetch(path, token, { method: "DELETE" }), opportunityId);
+  if (!saved) throw new Error("The saved email draft was not returned.");
+  return saved;
 }
 
 /** Saves against the revision the edit was made on; the API answers 409 if the draft moved on. */
