@@ -21,6 +21,7 @@ from app.schemas.opportunities import (
     OpportunityUpdateRequest,
     RecentWorkSnapshot,
 )
+from app.schemas.stage1 import AdditionalInformationUpdate
 from app.services.pitch_owner import employee_pitch_owner, parse_team_members
 from app.services.recent_work import list_recent_work_snapshots
 from app.services import job_service
@@ -320,6 +321,35 @@ def update_opportunity(
         opportunity_id=opportunity_id,
         user_id=user.id,
         updates=body.model_dump(exclude_unset=True),
+    )
+    record_audit_event(
+        store,
+        actor_id=user.id,
+        action=AuditAction.OPPORTUNITY_UPDATE,
+        object_type=AuditObjectType.OPPORTUNITY,
+        object_id=opportunity_id,
+    )
+    return _to_response(row)
+
+
+@router.put("/{opportunity_id}/additional-information", response_model=OpportunityResponse)
+def update_additional_information(
+    opportunity_id: UUID,
+    body: AdditionalInformationUpdate,
+    user: AuthUserDep,
+    store: DataStoreDep,
+) -> OpportunityResponse:
+    """BAP-10: save only the "Additional information" of Client Information.
+
+    A ``stage1_intake`` PATCH replaces every intake field (and clears the voice recording); this
+    updates the one column through the same store method, so ownership checks, persistence and
+    auditing are the existing ones and all other client fields keep their values. Approved
+    Discovery versions are stored separately and are not touched; the next generation reads it.
+    """
+    row = store.update_opportunity(
+        opportunity_id=opportunity_id,
+        user_id=user.id,
+        updates={"about_company": body.additional_information},
     )
     record_audit_event(
         store,

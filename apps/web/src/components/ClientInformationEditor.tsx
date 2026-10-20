@@ -7,6 +7,7 @@ import { WorkflowActionBar } from "@/components/WorkflowActionBar";
 import { useAuth } from "@/components/AuthProvider";
 import { useLanguage } from "@/components/LanguageProvider";
 import { usePreviewJourney } from "@/components/PreviewJourneyProvider";
+import { ApiRequestError, saveAdditionalInformation } from "@/lib/api";
 import {
   ClientInformationAdapterError,
   clientInformationErrorMessage,
@@ -41,6 +42,18 @@ const FIELDS: Array<{
   { key: "additional_information", multiline: true },
 ];
 
+// BAP-10: the one client field a live session saves - context for the next Discovery generation,
+// e.g. after a failed website analysis.
+const LIVE_EDITABLE_FIELD: ClientInformationField = "additional_information";
+
+/** What went wrong when a live client field could not be saved. */
+function liveSaveErrorMessage(error: ApiRequestError): string {
+  if (error.status === 401) return "Your session has ended. Sign in again and save once more; your text is still here.";
+  if (error.status === 403 || error.status === 404) return "You do not have permission to update this client information.";
+  if (error.status === 422 || error.status === 400) return "Additional information could not be saved: it is too long (at most 20,000 characters) or contains unsupported characters.";
+  return "Client information could not be saved. Your text is still here; try again.";
+}
+
 const INDUSTRIES = [
   "Automotive and mobility",
   "Consumer and retail",
@@ -55,7 +68,7 @@ const INDUSTRIES = [
 export function ClientInformationEditor({ initialRecord }: ClientInformationEditorProps) {
   const router = useRouter();
   const { copy } = useLanguage();
-  const { ownerId, loading: authLoading } = useAuth();
+  const { ownerId, accessToken, loading: authLoading } = useAuth();
   const { createOpportunity, getOpportunity, updateClient, hydrated } = usePreviewJourney();
   const adapterRef = useRef(createFixtureClientInformationAdapter(initialRecord));
   const errorSummaryRef = useRef<HTMLDivElement>(null);
@@ -252,11 +265,25 @@ export function ClientInformationEditor({ initialRecord }: ClientInformationEdit
         router.push(`/opportunities/${encodeURIComponent(created.opportunity_id)}/discovery`);
         return;
       }
-      const saved = liveRecord ? currentRecord : await adapterRef.current.save({
-        opportunity_id: record.opportunity_id,
-        expected_revision: record.revision,
-        values: normalizeClientInformation(draft),
-      });
+      // Live: only "Additional information" is saved (BAP-10), on its own, so the other client
+      // fields keep the values the API holds; nothing else in the form is sent.
+      const liveChanged = liveRecord && draft.additional_information.trim() !== currentRecord.values.additional_information.trim();
+      if (liveChanged && !accessToken) throw new ApiRequestError("Sign in again to save client information.", 401);
+      const saved = liveRecord
+        ? liveChanged
+          ? {
+              ...currentRecord,
+              values: {
+                ...currentRecord.values,
+                additional_information: await saveAdditionalInformation(accessToken!, record.opportunity_id, draft.additional_information),
+              },
+            }
+          : currentRecord
+        : await adapterRef.current.save({
+            opportunity_id: record.opportunity_id,
+            expected_revision: record.revision,
+            values: normalizeClientInformation(draft),
+          });
       if (currentOwner.current !== ownerId) return;
       setRecord(saved);
       setDraft(saved.values);
@@ -268,13 +295,15 @@ export function ClientInformationEditor({ initialRecord }: ClientInformationEdit
       setExtraErrors({});
       setEditing(false);
       setNotice(liveRecord
-        ? "Extras saved only in this local preview. Live client fields were not changed; files are names only, not uploaded content."
+        ? liveChanged
+          ? "Additional information saved for this client. The next Discovery generation uses it; the other client fields were not changed."
+          : "Nothing to save: in a live session only Additional information can be changed here."
         : "Client information and extras saved in this local preview. Files are names only, not uploaded content.");
     } catch (saveError) {
       if (saveError instanceof ClientInformationAdapterError) {
         setFieldErrors(saveError.fieldErrors);
       }
-      setError(clientInformationErrorMessage(saveError));
+      setError(saveError instanceof ApiRequestError ? liveSaveErrorMessage(saveError) : clientInformationErrorMessage(saveError));
       requestAnimationFrame(() => errorSummaryRef.current?.focus());
     } finally {
       setBusy(false);
@@ -305,7 +334,8 @@ export function ClientInformationEditor({ initialRecord }: ClientInformationEdit
       id: key,
       name: key,
       value: draft[key],
-      disabled: busy || locked,
+      // Live: only Additional information is saved here; the other fields stay read-only.
+      disabled: busy || locked || (liveRecord && key !== LIVE_EDITABLE_FIELD),
       "aria-invalid": Boolean(fieldErrors[key]),
       "aria-describedby": fieldErrors[key] ? errorId : undefined,
       onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -482,7 +512,7 @@ export function ClientInformationEditor({ initialRecord }: ClientInformationEdit
       ) : null}
       {notice ? <p className="client-information-notice" role="status">{notice}</p> : null}
       {liveRecord || !canEdit ? <p role="status">{liveRecord
-        ? "Live client information is read-only here: the backend update contract cannot safely round-trip all five fields with revision checks. Extras are local preview metadata, not live-saved data."
+        ? "In a live session only Additional information can be changed here; it is saved for this client and used by the next Discovery generation. The other client fields are read-only: the backend update contract cannot safely round-trip all five fields with revision checks. Extras are local preview metadata, not live-saved data."
         : "This opportunity is not available in your local preview. Editing is disabled."}</p> : null}
 
       {editing && canEdit ? (

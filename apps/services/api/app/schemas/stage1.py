@@ -45,3 +45,21 @@ class Stage1Intake(BaseModel):
                 "client_web_page must be an absolute HTTP(S) URL without credentials"
             )
         return value
+
+
+class AdditionalInformationUpdate(BaseModel):
+    """BAP-10: the "Additional information" of Client Information (``stage1_intake.about_company``).
+
+    Updated on its own, so a live session can add company context after a failed website
+    analysis without sending - and possibly overwriting - the other client fields. Same rules as
+    ``Stage1Intake.about_company``: at most 20,000 characters, no NUL, blank clears it.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    additional_information: str | None = Field(default=None, max_length=20_000)
+
+    @field_validator("additional_information")
+    @classmethod
+    def normalize_empty(cls, value: str | None) -> str | None:
+        return Stage1Intake.normalize_empty(value)
