@@ -14,6 +14,8 @@ from services.framework.discovery_analysis.fixture import (
     load_library,
     prioritize_by_website,
     researched_profile_paragraph,
+    researched_scope,
+    website_profile_text,
 )
 from services.framework.discovery_analysis.layout import build_page_manifest
 from services.framework.discovery_analysis.model import (
@@ -210,12 +212,19 @@ def _apply_website_research(paper: dict[str, Any], draft: dict[str, Any], contex
     if any(fact["kind"] in ("description", "about", "offering", "industry") for fact in site.facts):
         unknown_business = load_library()["research"]["always_unknown"][0]
         research["unknown_facts"] = [item for item in research["unknown_facts"] if item != unknown_business]
-    description = next((fact for fact in site.facts if fact["kind"] in ("description", "about")), None)
-    if description and research["company_profile"]["origin"] == "UNKNOWN":
-        research["company_profile"] = {"text": description["value"], "origin": "SOURCE_FACT"}
-        paragraph = researched_profile_paragraph(description["value"])
+    # BAP-10: once research succeeded, no "no research was performed" wording is left. The
+    # profile comes from the website - its description, else what it lists - unless the user
+    # described the company; the scope note names the website as a source.
+    listed = site.facts[:MAX_WEBSITE_FACTS]
+    if research["company_profile"]["origin"] == "UNKNOWN":
+        profile = website_profile_text(listed)
+        research["company_profile"] = {"text": profile, "origin": "SOURCE_FACT"}
+        paragraph = researched_profile_paragraph(profile)
         if paragraph:
             draft["framing"]["chapters"]["overview"]["paragraphs"][0] = paragraph
+    document = draft["framing"]["document"]
+    if document["scope_note"] == load_library()["in_short"]["scope_context"]:
+        document["scope_note"] = researched_scope()
     draft["provenance"]["sources"] = refs
     draft["provenance"]["customer_facts_origin"] = "user_input_and_cited_research"
     paper["generation"]["research_mode"] = "provider"

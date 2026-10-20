@@ -118,6 +118,11 @@ class OptionalParts(BaseModel):
     system_interfaces: bool
 
 
+class SchemaVersion(Enum):
+    field_1_0 = '1.0'
+    field_1_1 = '1.1'
+
+
 class Status2(Enum):
     complete = 'complete'
     partial = 'partial'
@@ -193,7 +198,7 @@ class WebsiteResearch(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    schema_version: Literal['1.0']
+    schema_version: SchemaVersion
     status: Status2
     requested_url: str | None
     final_url: str | None = None

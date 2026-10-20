@@ -25,10 +25,11 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from services.research.website.extract import Block, PageContent, clean_text, extract_page
-from services.research.website.fetch import USER_AGENT, Fetcher, Limits
+from services.research.website.fetch import USER_AGENT, Fetcher, Limits, robots_reason
 from services.research.website.safety import WebsiteRejected, normalize_url
 
-SCHEMA_VERSION = "1.0"
+# 1.1 (BAP-10): the Discovery document prints the website facts with their sources.
+SCHEMA_VERSION = "1.1"
 
 # Page roles, best first. Keywords match URL path segments and link texts (English and German).
 _ROLES: tuple[tuple[str, int, tuple[str, ...]], ...] = (
@@ -85,15 +86,32 @@ _JOB_TITLE = re.compile(
 _ADDRESSES_READER = re.compile(r"\b(?:you|your|yours|Sie|Ihr|Ihre|Ihren|Ihrem|Ihrer|Ihres|dich|dein|deine|uns|we|our|unsere?)\b", re.IGNORECASE)
 _SECTION_LABEL = re.compile(
     r"^(?:key (?:competencies|facts|figures|benefits)|other (?:products|services|solutions)|more (?:products|services)|"
-    r"overview|übersicht|highlights?|kategorien|categories|vorteile|benefits|advantages|features|references?|contact us)\W*$",
+    r"overview|übersicht|highlights?|kategorien|categories|vorteile|benefits|advantages|features|references?|contact us|"
+    r"(?:alle |all |unsere |our )?(?:standorte?|locations?|niederlassungen|branches|offices|filialen)|"
+    r"(?:(?:the|our|die|unsere) )?(?:(?:main|key|core|wichtigsten|zentralen) )?(?:capabilities|competencies|strengths|kompetenzen|stärken)"
+    r"(?: (?:of|der|des|von) .*)?)\W*$",
     re.IGNORECASE,
+)
+# Job listings and vacancies ("Auszubildende, Seelze", "Elektroniker (m/w/d)") are not offerings.
+_JOB_LISTING = re.compile(
+    r"(?:\b[mwdf]\s?/\s?[mwdf]\s?/\s?[mwdf]\b|\b(?:Auszubildende\w*|Azubi\w*|Ausbildung\w*|Praktik\w*|Werkstudent\w*|"
+    r"Stellenangebot\w*|Stellenanzeige\w*|Jobs?|Karriere\w*|Bewerb\w*|vacanc\w*|apprentice\w*|trainee\w*|internships?|"
+    r"hiring|careers?|open positions?)\b)",
+    re.IGNORECASE,
+)
+# Company names with their legal form ("Wahl GmbH & Co. KG") name an entity, not an offering.
+_LEGAL_ENTITY = re.compile(
+    r"(?<![\w&])(?:GmbH|mbH|AG|KGaA|KG|SE|OHG|GbR|UG|e\.\s?K\.|e\.\s?V\.|Ltd\.?|LLC|Inc\.?|Corp\.?|PLC|S\.A\.|B\.V\.|N\.V\.)(?![\w])"
 )
 
 
-def _offering_like(text: str, following: str) -> bool:
+def _offering_like(text: str, following: str, tag: str = "") -> bool:
     return not (
-        _JOB_TITLE.search(text)
+        tag == "figcaption"  # a caption describes a picture
+        or _JOB_TITLE.search(text)
         or _JOB_TITLE.search(following)
+        or _JOB_LISTING.search(text)
+        or _LEGAL_ENTITY.search(text)
         or _ADDRESSES_READER.search(text)
         or _SECTION_LABEL.match(text)
         or "!" in text
@@ -232,7 +250,7 @@ def _run(result: WebsiteResearch, start: str, fetcher: Fetcher, client_name: str
                 result,
                 home,
                 failure.error or "WEBSITE_BLOCKED_BY_ROBOTS",
-                f"The website's robots.txt could not be read ({failure.message}), so automated reading is treated as not allowed.",
+                robots_reason(failure),
             )
             home.status = "blocked_by_robots"
         else:
@@ -332,10 +350,17 @@ def _role(url: str, label: str) -> tuple[str, int] | None:
         segment in _SKIP_WORDS or any(part in _SKIP_WORDS for part in segment.split("-")) for segment in segments
     ):
         return None
-    words = set(re.findall(r"[\wäöüß-]+", label.lower()))
+    parts = set(segments) | {part for segment in segments for part in segment.split("-")}
+    # The address decides first: /karriere/stellenangebote is a careers page, whatever its link
+    # says. Link texts match whole words only ("Stellenangebote" is not "Angebot").
     for role, weight, keywords in _ROLES:
-        if any(keyword in segments or any(keyword == part for segment in segments for part in segment.split("-")) for keyword in keywords) or any(
-            keyword in words or keyword.replace("-", " ") in label.lower() for keyword in keywords if len(keyword) > 3
+        if any(keyword in parts for keyword in keywords):
+            return role, weight
+    text = label.lower()
+    for role, weight, keywords in _ROLES:
+        if any(
+            len(keyword) > 3 and re.search(rf"(?<![\wäöüß]){re.escape(keyword.replace('-', ' '))}(?![\wäöüß])", text)
+            for keyword in keywords
         ):
             return role, weight
     return None
@@ -438,6 +463,21 @@ def _fact(kind: str, label: str, value: str, source_url: str, locator: str, exce
     }
 
 
+def _clip(text: str, limit: int) -> str:
+    """A leading part of a quote that still reads as a quote: whole sentences, else whole words.
+
+    Nothing is added (no ellipsis), so the value stays a verbatim part of the excerpt.
+    """
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    sentence_end = max(head.rfind(". "), head.rfind("! "), head.rfind("? "))
+    if sentence_end >= limit // 3:
+        return head[: sentence_end + 1]
+    word_end = head.rfind(" ")
+    return head[:word_end].rstrip(" ,;:-–") if word_end > 0 else head
+
+
 def _facts(pages: list[Page], client_name: str) -> list[dict[str, Any]]:
     """Verified statements: quoted verbatim from the site (value is always part of the excerpt)."""
     facts: list[dict[str, Any]] = []
@@ -459,14 +499,14 @@ def _facts(pages: list[Page], client_name: str) -> list[dict[str, Any]]:
     # Company description: the site's own summary, best source first.
     description = org.get("description")
     if description:
-        add(_fact("description", "Company description (website)", description[:400], org_url, "structured data (schema.org Organization)", description[:600]))
+        add(_fact("description", "Company description (website)", _clip(description, 400), org_url, "structured data (schema.org Organization)", description[:600]))
     elif home and home.content and home.content.description and len(home.content.description) >= 40:
-        add(_fact("description", "Company description (website)", home.content.description[:400], home.url, "meta description", home.content.description[:600]))
+        add(_fact("description", "Company description (website)", _clip(home.content.description, 400), home.url, "meta description", home.content.description[:600]))
     about = next((page for page in readable if page.role == "about"), None)
     if about and about.content:
         first = next((block.text for block in about.content.blocks if block.kind == "text" and len(block.text) >= 80 and _BUSINESS.search(block.text)), None)
         if first:
-            add(_fact("about", "About the company (website)", first[:400], about.url, "about page", first[:600]))
+            add(_fact("about", "About the company (website)", _clip(first, 400), about.url, "about page", first[:600]))
     if org.get("address"):
         add(_fact("headquarters", "Address (website)", org["address"], org_url, "structured data (schema.org address)", org["address"]))
     if org.get("foundingDate"):
@@ -491,7 +531,7 @@ def _facts(pages: list[Page], client_name: str) -> list[dict[str, Any]]:
             if not short or _GENERIC_HEADINGS.match(text) or text.lower() == name or len(text) < 4 or per_kind[kind] >= 8:
                 continue
             following = block.following or (blocks[index + 1].text if index + 1 < len(blocks) else "")
-            if not _offering_like(text, following[:120]):
+            if not _offering_like(text, following[:120], block.tag):
                 continue
             add(_fact(kind, label, text[:160], page.url, f"{page.role} page {'heading' if block.kind == 'heading' else 'list'}", text[:600]))
             per_kind[kind] += 1

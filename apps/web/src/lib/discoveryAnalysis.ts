@@ -53,16 +53,86 @@ export interface DiscoveryAnalysis {
   status: AnalysisStatus;
   generated_at: string | null;
   language: string;
-  intake_context: { client_name: string; meeting_purpose: string };
+  intake_context: { client_name: string; meeting_purpose: string; website_url?: string | null };
   generation: {
     mode: "fixture" | "live";
     specificity: "company" | "context" | "generic";
     research_mode: "user_context_only" | "provider";
     optional_parts: Record<string, boolean>;
     stages: AnalysisStage[];
+    /** BAP-5: what the research of the client's website found; absent when none ran. */
+    website_research?: WebsiteResearchRecord;
   };
   analysis: Record<string, unknown> | null;
   page_manifest: AnalysisPage[];
+}
+
+export interface WebsiteResearchRecord {
+  status: "complete" | "partial" | "failed" | "not_provided";
+  site?: string | null;
+  requested_url?: string | null;
+  summary?: string;
+  facts?: unknown[];
+  errors?: { code: string; url: string; message: string }[];
+}
+
+export type WebsiteResearchKind = "complete" | "partial" | "failed" | "disabled";
+
+export interface WebsiteResearchState {
+  kind: WebsiteResearchKind;
+  title: string;
+  message: string;
+  /** What is missing or went wrong, in the website's own error messages. */
+  reasons: string[];
+  /** A new generation runs the website research again (never for "disabled": that is configuration). */
+  canRetry: boolean;
+}
+
+// A link to a page that does not exist is no reason to call the research incomplete.
+const MINOR_RESEARCH_ERRORS = new Set(["WEBSITE_PAGE_NOT_FOUND"]);
+
+/**
+ * BAP-10: how the website research of this analysis went, for the status section above it.
+ * Null when no website was entered. "disabled" means no research ran although a website was
+ * entered: the environment has website research switched off, or the version predates it.
+ */
+export function websiteResearchState(paper: DiscoveryAnalysis): WebsiteResearchState | null {
+  const record = paper.generation.website_research;
+  const website = String(paper.intake_context.website_url ?? "").trim();
+  const researched = paper.generation.research_mode === "provider";
+  if (!record) {
+    if (!website || researched) return null;
+    return {
+      kind: "disabled",
+      title: "No website research for this version",
+      message: "Website research is not enabled in this environment, or this version was created before it was. The analysis uses only the information entered in Client Information.",
+      reasons: [],
+      canRetry: false,
+    };
+  }
+  if (record.status === "not_provided") return null;
+  const reasons = [...new Set((record.errors ?? []).filter((error) => !MINOR_RESEARCH_ERRORS.has(error.code)).map((error) => error.message).filter(Boolean))];
+  // Shown as a host name ("www.festo.com"), not as a raw address.
+  const site = (record.site || record.requested_url || website).replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  if (researched && record.status === "complete") {
+    return { kind: "complete", title: `Website analysed: ${site}`, message: record.summary ?? "", reasons: [], canRetry: false };
+  }
+  if (researched && record.status === "partial") {
+    return {
+      kind: "partial",
+      title: `Website analysed in part: ${site}`,
+      message: reasons.length ? "The analysis uses what could be read. Some content was not available:" : record.summary ?? "The analysis uses what could be read.",
+      reasons,
+      canRetry: true,
+    };
+  }
+  return {
+    kind: "failed",
+    title: `Website could not be analysed: ${site}`,
+    message: "The analysis uses only the information entered in Client Information. The reason:",
+    reasons: reasons.length ? reasons : ["No usable business content was found on the website."],
+    canRetry: true,
+  };
 }
 
 export interface AnalysisVersion {

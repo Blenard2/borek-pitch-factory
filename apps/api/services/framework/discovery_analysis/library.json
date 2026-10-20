@@ -766,7 +766,11 @@
       "business_case_lead": "Industry-typical impact ranges from comparable organisations, ordered by payback horizon.",
       "business_case_footnote": "Industry benchmarks as working hypotheses — to be validated against real metrics in the baseline workshop, not commitments. AI drafts, checks and orchestrates; people retain every approval, release and sign-off. Deployed via interfaces to the existing system landscape, no migration.",
       "profile_provided": "Context provided for this analysis: {text}",
-      "profile_researched": "From the client's website (quoted; the sources are listed in the analysis): {text}",
+      "profile_researched": "From the client's website (quoted; the sources are listed in the company background table): {text}",
+      "background_nav": "Company background",
+      "background_lead": "What the client's public website states about the company, quoted with the page it comes from. These are the company's own statements; the challenges and opportunities in this analysis remain hypotheses to validate.",
+      "background_columns": ["Topic", "Statement on the website", "Source"],
+      "background_footnote": "Read from {site} on {date}. Statements are quoted as published on the website and were not verified independently.",
       "thesis_title": "Working hypothesis",
       "map_columns": [
         "Area",
@@ -860,6 +864,7 @@
     "third_statement": "For every opportunity: the discovery questions for the conversation and the signal that real potential exists.",
     "scope_named": "Prepared as a discussion basis for the conversation with {client}. All impact figures are industry benchmarks as working hypotheses, not commitments. People retain every decision, release and sign-off.",
     "scope_context": "Prepared as a discussion basis from the context provided; no company research was performed. All impact figures are industry benchmarks as working hypotheses, not commitments. People retain every decision.",
+    "scope_researched": "Prepared as a discussion basis from the context provided and the client's public website. All impact figures are industry benchmarks as working hypotheses, not commitments. People retain every decision.",
     "scope_generic": "Prepared as a generic discussion basis: no company context was available, so nothing here is a statement about a specific organisation. All impact figures are industry benchmarks as working hypotheses, not commitments."
   },
   "thesis": {

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/components/AuthProvider";
@@ -20,6 +21,7 @@ import {
   saveAnalysisSection,
   stageProgress,
   viewOf,
+  websiteResearchState,
   type AnalysisPage,
   type AnalysisView,
   type DiscoveryAnalysis,
@@ -284,6 +286,13 @@ export function DiscoveryAnalysisWorkspace({ opportunityId, legacy }: DiscoveryA
   }
 
   const editing = editTarget ? editableSection(paper.analysis, editTarget) : null;
+  // BAP-10: how the website research went, shown above the analysis it was used for.
+  const researchState = live && paper.status === "ready" ? websiteResearchState(paper) : null;
+  const backgroundPage = manifest.find((page) => page.id.startsWith("company-background-"));
+  const clientInformationHref = `/opportunities/${encodeURIComponent(opportunityId)}/client-information`;
+  const retryResearch = () => {
+    if (window.confirm("Analyse the website again? This generates a new draft analysis; an approved version stays unchanged.")) void generate();
+  };
   const statusLine = loadState === "loading" ? "Loading Discovery from the server..."
     : paper.status === "generating" || busy === "generate" ? `Generating: ${progress.current?.label ?? "starting"} (${progress.done} of ${progress.total} steps done)`
     : paper.status === "failed" ? `Generation stopped at "${progress.failed?.label ?? "an earlier step"}". Nothing partial was kept; restart the generation.`
@@ -318,6 +327,35 @@ export function DiscoveryAnalysisWorkspace({ opportunityId, legacy }: DiscoveryA
             }}>{busy === "generate" ? "Generating..." : paper.status === "failed" ? "Restart generation" : "Regenerate"}</button>
           ) : null}
         </div>
+
+        {researchState ? (
+          <section
+            className={`discovery-research-status is-${researchState.kind}`}
+            aria-labelledby="discovery-research-status-title"
+            data-testid="website-research-status"
+            data-state={researchState.kind}
+            role={researchState.kind === "failed" ? "alert" : "status"}
+          >
+            <h2 id="discovery-research-status-title">{researchState.title}</h2>
+            {researchState.message ? <p>{researchState.message}</p> : null}
+            {researchState.reasons.length ? <ul>{researchState.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}
+            <div className="discovery-research-status-actions">
+              {researchState.kind === "complete" && backgroundPage ? (
+                <button type="button" className="btn btn-secondary" disabled={Boolean(editTarget)} onClick={() => { setSelectedId(backgroundPage.id); setNotice(null); }}>
+                  View sources (page {backgroundPage.number})
+                </button>
+              ) : null}
+              {researchState.canRetry ? (
+                <button type="button" className="btn btn-secondary" disabled={busy !== null || Boolean(editTarget)} onClick={retryResearch}>
+                  {busy === "generate" ? "Generating..." : "Retry website analysis"}
+                </button>
+              ) : null}
+              {researchState.kind !== "complete" ? (
+                <Link className="btn btn-secondary" href={clientInformationHref}>Add company information</Link>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         {paper.status !== "ready" ? (
           <div className="discovery-page-state" role="status">

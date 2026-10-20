@@ -2763,6 +2763,18 @@ body:has(.app-workspace) {
 .discovery-generation-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .discovery-generation-card p,
 .discovery-download-card > p { margin: 5px 0 0; color: var(--pitch-gray-500); font-size: 0.72rem; }
+/* BAP-10: website research status above the analysis; the left rule carries the state. */
+.discovery-research-status { margin-bottom: 12px; padding: 12px 16px; border: 1px solid var(--pitch-gray-200); border-left: 4px solid var(--color-success); border-radius: var(--pitch-control-radius); background: #fff; font-size: 0.78rem; }
+.discovery-research-status.is-partial { border-left-color: var(--color-warning); }
+.discovery-research-status.is-failed { border-left-color: var(--color-danger); }
+.discovery-research-status.is-disabled { border-left-color: var(--pitch-gray-500); }
+.discovery-research-status h2 { margin: 0; font-size: 0.82rem; font-weight: 600; overflow-wrap: anywhere; }
+.discovery-research-status p,
+.discovery-research-status ul { margin: 5px 0 0; color: var(--pitch-gray-500); font-size: 0.72rem; }
+.discovery-research-status ul { padding-left: 18px; }
+.discovery-research-status-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.discovery-research-status-actions:empty { display: none; }
+.discovery-research-status-actions .btn { font-size: 0.75rem; padding: 7px 12px; }
 .artifact-preview-workspace .discovery-version-actions { justify-content: flex-start; gap: 10px; border-top: 0; margin-top: 12px; padding-top: 0; }
 .artifact-preview-workspace .discovery-version-actions .btn { font-size: 0.75rem; padding: 9px 12px; }
 .discovery-document-workspace .discovery-gate-copy { text-align: left; margin: 0; }
