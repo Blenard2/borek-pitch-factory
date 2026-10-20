@@ -123,7 +123,7 @@ class Response:
 
 @dataclass
 class FixtureWeb:
-    """Hosts -> (path -> page). A page is HTML text, None (404) or a ``Response``."""
+    """Hosts -> (path -> page). A page is HTML text, None (404), a ``Response`` or a handler."""
 
     sites: dict[str, dict[str, Any]]
     addresses: dict[str, list[str]] = field(default_factory=dict)
@@ -145,6 +145,8 @@ class FixtureWeb:
         page = pages.get(request.url.path)
         if page is None:
             return httpx.Response(404, text="not found")
+        if callable(page):  # e.g. a function raising httpx.ReadTimeout
+            return page(request)
         if isinstance(page, Response):
             body = page.body.encode("utf-8") if isinstance(page.body, str) else page.body
             return httpx.Response(page.status, content=body, headers=page.headers)

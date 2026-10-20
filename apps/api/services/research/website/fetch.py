@@ -55,6 +55,9 @@ class FetchResult:
         return self.error is None and self.html is not None
 
 
+# robots.txt answers that mean "this site has no robots.txt" (RFC 9309: crawling is allowed).
+_ROBOTS_MISSING = frozenset({404, 410})
+
 _STATUS_ERRORS = {
     401: ("WEBSITE_ACCESS_RESTRICTED", "The page requires a login; it was not analysed."),
     403: ("WEBSITE_ACCESS_RESTRICTED", "The website refused automated access (HTTP 403); this is respected."),
@@ -117,21 +120,32 @@ class Fetcher:
         return self._robots_errors.get(f"{parts.scheme}://{parts.netloc}")
 
     def _load_robots(self, origin: str) -> RobotFileParser | None:
-        result = self.get(origin + "/robots.txt", accept=("text/plain",), max_bytes=self.limits.max_robots_bytes)
+        """The site's robots.txt rules; None when the site has none (everything is allowed).
+
+        Only a robots.txt that does not exist (404/410), or an answer that is not a robots file,
+        allows crawling. A refusal (401/403), a rate limit (429), any other client error, a server
+        error, a timeout or an unreachable site fails closed: the whole site is treated as
+        disallowed and the reason is kept for the report.
+        """
+        # robots.txt itself is never checked against robots.txt (no recursion).
+        result = self.get(origin + "/robots.txt", accept=("text/plain",), max_bytes=self.limits.max_robots_bytes, check_robots=False)
         parser = RobotFileParser()
         if result.ok:
             parser.parse((result.html or "").splitlines())
             return parser
-        if (result.status is not None and 400 <= result.status < 500) or result.error == "WEBSITE_UNSUPPORTED_CONTENT":
-            return None  # no robots.txt: everything is allowed
-        # robots.txt unreachable (server error, timeout): assume the site disallows crawling.
+        if result.status in _ROBOTS_MISSING or result.error == "WEBSITE_UNSUPPORTED_CONTENT":
+            return None
         self._robots_errors[origin] = result
         parser.parse(["User-agent: *", "Disallow: /"])
         return parser
 
     # ------------------------------------------------------------------ pages
 
-    def get(self, url: str, *, accept: tuple[str, ...] = HTML_TYPES, max_bytes: int | None = None) -> FetchResult:
+    def get(
+        self, url: str, *, accept: tuple[str, ...] = HTML_TYPES, max_bytes: int | None = None, check_robots: bool = True
+    ) -> FetchResult:
+        """Fetch one page. With ``check_robots`` every address requested - the first one and every
+        redirect target, on this or another site - must be allowed by that site's robots.txt."""
         limit = max_bytes or self.limits.max_bytes
         try:
             current = normalize_url(url)
@@ -147,9 +161,24 @@ class Fetcher:
             host = parts.hostname or ""
             port = parts.port or ALLOWED_PORTS[parts.scheme]
             try:
+                # The address check comes first: no request, not even for robots.txt, reaches a
+                # private or reserved address.
                 address = resolve_public(host, port, self._resolver)[0]
             except WebsiteRejected as exc:
                 result.error, result.message = exc.code, str(exc)
+                return result
+            if check_robots and not self.allowed(current):
+                failure = self.robots_failure(current)
+                result.error = "WEBSITE_BLOCKED_BY_ROBOTS"
+                result.message = (
+                    f"robots.txt of {host} could not be read ({failure.message}); the site is treated as not allowing automated reading."
+                    if failure is not None
+                    else f"robots.txt of {host} does not allow automated reading of {current}; this is respected."
+                )
+                return result
+            remaining = self.remaining()  # reading robots.txt took time
+            if remaining <= 0.5:
+                result.error, result.message = "WEBSITE_TIME_BUDGET_EXCEEDED", "The time budget for the website analysis was used up."
                 return result
             pinned_host = f"[{address}]" if ":" in address else address
             target = urlunsplit((parts.scheme, pinned_host, parts.path or "/", parts.query, ""))

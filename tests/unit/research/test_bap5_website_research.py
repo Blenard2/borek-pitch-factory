@@ -321,3 +321,128 @@ def test_line_breaks_separate_words_and_team_cards_are_not_offerings() -> None:
     offerings = [fact["value"] for fact in result.facts if fact["kind"] == "offering"]
     assert "End-to-End Development" in offerings and "Business Process Outsourcing" in offerings
     assert not any(name in " ".join(offerings) for name in ("Katharina", "Jonas", "Managing Partner", "Head of", "This is us"))
+
+
+# --- robots.txt on redirects and robots.txt failures (PR #8 review) -----------------------------
+
+ALLOW_ALL = "User-agent: *\nDisallow:\n"
+
+
+def test_a_redirect_to_a_path_robots_txt_disallows_is_not_fetched() -> None:
+    web = FixtureWeb(
+        sites={
+            "redirecting.test": {
+                "/robots.txt": "User-agent: *\nDisallow: /private/\n",
+                "/": Response(302, "", {"location": "/private/home"}),
+                "/private/home": HANSA_HOME,
+            }
+        }
+    )
+    result = run(web, "https://redirecting.test")
+    assert result.status == "failed"
+    assert result.errors[0]["code"] == "WEBSITE_BLOCKED_BY_ROBOTS" and "/private/home" in result.errors[0]["message"]
+    assert result.pages[0].status == "blocked_by_robots"
+    assert "/private/home" not in web.paths("redirecting.test"), "the disallowed target is never requested"
+
+
+def test_a_redirect_to_another_host_follows_that_hosts_robots_txt() -> None:
+    web = FixtureWeb(
+        sites={
+            "start.test": {"/robots.txt": ALLOW_ALL, "/": Response(301, "", {"location": "https://elsewhere.test/landing"})},
+            "elsewhere.test": {"/robots.txt": "User-agent: *\nDisallow: /\n", "/landing": HANSA_HOME},
+        }
+    )
+    result = run(web, "https://start.test")
+    assert result.status == "failed" and result.errors[0]["code"] == "WEBSITE_BLOCKED_BY_ROBOTS"
+    assert web.paths("elsewhere.test") == ["/robots.txt"], "only the other host's robots.txt is read"
+
+
+def test_an_internal_page_that_redirects_into_a_disallowed_path_is_skipped() -> None:
+    pages = {**HANSA_PAGES, "/services": Response(302, "", {"location": "/intern/services"}), "/intern/services": HANSA_PAGES["/services"]}
+    web = FixtureWeb(sites={"www.hansa-praezision.test": pages})  # robots.txt disallows /intern/
+    result = run(web, HANSA)
+    services = next(page for page in result.pages if page.role == "services")
+    assert services.status == "blocked_by_robots" and services.error == "WEBSITE_BLOCKED_BY_ROBOTS"
+    assert "/intern/services" not in web.paths("www.hansa-praezision.test")
+    assert result.status == "partial" and result.facts, "the other pages are still read"
+
+
+def test_permitted_redirects_are_still_followed_with_pinning() -> None:
+    web = FixtureWeb(
+        sites={
+            "hansa.test": {"/robots.txt": ALLOW_ALL, "/": Response(301, "", {"location": "https://www.hansa-praezision.test/"})},
+            "www.hansa-praezision.test": {**HANSA_PAGES, "/about-us": Response(301, "", {"location": "/company"}), "/company": HANSA_PAGES["/about-us"]},
+        }
+    )
+    result = run(web, "https://hansa.test")
+    assert result.status == "complete" and result.final_url == "https://www.hansa-praezision.test/"
+    about = next(page for page in result.pages if page.role == "about")
+    assert about.status == "ok" and about.url.endswith("/company")
+    assert all(request.url.host == PUBLIC_IP for request in web.requests), "every request, robots.txt included, is pinned"
+
+
+def test_robots_txt_is_fetched_without_a_robots_lookup_of_its_own() -> None:
+    web = FixtureWeb(
+        sites={
+            "moved-robots.test": {
+                "/robots.txt": Response(301, "", {"location": "/config/robots.txt"}),
+                "/config/robots.txt": "User-agent: *\nDisallow: /secret\n",
+                "/": HANSA_HOME,
+            }
+        }
+    )
+    result = run(web, "https://moved-robots.test")
+    assert result.status in ("complete", "partial")
+    paths = web.paths("moved-robots.test")
+    assert paths.count("/robots.txt") == 1 and paths.count("/config/robots.txt") == 1, "read once, no recursion"
+
+
+def _timeout(request):
+    import httpx
+
+    raise httpx.ReadTimeout("robots.txt timed out", request=request)
+
+
+@pytest.mark.parametrize(
+    ("robots", "allowed", "code"),
+    [
+        (None, True, None),  # 404: no robots.txt, crawling allowed
+        (Response(410, "gone", {"content-type": "text/plain"}), True, None),
+        (Response(401, "login", {"content-type": "text/plain"}), False, "WEBSITE_ACCESS_RESTRICTED"),
+        (Response(403, "forbidden", {"content-type": "text/plain"}), False, "WEBSITE_ACCESS_RESTRICTED"),
+        (Response(429, "slow down", {"content-type": "text/plain"}), False, "WEBSITE_RATE_LIMITED"),
+        (Response(451, "legal", {"content-type": "text/plain"}), False, "WEBSITE_HTTP_ERROR"),
+        (Response(500, "error", {"content-type": "text/plain"}), False, "WEBSITE_HTTP_ERROR"),
+        (Response(503, "maintenance", {"content-type": "text/plain"}), False, "WEBSITE_HTTP_ERROR"),
+        (_timeout, False, "WEBSITE_TIMEOUT"),
+    ],
+    ids=["404", "410", "401", "403", "429", "451", "500", "503", "timeout"],
+)
+def test_only_a_missing_robots_txt_allows_crawling(robots, allowed: bool, code: str | None) -> None:
+    web = FixtureWeb(sites={"site.test": {"/robots.txt": robots, "/": HANSA_HOME}})
+    result = run(web, "https://site.test")
+    fetched = "/" in web.paths("site.test")
+    assert fetched is allowed
+    if allowed:
+        assert result.status in ("complete", "partial") and result.facts
+        return
+    assert result.status == "failed" and result.errors[0]["code"] == code
+    assert web.paths("site.test") == ["/robots.txt"], "robots.txt is asked once, never retried, and nothing else is read"
+    if code == "WEBSITE_TIMEOUT":
+        # The site did not answer at all: reported as that, and still nothing else is requested.
+        assert result.errors[0]["message"] == "The website did not answer in time."
+    else:
+        assert "robots.txt" in result.errors[0]["message"]
+        assert result.pages[0].status == "blocked_by_robots"
+
+
+def test_a_failed_robots_txt_blocks_a_redirect_target_on_another_host() -> None:
+    web = FixtureWeb(
+        sites={
+            "start.test": {"/robots.txt": ALLOW_ALL, "/": Response(302, "", {"location": "https://limited.test/"})},
+            "limited.test": {"/robots.txt": Response(429, "slow down", {"content-type": "text/plain"}), "/": HANSA_HOME},
+        }
+    )
+    result = run(web, "https://start.test")
+    assert result.errors[0]["code"] == "WEBSITE_BLOCKED_BY_ROBOTS" and "429" in result.errors[0]["message"]
+    assert web.paths("limited.test") == ["/robots.txt"]

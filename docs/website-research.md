@@ -47,7 +47,10 @@ sites are skipped. No model call is made for the research itself.
 - **Limits.** At most 1.5 MB per response (the rest is not downloaded), 4 redirects, 18,000
   characters of content per site, about 9,000 characters of it passed to each live model stage.
 - **Restricted sites.** `robots.txt`, logins (401), refusals (403) and rate limits (429) are
-  respected and reported, never retried or worked around. Many large corporate sites refuse
+  respected and reported, never retried or worked around. `robots.txt` is checked for every
+  address requested, including each redirect target on the same or another site. Only a missing
+  `robots.txt` (404/410) allows crawling; if it answers 401, 403, 429, another client error, a
+  server error or times out, the site is treated as disallowed. Many large corporate sites refuse
   automated access; those clients get a user-input-only Discovery with a note saying why.
 - **TLS.** Certificates are always verified. A site with a broken certificate chain fails with
   `WEBSITE_TLS_ERROR`.

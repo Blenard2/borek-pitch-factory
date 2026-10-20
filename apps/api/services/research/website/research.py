@@ -226,6 +226,15 @@ def _run(result: WebsiteResearch, start: str, fetcher: Fetcher, client_name: str
         if failure is not None and failure.status is None:
             # The site could not be reached at all: report that, not a robots.txt rule.
             _fail(result, home, failure.error or "WEBSITE_FETCH_FAILED", failure.message)
+        elif failure is not None:
+            # robots.txt was refused (401/403), rate limited (429) or failed (5xx): fail closed.
+            _fail(
+                result,
+                home,
+                failure.error or "WEBSITE_BLOCKED_BY_ROBOTS",
+                f"The website's robots.txt could not be read ({failure.message}), so automated reading is treated as not allowed.",
+            )
+            home.status = "blocked_by_robots"
         else:
             _fail(result, home, "WEBSITE_BLOCKED_BY_ROBOTS", "The website's robots.txt does not allow automated reading; this is respected.")
             home.status = "blocked_by_robots"
@@ -290,7 +299,8 @@ def _run(result: WebsiteResearch, start: str, fetcher: Fetcher, client_name: str
 
 
 def _fail(result: WebsiteResearch, page: Page, code: str, message: str) -> None:
-    page.status, page.error, page.message = "failed", code, message
+    page.status = "blocked_by_robots" if code == "WEBSITE_BLOCKED_BY_ROBOTS" else "failed"
+    page.error, page.message = code, message
     result.errors.append({"code": code, "url": page.url, "message": message})
 
 
