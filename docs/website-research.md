@@ -49,8 +49,10 @@ sites are skipped. No model call is made for the research itself.
 - **Restricted sites.** `robots.txt`, logins (401), refusals (403) and rate limits (429) are
   respected and reported, never retried or worked around. `robots.txt` is checked for every
   address requested, including each redirect target on the same or another site. Only a missing
-  `robots.txt` (404/410) allows crawling; if it answers 401, 403, 429, another client error, a
-  server error or times out, the site is treated as disallowed. Many large corporate sites refuse
+  `robots.txt` (404/410) allows crawling, and only a complete plain-text `robots.txt` is parsed.
+  If it answers 401, 403, 429, another client error or a server error, times out, is not plain
+  text (for example an HTML page) or is cut off by the 200 KB limit or the time budget, the site
+  is treated as disallowed. Many large corporate sites refuse
   automated access; those clients get a user-input-only Discovery with a note saying why.
 - **TLS.** Certificates are always verified. A site with a broken certificate chain fails with
   `WEBSITE_TLS_ERROR`.
@@ -69,7 +71,7 @@ sites are skipped. No model call is made for the research itself.
 
 `WEBSITE_URL_INVALID`, `WEBSITE_URL_BLOCKED`, `WEBSITE_UNREACHABLE`, `WEBSITE_TIMEOUT`,
 `WEBSITE_TLS_ERROR`, `WEBSITE_ACCESS_RESTRICTED`, `WEBSITE_RATE_LIMITED`,
-`WEBSITE_BLOCKED_BY_ROBOTS`, `WEBSITE_REDIRECT_BLOCKED`, `WEBSITE_TOO_MANY_REDIRECTS`,
+`WEBSITE_BLOCKED_BY_ROBOTS`, `WEBSITE_ROBOTS_TOO_LARGE`, `WEBSITE_REDIRECT_BLOCKED`, `WEBSITE_TOO_MANY_REDIRECTS`,
 `WEBSITE_TOO_LARGE`, `WEBSITE_UNSUPPORTED_CONTENT`, `WEBSITE_REQUIRES_JAVASCRIPT`,
 `WEBSITE_TIME_BUDGET_EXCEEDED`, `WEBSITE_PAGE_TRUNCATED`, `WEBSITE_PAGE_NOT_FOUND` (a linked page
 only), `WEBSITE_NO_CONTENT`, `WEBSITE_LIMITED_CONTENT`.

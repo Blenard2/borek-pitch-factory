@@ -446,3 +446,64 @@ def test_a_failed_robots_txt_blocks_a_redirect_target_on_another_host() -> None:
     result = run(web, "https://start.test")
     assert result.errors[0]["code"] == "WEBSITE_BLOCKED_BY_ROBOTS" and "429" in result.errors[0]["message"]
     assert web.paths("limited.test") == ["/robots.txt"]
+
+
+# --- robots.txt that is not plain text or not complete (PR #8 final review) ---------------------
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        Response(200, "<html><body><h1>Welcome</h1><p>Our homepage instead of a robots file.</p></body></html>", {"content-type": "text/html; charset=utf-8"}),
+        Response(200, '{"robots": "none"}', {"content-type": "application/json"}),
+        Response(200, b"\x89PNG", {"content-type": "image/png"}),
+    ],
+    ids=["html", "json", "image"],
+)
+def test_a_robots_txt_that_is_not_plain_text_blocks_crawling(answer: Response) -> None:
+    web = FixtureWeb(sites={"site.test": {"/robots.txt": answer, "/": HANSA_HOME}})
+    result = run(web, "https://site.test")
+    assert result.status == "failed" and result.errors[0]["code"] == "WEBSITE_UNSUPPORTED_CONTENT"
+    assert "robots.txt was not answered with a plain-text file" in result.errors[0]["message"]
+    assert result.pages[0].status == "blocked_by_robots"
+    assert web.paths("site.test") == ["/robots.txt"], "nothing else is read"
+
+
+def test_a_robots_txt_cut_off_by_the_size_limit_is_not_parsed() -> None:
+    # The first rules allow everything; the forbidding part comes after the size limit.
+    robots = "User-agent: *\nAllow: /\n" + "# padding\n" * 30 + "User-agent: *\nDisallow: /\n"
+    web = FixtureWeb(sites={"site.test": {"/robots.txt": robots, "/": HANSA_HOME}})
+    result = run(web, "https://site.test", Limits(max_robots_bytes=100))
+    assert result.status == "failed" and result.errors[0]["code"] == "WEBSITE_ROBOTS_TOO_LARGE"
+    assert "larger than 100 bytes" in result.errors[0]["message"]
+    assert web.paths("site.test") == ["/robots.txt"]
+    # A robots.txt declared far beyond the limit is not downloaded at all, with the same outcome.
+    declared = FixtureWeb(sites={"site.test": {"/robots.txt": Response(200, "User-agent: *\n", {"content-type": "text/plain", "content-length": "90000000"}), "/": HANSA_HOME}})
+    assert run(declared, "https://site.test").errors[0]["code"] == "WEBSITE_ROBOTS_TOO_LARGE"
+    assert declared.paths("site.test") == ["/robots.txt"]
+
+
+def test_a_robots_txt_cut_off_by_the_time_budget_is_not_parsed() -> None:
+    state = {"now": 0.0}
+
+    def slow_robots(request):
+        import httpx
+
+        state["now"] = 1_000.0  # the time budget runs out while robots.txt is being read
+        return httpx.Response(200, content=b"User-agent: *\nAllow: /\n", headers={"content-type": "text/plain"})
+
+    web = FixtureWeb(sites={"site.test": {"/robots.txt": slow_robots, "/": HANSA_HOME}})
+    result = run(web, "https://site.test", clock=lambda: state["now"])
+    assert result.status == "failed" and result.errors[0]["code"] == "WEBSITE_TIME_BUDGET_EXCEEDED"
+    assert "robots.txt could not be read completely within the time budget" in result.errors[0]["message"]
+    assert web.paths("site.test") == ["/robots.txt"]
+
+
+def test_a_complete_plain_text_robots_txt_is_applied() -> None:
+    robots = "User-agent: *\nDisallow: /about-us\n\nUser-agent: OtherBot\nDisallow: /\n"
+    web = FixtureWeb(sites={"www.hansa-praezision.test": {**HANSA_PAGES, "/robots.txt": robots}})
+    result = run(web, HANSA)
+    assert result.status in ("complete", "partial") and result.facts
+    paths = web.paths("www.hansa-praezision.test")
+    assert "/" in paths and "/services" in paths and "/about-us" not in paths
+    assert next(page for page in result.pages if page.role == "about").status == "blocked_by_robots"

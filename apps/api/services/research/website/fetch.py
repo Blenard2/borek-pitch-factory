@@ -46,6 +46,7 @@ class FetchResult:
     status: int | None = None
     html: str | None = None
     truncated: bool = False
+    truncated_by: str | None = None  # "size" (byte limit) or "time" (time budget) when truncated
     error: str | None = None
     message: str = ""
     redirects: list[str] = field(default_factory=list)
@@ -122,19 +123,29 @@ class Fetcher:
     def _load_robots(self, origin: str) -> RobotFileParser | None:
         """The site's robots.txt rules; None when the site has none (everything is allowed).
 
-        Only a robots.txt that does not exist (404/410), or an answer that is not a robots file,
-        allows crawling. A refusal (401/403), a rate limit (429), any other client error, a server
-        error, a timeout or an unreachable site fails closed: the whole site is treated as
-        disallowed and the reason is kept for the report.
+        Only a robots.txt that does not exist (404/410) allows crawling, and only a complete
+        plain-text robots.txt is parsed for its rules. Anything else fails closed - the whole site
+        is treated as disallowed and the reason is kept for the report: a refusal (401/403), a rate
+        limit (429), any other client error, a server error, a timeout, an unreachable site, an
+        answer that is not plain text (e.g. an HTML page), and a robots.txt cut off by the size
+        limit or the time budget (partial rules could permit what the rest forbids).
         """
         # robots.txt itself is never checked against robots.txt (no recursion).
         result = self.get(origin + "/robots.txt", accept=("text/plain",), max_bytes=self.limits.max_robots_bytes, check_robots=False)
         parser = RobotFileParser()
-        if result.ok:
+        if result.ok and not result.truncated:
             parser.parse((result.html or "").splitlines())
             return parser
-        if result.status in _ROBOTS_MISSING or result.error == "WEBSITE_UNSUPPORTED_CONTENT":
+        if result.status in _ROBOTS_MISSING:  # a 404/410 answer, never a network failure (status None)
             return None
+        if result.ok and result.truncated_by == "time":
+            result.error, result.message = "WEBSITE_TIME_BUDGET_EXCEEDED", "robots.txt could not be read completely within the time budget"
+        elif result.ok:
+            result.error, result.message = "WEBSITE_ROBOTS_TOO_LARGE", f"robots.txt is larger than {self.limits.max_robots_bytes:,} bytes and was not read completely"
+        elif result.error == "WEBSITE_UNSUPPORTED_CONTENT":
+            result.message = "robots.txt was not answered with a plain-text file"
+        elif result.error == "WEBSITE_TOO_LARGE":
+            result.error, result.message = "WEBSITE_ROBOTS_TOO_LARGE", f"robots.txt is larger than {self.limits.max_robots_bytes:,} bytes"
         self._robots_errors[origin] = result
         parser.parse(["User-agent: *", "Disallow: /"])
         return parser
@@ -248,10 +259,10 @@ class Fetcher:
             body.extend(chunk)
             if len(body) >= limit:
                 del body[limit:]
-                result.truncated = True
+                result.truncated, result.truncated_by = True, "size"
                 break
             if self.remaining() <= 0:
-                result.truncated = True
+                result.truncated, result.truncated_by = True, "time"
                 break
         encoding = response.charset_encoding or _meta_charset(bytes(body[:4096])) or "utf-8"
         try:
