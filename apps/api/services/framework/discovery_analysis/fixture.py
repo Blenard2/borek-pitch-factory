@@ -188,6 +188,32 @@ def prioritize_by_website(areas: list[dict[str, Any]], signals: list[dict[str, A
     areas[:] = [area for area in areas if area["priority"]] + [area for area in areas if not area["priority"]]
 
 
+def website_profile_text(facts: list[dict[str, Any]]) -> str:
+    """The company profile from website facts: its own description, else what it lists.
+
+    Only quoted values are used. Without a description the profile names the services,
+    products and industries the website lists (BAP-10), or the other facts it states.
+    """
+    described = next((fact for fact in facts if fact["kind"] in ("description", "about")), None)
+    if described:
+        return described["value"]
+    offerings = [fact["value"] for fact in facts if fact["kind"] == "offering"][:6]
+    industries = [fact["value"] for fact in facts if fact["kind"] == "industry"][:6]
+    parts = []
+    if offerings:
+        parts.append("Services and products named on the website: " + "; ".join(offerings) + ".")
+    if industries:
+        parts.append("Industries named on the website: " + "; ".join(industries) + ".")
+    if not parts:
+        parts.append("; ".join(f"{fact['label']}: {fact['value']}" for fact in facts[:4]) + ".")
+    return " ".join(parts)
+
+
+def researched_scope() -> str:
+    """The scope note of an analysis built from the context provided and the client's website."""
+    return load_library()["in_short"]["scope_researched"]
+
+
 def researched_profile_paragraph(text: str) -> str | None:
     """The overview's profile paragraph from a description quoted from the client's website."""
     template = load_library()["chapters"]["overview"]["profile_researched"]

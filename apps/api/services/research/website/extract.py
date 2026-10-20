@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -42,6 +43,7 @@ class Block:
     text: str
     level: int = 0  # heading level, 0 for text
     following: str = ""  # headings: the text right after the heading, however short (e.g. a job title)
+    tag: str = ""  # the HTML element the text comes from (a figcaption is a caption, not an offering)
 
 
 @dataclass
@@ -62,8 +64,17 @@ class PageContent:
 
 
 def clean_text(value: Any) -> str:
-    """Visible text: whitespace collapsed, control characters removed."""
-    text = "".join(char if char.isprintable() or char in "\t\n " else " " for char in str(value or ""))
+    """Visible text: whitespace collapsed, control characters removed.
+
+    Invisible format characters inside a word - soft hyphens ("Informa&shy;tions&shy;technik"),
+    zero-width spaces and joiners, word joiners, byte order marks - are dropped, so the word stays
+    whole. Every other unprintable character (control characters, line and paragraph
+    separators, non-breaking and other spaces) still separates words.
+    """
+    text = "".join(
+        "" if unicodedata.category(char) == "Cf" else char if char.isprintable() or char in "\t\n " else " "
+        for char in str(value or "")
+    )
     return _SPACE.sub(" ", text).strip()
 
 
@@ -190,12 +201,12 @@ def _blocks(container: Any) -> list[Block]:
                 continue
             sibling = node.getnext()
             following = clean_text(sibling.text_content())[:120] if sibling is not None and isinstance(sibling.tag, str) else ""
-            blocks.append(Block("heading", text, int(tag[1]), following))
+            blocks.append(Block("heading", text, int(tag[1]), following, tag))
         else:
             minimum = 25 if tag in ("li", "dd", "dt", "td") else 40
             if len(text) < minimum or link_chars > 0.6 * len(text):
                 continue
-            blocks.append(Block("text", text[:1200]))
+            blocks.append(Block("text", text[:1200], tag=tag))
         seen.add(text.lower())
     return blocks
 

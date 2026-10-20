@@ -13,7 +13,7 @@
     "test:auth": "tsx src/lib/authMode.test.ts && tsx src/lib/deployedDevPreview.test.ts",
     "test:ms40": "tsx src/lib/discoveryFirst.test.ts && tsx src/lib/clientDirectory.test.ts && tsx src/components/DiscoveryWorkflowStepper.test.tsx && tsx src/components/sharedSidebar.test.ts && tsx src/components/ms40Brand.test.tsx",
     "test:ms41": "tsx src/lib/clientInformation.test.ts && tsx src/lib/intakeDraft.test.ts && tsx src/lib/optionalInputs.test.ts",
-    "test:discovery": "tsx src/lib/discoveryAnalysis.test.ts",
+    "test:discovery": "tsx src/lib/discoveryAnalysis.test.ts && tsx src/lib/websiteResearchStatus.test.ts && tsx src/lib/clientAdditionalInformation.test.ts",
     "test:ms42": "tsx src/lib/discoveryWorkspace.test.ts && tsx src/lib/liveDiscovery.test.ts && npm run test:discovery",
     "test:premeeting": "tsx src/lib/previewJourney.test.ts && tsx src/lib/clientInformation.test.ts && tsx src/lib/intakeDraft.test.ts && tsx src/lib/opportunityResolution.test.ts && tsx src/lib/discoveryWorkspace.test.ts && tsx src/components/PresentationWorkspace.test.ts && tsx src/components/WorkflowArtifactTabs.test.ts && tsx src/lib/presentationHeadline.test.ts && npm run test:premeeting:live",
     "test:premeeting:live": "tsx src/lib/liveDiscovery.test.ts && tsx src/lib/presentationLive.test.ts && tsx src/lib/ppt1Generation.test.ts && tsx src/lib/ownerFlowWiring.test.ts",

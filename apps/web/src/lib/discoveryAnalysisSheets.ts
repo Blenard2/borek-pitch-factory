@@ -225,6 +225,24 @@ function m5(page: AnalysisPage): string {
     ${footer(page)}`);
 }
 
+/** An http(s) address that may be linked; anything else (javascript:, data:, relative) is not. */
+export function linkableSource(value: unknown): string | null {
+  try {
+    const url = new URL(s(value));
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+// A cited source (BAP-10 company background): the printed label links to the page it quotes.
+function verdictCell(row: Obj): string {
+  const href = linkableSource(row.source_url);
+  return href
+    ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer nofollow" style="color:inherit;text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere">${esc(row.verdict)}</a>`
+    : esc(row.verdict);
+}
+
 // M6 · COMPARISON TABLE (three columns, grouped rows, footnote)
 function m6(page: AnalysisPage): string {
   const c = page.content;
@@ -235,8 +253,8 @@ function m6(page: AnalysisPage): string {
     const bottom = index === rows.length - 1 ? `border-bottom:1px solid ${RULE};` : "";
     const verdict = `color:${BLUE};font-weight:500`;
     return row.grouped
-      ? `<tr style="background:${TINT}"><td style="border-top:${top};${bottom}padding:12px 16px 12px 12px;vertical-align:top;font-weight:500">${esc(row.subject)}</td><td style="border-top:${top};${bottom}padding:12px 16px 12px 0;vertical-align:top">${esc(row.description)}</td><td style="border-top:${top};${bottom}padding:12px 12px 12px 0;vertical-align:top;${verdict}">${esc(row.verdict)}</td></tr>`
-      : `<tr><td style="border-top:${top};${bottom}padding:12px 16px 12px 0;vertical-align:top;font-weight:500">${esc(row.subject)}</td><td style="border-top:${top};${bottom}padding:12px 16px 12px 0;vertical-align:top;color:${SLATE}">${esc(row.description)}</td><td style="border-top:${top};${bottom}padding:12px 0;vertical-align:top;${verdict}">${esc(row.verdict)}</td></tr>`;
+      ? `<tr style="background:${TINT}"><td style="border-top:${top};${bottom}padding:12px 16px 12px 12px;vertical-align:top;font-weight:500">${esc(row.subject)}</td><td style="border-top:${top};${bottom}padding:12px 16px 12px 0;vertical-align:top">${esc(row.description)}</td><td style="border-top:${top};${bottom}padding:12px 12px 12px 0;vertical-align:top;${verdict}">${verdictCell(row)}</td></tr>`
+      : `<tr><td style="border-top:${top};${bottom}padding:12px 16px 12px 0;vertical-align:top;font-weight:500">${esc(row.subject)}</td><td style="border-top:${top};${bottom}padding:12px 16px 12px 0;vertical-align:top;color:${SLATE}">${esc(row.description)}</td><td style="border-top:${top};${bottom}padding:12px 0;vertical-align:top;${verdict}">${verdictCell(row)}</td></tr>`;
   }).join("");
   const note = s(c.footnote);
   return shell(page, LIGHT, `

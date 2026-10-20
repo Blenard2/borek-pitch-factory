@@ -319,6 +319,24 @@ export function resolveBackendOpportunityId(opportunityId: string): string {
   return readBackendOpportunityMap()[opportunityId] ?? opportunityId;
 }
 
+/**
+ * BAP-10: save the "Additional information" of a live client (stage1_intake.about_company) on
+ * its own; the other client fields keep their stored values. Blank clears it. Returns the stored
+ * value as the API saved it.
+ */
+export async function saveAdditionalInformation(
+  accessToken: string,
+  opportunityId: string,
+  text: string,
+): Promise<string> {
+  const row = await apiFetch<{ stage1_intake?: { about_company?: string | null } | null }>(
+    `${opportunityPath(opportunityId)}/additional-information`,
+    accessToken,
+    { method: "PUT", body: JSON.stringify({ additional_information: text.trim() || null }) },
+  );
+  return row.stage1_intake?.about_company ?? "";
+}
+
 export async function generateDiscoveryPaper(
   accessToken: string,
   opportunityId: string,

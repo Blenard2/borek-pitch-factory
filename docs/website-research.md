@@ -35,6 +35,23 @@ sites are skipped. No model call is made for the research itself.
 - **Signals** ("the website mentions logistics") are interpretations (`AI_INFERENCE`, to validate).
   They only order the opportunity areas; they are never presented as facts or verified challenges.
 
+## In the Discovery document (BAP-10)
+
+- When the research produced cited facts, part 1 of the document starts with a **Company
+  background** table (M6 page type): topic, the statement quoted from the website, and the source
+  page, linked. It continues on further pages when needed and appears identically in the preview
+  and in the PDF export. The overview's company profile is the website's own description or, when
+  it has none, the services and industries it lists.
+- Once research succeeded, no "no research was performed" wording is printed. Failed or partial
+  research is never presented as successful.
+- The Discovery page shows the research status above the document: **complete** (summary and a
+  link to the sources), **partial** (what was missing), **failed** (the reason, *Retry website
+  analysis* and *Add company information*), or **disabled** (research not enabled in this
+  environment; no retry offered). A retry runs the normal regeneration: it creates a new draft and
+  never changes an approved version.
+- Analyses generated before BAP-10 (research record version 1.0) keep the pages they were stored
+  with.
+
 ## Operational requirements and limitations
 
 - **Outbound HTTPS.** The API container needs outbound internet access on ports 443 (and 80 for

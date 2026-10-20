@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from typing import Any
+from urllib.parse import urlsplit
 
 from services.framework.discovery_analysis.fixture import load_library
 from services.framework.discovery_analysis.model import (
@@ -129,8 +130,22 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
     )
     add("contents", "M2", "Contents", ["framing"], {}, None)  # filled once every page number is known
 
-    # Part 1 - overview: opportunity map and business case.
+    # Part 1 - overview: company background (website research), opportunity map, business case.
     chapter = open_chapter("overview", chapters["overview"], "framing")
+    background, background_note = company_background(paper)
+    if background:
+        # Quotes from the website with their source; not editable, they are what the site says.
+        add_tables(
+            "company-background",
+            labels["overview"]["background_nav"],
+            labels["overview"]["background_lead"],
+            list(labels["overview"]["background_columns"]),
+            background,
+            background_note,
+            [],
+            None,
+            chapter,
+        )
     map_rows = [
         {
             "id": area["id"],
@@ -445,6 +460,59 @@ def _paginate_items(items: list[dict[str, Any]], lead: str) -> list[list[dict[st
         chunks.append(pair)
         index += len(pair)
     return chunks
+
+
+_MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+
+
+def company_background(paper: dict[str, Any]) -> tuple[list[dict[str, Any]], str | None]:
+    """BAP-10: the website facts as M6 rows - topic, quoted statement, source page - and the note.
+
+    Only for analyses whose website research succeeded and was recorded in version 1.1; earlier
+    analyses keep exactly the pages they were stored with.
+    """
+    generation = paper.get("generation") or {}
+    research = generation.get("website_research") or {}
+    if research.get("schema_version") != "1.1" or generation.get("research_mode") != "provider" or not paper.get("analysis"):
+        return [], None
+    rows = []
+    for index, fact in enumerate(paper["analysis"]["research"]["known_facts"], start=1):
+        if fact["origin"] != "SOURCE_FACT" or not fact["source_refs"]:
+            continue
+        url = str(fact["source_refs"][0]["source_id"])
+        rows.append(
+            {
+                "id": f"website_fact_{index}",
+                "subject": fact["label"].removesuffix(" (website)"),
+                "description": fact["value"],
+                "verdict": source_label(url),
+                "source_url": url,
+                "grouped": False,
+            }
+        )
+    if not rows:
+        return [], None
+    template = load_library()["chapters"]["overview"]["background_footnote"]
+    return rows, template.format(site=research.get("site") or source_label(rows[0]["source_url"]), date=_long_date(research.get("researched_at")))
+
+
+def source_label(url: str) -> str:
+    """A source address as printed: host and path, short enough for the source column."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").removeprefix("www.")
+    path = parts.path.rstrip("/")
+    label = f"{host}{path}" if path else host
+    if len(label) <= 44:
+        return label
+    last = path.rsplit("/", 1)[-1]
+    return f"{host}/…/{last[:24]}" if last else label[:43] + "…"
+
+
+def _long_date(value: Any) -> str:
+    text = str(value or "")
+    if len(text) >= 10 and text[4] == "-" and text[7] == "-" and text[5:7].isdigit() and 1 <= int(text[5:7]) <= 12:
+        return f"{int(text[8:10])} {_MONTHS[int(text[5:7]) - 1]} {text[0:4]}"
+    return "the date of the analysis"
 
 
 def _month_year(generated_at: Any) -> tuple[str, str]:

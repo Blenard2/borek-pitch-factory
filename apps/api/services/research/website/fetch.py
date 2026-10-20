@@ -120,6 +120,7 @@ class Fetcher:
         parts = urlsplit(url)
         return self._robots_errors.get(f"{parts.scheme}://{parts.netloc}")
 
+
     def _load_robots(self, origin: str) -> RobotFileParser | None:
         """The site's robots.txt rules; None when the site has none (everything is allowed).
 
@@ -182,7 +183,7 @@ class Fetcher:
                 failure = self.robots_failure(current)
                 result.error = "WEBSITE_BLOCKED_BY_ROBOTS"
                 result.message = (
-                    f"robots.txt of {host} could not be read ({failure.message}); the site is treated as not allowing automated reading."
+                    robots_reason(failure, host)
                     if failure is not None
                     else f"robots.txt of {host} does not allow automated reading of {current}; this is respected."
                 )
@@ -280,3 +281,18 @@ def _meta_charset(head: bytes) -> str | None:
     value = text[marker + 8 :].lstrip("\"' ")
     name = "".join(char for char in value[:40] if char.isalnum() or char in "-_")
     return name or None
+
+
+def robots_reason(failure: FetchResult, host: str = "") -> str:
+    """One readable sentence on why a robots.txt that could not be read stops the research."""
+    site = f"{host} " if host else "The website "
+    status = failure.status
+    if status in (401, 403):
+        cause = f"refused access to its robots.txt (HTTP {status})"
+    elif status == 429:
+        cause = "asked to slow down when its robots.txt was requested (HTTP 429)"
+    elif status is not None and status >= 400:
+        cause = f"could not deliver its robots.txt (HTTP {status})"
+    else:
+        cause = f"has a robots.txt that could not be used: {failure.message.rstrip('.')}"
+    return f"{site}{cause}, so automated reading is treated as not allowed."
