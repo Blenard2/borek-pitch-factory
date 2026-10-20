@@ -123,11 +123,12 @@ class Settings(BaseSettings):
         description="fixture for deterministic local/test runs; live invokes configured LLM providers",
     )
     WEBSITE_RESEARCH_ENABLED: bool = Field(
-        default=True,
+        default=False,
         description=(
             "BAP-5: read the client's public website (homepage and a few relevant pages, bounded and "
-            "SSRF-protected) for the Discovery analysis. Off in unit tests; when off, Discovery uses the "
-            "user's input only and says so"
+            "SSRF-protected) for the Discovery analysis. Opt-in per environment: off unless set to true. "
+            "When off, Discovery uses the user's input only and says that no research was performed. "
+            "Needs outbound HTTPS from the API; see docs/website-research.md"
         ),
     )
     FOLLOWUP_AI_WRITER_ENABLED: bool = Field(

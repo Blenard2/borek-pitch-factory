@@ -23,6 +23,7 @@ Environment variables (see `app/config.py`):
 - `REDIS_URL`
 - `DATABASE_URL`
 - `RENDERER_URL`
+- `WEBSITE_RESEARCH_ENABLED` (optional, opt-in; default `false`): `true` lets Discovery read the client's public website. Needs outbound HTTPS; see [docs/website-research.md](../../../docs/website-research.md)
 
 Missing required vars cause **fail-fast** startup errors from Pydantic settings validation.
 
