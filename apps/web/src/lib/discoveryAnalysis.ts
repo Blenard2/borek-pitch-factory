@@ -30,6 +30,19 @@ export interface KnownFact {
   label: string;
   value: string;
   origin: "USER_INPUT" | "SOURCE_FACT";
+  /** SOURCE_FACT only: where the statement is quoted from (BAP-5: a page of the client's website). */
+  source_refs?: { source_id: string; locator: string; excerpt: string }[];
+}
+
+/** A cited source that can be opened: only absolute http(s) addresses, never other schemes. */
+export function sourceLink(ref: { source_id?: string } | undefined): string | null {
+  const value = String(ref?.source_id ?? "");
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface DiscoveryAnalysis {

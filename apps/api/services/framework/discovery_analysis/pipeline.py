@@ -9,7 +9,12 @@ from uuid import uuid4
 
 from services.framework.discovery_analysis import live
 from services.framework.discovery_analysis.brief import build_presentation_brief
-from services.framework.discovery_analysis.fixture import build_fixture_analysis, load_library
+from services.framework.discovery_analysis.fixture import (
+    build_fixture_analysis,
+    load_library,
+    prioritize_by_website,
+    researched_profile_paragraph,
+)
 from services.framework.discovery_analysis.layout import build_page_manifest
 from services.framework.discovery_analysis.model import (
     SCHEMA_VERSION,
@@ -85,10 +90,17 @@ def generate_discovery_analysis(
     # Both modes start from the same skeleton: user-provided facts, unknowns, benchmark framing.
     draft = build_fixture_analysis(context, requested)
 
+    # The model call of every live stage; with website research it also carries the findings.
+    calls: dict[str, live.CompleteFn | None] = {"complete": complete}
+
     def research() -> None:
-        _apply_research(paper, draft, context, research_provider)
+        website = _apply_research(paper, draft, context, research_provider)
         if complete is not None:
-            live.research_stage(complete, context, draft)
+            if website is not None:
+                material = live.website_material(website)
+                calls["complete"] = live.with_website(complete, material)
+                _cite_material(draft, material)
+            live.research_stage(calls["complete"], context, draft)
 
     def validation() -> None:
         if complete is not None:
@@ -106,12 +118,12 @@ def generate_discovery_analysis(
         {}
         if complete is None
         else {
-            "overview": lambda: live.overview_stage(complete, context, draft),
-            "deep_dives": lambda: live.deep_dives_stage(complete, context, draft),
-            "shadow_processes": lambda: live.shadow_stage(complete, context, draft),
-            "target_picture": lambda: live.target_stage(complete, context, draft),
-            "optional_parts": lambda: live.optional_stage(complete, context, draft, requested),
-            "closing": lambda: live.closing_stage(complete, context, draft),
+            "overview": lambda: live.overview_stage(calls["complete"], context, draft),
+            "deep_dives": lambda: live.deep_dives_stage(calls["complete"], context, draft),
+            "shadow_processes": lambda: live.shadow_stage(calls["complete"], context, draft),
+            "target_picture": lambda: live.target_stage(calls["complete"], context, draft),
+            "optional_parts": lambda: live.optional_stage(calls["complete"], context, draft, requested),
+            "closing": lambda: live.closing_stage(calls["complete"], context, draft),
         }
     )
     steps = {"research": research, "validation": validation, "layout": layout, **live_steps}
@@ -138,14 +150,26 @@ def generate_discovery_analysis(
     return paper
 
 
-def _apply_research(paper: dict[str, Any], draft: dict[str, Any], context: dict[str, Any], provider: Any) -> None:
+# Website facts listed as known facts; the rest stay available in generation.website_research.
+MAX_WEBSITE_FACTS = 14
+
+
+def _apply_research(paper: dict[str, Any], draft: dict[str, Any], context: dict[str, Any], provider: Any) -> dict[str, Any] | None:
     """Cited evidence from an approved research provider, if one exists. Otherwise nothing:
-    researched fields stay unknown and the analysis says that no research was performed."""
-    if provider is None or not context["client_name"]:
-        return
+    researched fields stay unknown and the analysis says that no research was performed.
+
+    A website research provider (BAP-5) returns the website research for the live stages.
+    """
+    if provider is None:
+        return None
+    research_site = getattr(provider, "research_website", None)
+    if callable(research_site):
+        return _apply_website_research(paper, draft, context, research_site)
+    if not context["client_name"]:
+        return None
     evidence = provider.research(client_name=context["client_name"], client_web_page=context["website_url"])
     if not evidence:
-        return
+        return None
     research = draft["research"]
     sources = []
     for item in evidence:
@@ -158,6 +182,56 @@ def _apply_research(paper: dict[str, Any], draft: dict[str, Any], context: dict[
     draft["provenance"]["sources"] = sources
     draft["provenance"]["customer_facts_origin"] = "user_input_and_cited_research"
     paper["generation"]["research_mode"] = "provider"
+    return None
+
+
+def _apply_website_research(paper: dict[str, Any], draft: dict[str, Any], context: dict[str, Any], research_site: Any) -> dict[str, Any] | None:
+    """BAP-5: facts quoted from the client's website, with their sources, kept apart from hints.
+
+    The research state is recorded in every case (``generation.website_research``); a website
+    that could not be analysed is reported as such, and the analysis is not presented as
+    researched. Signals stay interpretations: they only order the areas, never become facts.
+    """
+    if not context["website_url"]:
+        return None
+    site = research_site(context["website_url"], client_name=context["client_name"] or "")
+    data = site.to_dict()
+    paper["generation"]["website_research"] = {key: value for key, value in data.items() if key != "content"}
+    research = draft["research"]
+    research["web_research"] = {"performed": False, "note": site.summary()}
+    if not site.usable or not site.facts:
+        return None
+    refs = []
+    for fact in site.facts[:MAX_WEBSITE_FACTS]:
+        ref = {"source_id": fact["source_url"], "locator": fact["locator"], "excerpt": fact["excerpt"]}
+        refs.append(ref)
+        research["known_facts"].append({"label": fact["label"], "value": fact["value"], "origin": "SOURCE_FACT", "source_refs": [ref]})
+    research["web_research"] = {"performed": True, "note": site.summary()}
+    if any(fact["kind"] in ("description", "about", "offering", "industry") for fact in site.facts):
+        unknown_business = load_library()["research"]["always_unknown"][0]
+        research["unknown_facts"] = [item for item in research["unknown_facts"] if item != unknown_business]
+    description = next((fact for fact in site.facts if fact["kind"] in ("description", "about")), None)
+    if description and research["company_profile"]["origin"] == "UNKNOWN":
+        research["company_profile"] = {"text": description["value"], "origin": "SOURCE_FACT"}
+        paragraph = researched_profile_paragraph(description["value"])
+        if paragraph:
+            draft["framing"]["chapters"]["overview"]["paragraphs"][0] = paragraph
+    draft["provenance"]["sources"] = refs
+    draft["provenance"]["customer_facts_origin"] = "user_input_and_cited_research"
+    paper["generation"]["research_mode"] = "provider"
+    prioritize_by_website(draft["areas"], data["signals"])
+    return data
+
+
+def _cite_material(draft: dict[str, Any], material: dict[str, Any]) -> None:
+    """Everything the model is shown from the website is listed as a source of the analysis."""
+    sources = draft["provenance"]["sources"]
+    known = {(ref["source_id"], ref["excerpt"]) for ref in sources}
+    for item in material["excerpts"]:
+        ref = {"source_id": item["source_url"], "locator": f"{item['role']} page text", "excerpt": item["text"]}
+        if (ref["source_id"], ref["excerpt"]) not in known:
+            known.add((ref["source_id"], ref["excerpt"]))
+            sources.append(ref)
 
 
 def _settle_live(draft: dict[str, Any]) -> None:
@@ -183,7 +257,10 @@ def _settle_live(draft: dict[str, Any]) -> None:
     document["in_short"][0] = library["in_short"]["first_statement"].format(**counts)
     draft["framing"]["leads"]["map"] = library["chapters"]["overview"]["map_lead"].format(count=counts["opportunity_count"])
     draft["provenance"]["content_origin"] = "live_model"
+    researched = draft["provenance"]["customer_facts_origin"] == "user_input_and_cited_research"
     draft["provenance"]["notes"] = [
-        "Opportunities, shadow processes and workflow chains were written by the model from the user's context; they are hypotheses, not findings about this company.",
+        "Opportunities, shadow processes and workflow chains were written by the model from the user's context"
+        + (" and the cited website research" if researched else "")
+        + "; they are hypotheses, not findings about this company.",
         library["research"]["notes"][1],
     ]

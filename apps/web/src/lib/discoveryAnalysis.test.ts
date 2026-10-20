@@ -9,6 +9,7 @@ import {
   pagePosition,
   PAGE_TYPES,
   parseDiscoveryAnalysis,
+  sourceLink,
   stageProgress,
   type AnalysisPage,
 } from "./discoveryAnalysis.js";
@@ -168,6 +169,14 @@ async function run() {
   const approved = await adapter.approve({ opportunity_id: "opp-preview", version_id: "discovery-v1", expected_revision: 1 });
   assert.equal(approved.document_state, "approved");
   assert.equal(canDownloadDiscoveryPdf(approved), true, "the preview journey accepts this record as an approved Discovery");
+
+  // BAP-5: a cited website source is linked only when it is an http(s) address.
+  assert.equal(sourceLink({ source_id: "https://www.hansa-praezision.test/about-us" }), "https://www.hansa-praezision.test/about-us");
+  for (const unsafe of ["javascript:alert(1)", "data:text/html,x", "annual-report", ""]) {
+    assert.equal(sourceLink({ source_id: unsafe }), null, unsafe);
+  }
+  assert.equal(sourceLink(undefined), null);
+  assert.match(workspace, /rel="noopener noreferrer nofollow">source<\/a>/);
 
   console.log("discoveryAnalysis tests passed");
 }

@@ -158,6 +158,43 @@ def build_fixture_analysis(context: dict[str, Any], optional_parts: dict[str, bo
     }
 
 
+# BAP-5: which library area a website signal points at. A signal is an interpretation of the
+# site's wording; it only moves an area forward, it is never shown as a finding.
+SIGNAL_AREAS = {
+    "quoting_sales": "sales_quoting",
+    "customer_service": "order_service",
+    "order_processing": "order_service",
+    "logistics": "order_service",
+    "production": "operations_planning",
+    "field_service": "operations_planning",
+    "finance": "finance_controlling",
+    "documents_compliance": "quality_compliance",
+    "recruiting": "knowledge_people",
+}
+
+
+def prioritize_by_website(areas: list[dict[str, Any]], signals: list[dict[str, Any]], limit: int = 2) -> None:
+    """Mark the areas the strongest website signals point at as priority (in place, stable order)."""
+    wanted: list[str] = []
+    for signal in signals:
+        area_id = SIGNAL_AREAS.get(str(signal.get("key")))
+        if area_id and area_id not in wanted:
+            wanted.append(area_id)
+        if len(wanted) == limit:
+            break
+    for area in areas:
+        if area["id"] in wanted:
+            area["priority"] = True
+    areas[:] = [area for area in areas if area["priority"]] + [area for area in areas if not area["priority"]]
+
+
+def researched_profile_paragraph(text: str) -> str | None:
+    """The overview's profile paragraph from a description quoted from the client's website."""
+    template = load_library()["chapters"]["overview"]["profile_researched"]
+    fitted = _fit_sentences(text, LIMITS["chapter_paragraph"] - len(template))
+    return template.format(text=fitted) if fitted else None
+
+
 def _areas(library: dict[str, Any], user_text: str) -> list[dict[str, Any]]:
     """Library areas; the ones the user's own words point at come first."""
     haystack = user_text.lower()

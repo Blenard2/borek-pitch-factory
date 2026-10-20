@@ -766,6 +766,7 @@
       "business_case_lead": "Industry-typical impact ranges from comparable organisations, ordered by payback horizon.",
       "business_case_footnote": "Industry benchmarks as working hypotheses — to be validated against real metrics in the baseline workshop, not commitments. AI drafts, checks and orchestrates; people retain every approval, release and sign-off. Deployed via interfaces to the existing system landscape, no migration.",
       "profile_provided": "Context provided for this analysis: {text}",
+      "profile_researched": "From the client's website (quoted; the sources are listed in the analysis): {text}",
       "thesis_title": "Working hypothesis",
       "map_columns": [
         "Area",

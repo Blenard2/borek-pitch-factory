@@ -12,6 +12,8 @@ _TEST_ENV = {
     "SUPABASE_SERVICE_ROLE_KEY": "test-supabase-service-role",
     "API_DATA_BACKEND": "memory",
     "AI_EXECUTION_MODE": "fixture",
+    # BAP-5: no real website is read in tests; research tests use fixture sites.
+    "WEBSITE_RESEARCH_ENABLED": "false",
     "SUPABASE_JWT_SECRET": "test-supabase-jwt-secret-with-32-byte-minimum-length",
     "REDIS_URL": "redis://localhost:6379/0",
     "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/borek",

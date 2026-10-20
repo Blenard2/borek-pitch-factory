@@ -24,6 +24,7 @@ import {
   type AnalysisView,
   type DiscoveryAnalysis,
   type KnownFact,
+  sourceLink,
 } from "@/lib/discoveryAnalysis";
 import { sampleAnalysis } from "@/lib/discoveryAnalysisSample";
 import { SHEET_H, SHEET_W, findOverflowingPages, printAnalysisPdf, renderAnalysisSheet } from "@/lib/discoveryAnalysisSheets";
@@ -402,7 +403,7 @@ export function DiscoveryAnalysisWorkspace({ opportunityId, legacy }: DiscoveryA
                         <p>{research.web_research?.note}</p>
                         {research.known_facts?.length ? (
                           <dl>{research.known_facts.map((fact) => (
-                            <React.Fragment key={fact.label}><dt>{fact.label} <small>({fact.origin === "USER_INPUT" ? "entered by you" : "cited research"})</small></dt><dd>{fact.value}</dd></React.Fragment>
+                            <React.Fragment key={`${fact.label}:${fact.value}`}><dt>{fact.label} <small>({fact.origin === "USER_INPUT" ? "entered by you" : "cited research"})</small></dt><dd>{fact.value}{fact.origin === "SOURCE_FACT" && sourceLink(fact.source_refs?.[0]) ? <> <a href={sourceLink(fact.source_refs?.[0])!} target="_blank" rel="noopener noreferrer nofollow">source</a></> : null}</dd></React.Fragment>
                           ))}</dl>
                         ) : <p>No client information was entered. The analysis is a generic discussion basis.</p>}
                         {research.unknown_facts?.length ? <p><strong>Unknown, not assumed:</strong> {research.unknown_facts.join(" · ")}</p> : null}

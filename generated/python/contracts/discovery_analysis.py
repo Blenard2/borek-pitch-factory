@@ -118,21 +118,93 @@ class OptionalParts(BaseModel):
     system_interfaces: bool
 
 
-class Generation(BaseModel):
+class Status2(Enum):
+    complete = 'complete'
+    partial = 'partial'
+    failed = 'failed'
+    not_provided = 'not_provided'
+
+
+class Status3(Enum):
+    pending = 'pending'
+    ok = 'ok'
+    failed = 'failed'
+    requires_javascript = 'requires_javascript'
+    blocked_by_robots = 'blocked_by_robots'
+    skipped = 'skipped'
+
+
+class Page1(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    mode: Mode
-    specificity: Specificity = Field(
-        ...,
-        description='company: a company name is known. context: only purpose or free-text context is known. generic: nothing is known, so the analysis is an explicitly generic discussion basis.',
+    url: str
+    role: str
+    status: Status3
+    title: str | None = None
+    chars: int | None = Field(None, ge=0)
+    error: str | None = None
+
+
+class Fact(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
     )
-    research_mode: ResearchMode = Field(
-        ...,
-        description='user_context_only means no web or company research was performed.',
+    kind: str
+    label: Text
+    value: Text
+    origin: Literal['SOURCE_FACT']
+    source_url: Text
+    locator: Text
+    excerpt: Text
+
+
+class EvidenceItem(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
     )
-    optional_parts: OptionalParts
-    stages: list[Stage]
+    source_url: str
+    excerpt: str
+
+
+class Signal(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    key: str
+    topic: Text
+    origin: Literal['AI_INFERENCE']
+    status: Literal['to_validate']
+    statement: Text
+    mentions: int | None = Field(None, ge=0)
+    evidence: list[EvidenceItem]
+
+
+class Error(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    code: str
+    url: str
+    message: str
+
+
+class WebsiteResearch(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    schema_version: Literal['1.0']
+    status: Status2
+    requested_url: str | None
+    final_url: str | None = None
+    site: str | None = None
+    researched_at: str | None = None
+    user_agent: str | None = None
+    summary: Text
+    pages: list[Page1]
+    facts: list[Fact]
+    signals: list[Signal]
+    errors: list[Error]
 
 
 class Origin1(Enum):
@@ -531,6 +603,24 @@ class Page(BaseModel):
     nav_label: Text
     edit_targets: list[EditTarget]
     content: dict[str, Any]
+
+
+class Generation(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    mode: Mode
+    specificity: Specificity = Field(
+        ...,
+        description='company: a company name is known. context: only purpose or free-text context is known. generic: nothing is known, so the analysis is an explicitly generic discussion basis.',
+    )
+    research_mode: ResearchMode = Field(
+        ...,
+        description='user_context_only means no web or company research was performed.',
+    )
+    optional_parts: OptionalParts
+    stages: list[Stage]
+    website_research: WebsiteResearch | None = None
 
 
 class DiscoveryAnalysis(BaseModel):
