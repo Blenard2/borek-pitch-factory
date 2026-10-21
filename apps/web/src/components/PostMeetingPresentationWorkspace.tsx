@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { usePostMeeting } from "@/components/PostMeetingShell";
 import { OwnerCheckpointPanel } from "@/components/OwnerCheckpointPanel";
+import { PostMeetingDocuments } from "@/components/PostMeetingDocuments";
 import { postMeetingDeckLabel } from "@/lib/masterPresentationV2";
 import { downloadPresentationVersion, loadEarlierVersions, versionLabel, type EarlierVersion } from "@/lib/presentationLive";
 import {
@@ -240,6 +241,9 @@ function PresentationSession({ opportunityId, accessToken, live }: {
         </div>
       </article>
     </div>
+    {/* BAP-11: the saved documents, loaded independently of the deck above. */}
+    {live && accessToken ? <PostMeetingDocuments opportunityId={opportunityId} accessToken={accessToken} master={master} clientName={companyName}
+      ppt1={workflow?.documents.ppt1} ppt2={workflow?.documents.ppt2} /> : null}
     {live && master && deck ? <OwnerCheckpointPanel opportunityId={opportunityId} compact /> : null}
   </section>;
 }

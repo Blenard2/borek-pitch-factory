@@ -280,3 +280,15 @@
 .root .packageSidebar .packageExport :global(.btn:disabled) { opacity: .5; }
 @media (max-width: 960px) { .columns, .followUpColumns { grid-template-columns: minmax(0, 1fr); } .workflow ol { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .phaseNav, .extraction, .workflow ol { grid-template-columns: minmax(0, 1fr); } .emailStaticsGrid, .emailLengths { grid-template-columns: minmax(0, 1fr); } .emailFields > div, .root .emailSubject { grid-template-columns: minmax(0, 1fr); gap: 4px; } .emailLink { display: block; margin: 6px 0 0; } .card, .summary { padding: 16px; } .actions { align-items: stretch; flex-direction: column; } .actions > * { width: 100%; } }
+
+/* BAP-11: the client's saved documents after the first meeting. */
+.documents { margin-top: 16px; padding: 16px; border: 1px solid var(--pitch-gray-200); border-radius: var(--pitch-control-radius); background: #fff; }
+.documents h2 { margin: 0 0 8px; font-size: var(--pitch-text-label); font-weight: var(--pitch-weight-semibold); }
+.documents ul { list-style: none; margin: 0; padding: 0; }
+.documents li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 0; border-top: 1px solid var(--pitch-gray-200); }
+.documents li:first-child { border-top: 0; }
+.documents li > div:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.documents li small { color: var(--pitch-gray-500); overflow-wrap: anywhere; }
+.documents li > .error { flex-basis: 100%; margin: 0; }
+.documentActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.documentActions :global(.btn) { font-size: 0.75rem; padding: 7px 12px; }
