@@ -453,6 +453,19 @@ def get_opportunity_discovery_paper_docx(
     return _docx_response(discovery1_docx(store, opportunity_id=opportunity_id, version_id=version_id, user_id=user.id))
 
 
+@router.get("/{opportunity_id}/pre-meeting-discovery")
+def get_opportunity_pre_meeting_discovery(opportunity_id: UUID, user: AuthUserDep, store: DataStoreDep) -> dict:
+    """BAP-11: the saved Discovery documents of the post-meeting document list (read-only).
+
+    The Pre-Meeting Discovery Document is the approved version Presentation V1 was built from;
+    the Post-Meeting Discovery Document is the approved Discovery 2. Both are downloaded through
+    their existing version endpoints; nothing is generated here.
+    """
+    from app.services.pre_meeting_discovery import discovery_documents
+
+    return discovery_documents(store, opportunity_id=opportunity_id, user_id=user.id)
+
+
 # ------------------------------------------------------------------ BAP-7 Discovery 2
 
 
