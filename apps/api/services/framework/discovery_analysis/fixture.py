@@ -49,10 +49,12 @@ def build_fixture_analysis(context: dict[str, Any], optional_parts: dict[str, bo
     provided = [(label, context[key]) for key, label in _FACT_LABELS if context[key]]
 
     profile_text = _fit_sentences(additional, LIMITS["chapter_paragraph"] - len(chapters["overview"]["profile_provided"]))
+    # Without a company description the paragraph says what the content is based on - patterns of
+    # comparable organisations - in customer-facing words, naming the company when it is known.
     profile_paragraph = (
         chapters["overview"]["profile_provided"].format(text=profile_text)
         if profile_text
-        else chapters["overview"]["profile_unknown"]
+        else _named(chapters["overview"]["profile_unknown_named"], chapters["overview"]["profile_unknown"], client, LIMITS["chapter_paragraph"])
     )
     if client:
         scope = _named(in_short["scope_named"], in_short["scope_context"], client, LIMITS["scope_note"])
@@ -214,9 +216,14 @@ def researched_scope() -> str:
     return load_library()["in_short"]["scope_researched"]
 
 
-def researched_profile_paragraph(text: str) -> str | None:
-    """The overview's profile paragraph from a description quoted from the client's website."""
-    template = load_library()["chapters"]["overview"]["profile_researched"]
+def researched_profile_paragraph(text: str, client: str = "") -> str | None:
+    """The overview's profile paragraph from a description quoted from the company's website.
+
+    Names the company ("From the Wahl & CO website ...") when the name is known.
+    """
+    overview = load_library()["chapters"]["overview"]
+    named = client.replace("{", "{{").replace("}", "}}")  # a name is text, never a format field
+    template = overview["profile_researched"].replace("{client}", named) if client else overview["profile_researched_unnamed"]
     fitted = _fit_sentences(text, LIMITS["chapter_paragraph"] - len(template))
     return template.format(text=fitted) if fitted else None
 

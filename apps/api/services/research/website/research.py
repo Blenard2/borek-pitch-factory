@@ -29,7 +29,8 @@ from services.research.website.fetch import USER_AGENT, Fetcher, Limits, robots_
 from services.research.website.safety import WebsiteRejected, normalize_url
 
 # 1.1 (BAP-10): the Discovery document prints the website facts with their sources.
-SCHEMA_VERSION = "1.1"
+# 1.2 (BAP-9): the same page, introduced in customer-facing words that name the company.
+SCHEMA_VERSION = "1.2"
 
 # Page roles, best first. Keywords match URL path segments and link texts (English and German).
 _ROLES: tuple[tuple[str, int, tuple[str, ...]], ...] = (

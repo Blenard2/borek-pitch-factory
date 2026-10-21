@@ -50,7 +50,8 @@ sites are skipped. No model call is made for the research itself.
   environment; no retry offered). A retry runs the normal regeneration: it creates a new draft and
   never changes an approved version.
 - Analyses generated before BAP-10 (research record version 1.0) keep the pages they were stored
-  with.
+  with. BAP-9 (version 1.2) introduces the table in customer-facing words that name the company;
+  analyses recorded with 1.1 keep the BAP-10 sentence, so stored documents rebuild unchanged.
 
 ## Operational requirements and limitations
 

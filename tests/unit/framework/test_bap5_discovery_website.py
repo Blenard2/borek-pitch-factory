@@ -52,7 +52,7 @@ def test_website_facts_reach_the_analysis_with_their_sources() -> None:
         "origin": "SOURCE_FACT",
     }
     overview = paper["analysis"]["framing"]["chapters"]["overview"]["paragraphs"][0]
-    assert overview.startswith("From the client's website") and "precision CNC" in overview
+    assert overview.startswith("From the Hansa Präzisionsteile website") and "precision CNC" in overview
     facts = website_facts(paper)
     assert len(facts) >= 8
     for fact in facts:

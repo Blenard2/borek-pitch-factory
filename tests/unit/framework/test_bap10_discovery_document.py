@@ -14,7 +14,7 @@ import json
 from typing import Any
 
 from services.framework.discovery_analysis.fixture import load_library
-from services.framework.discovery_analysis.layout import build_page_manifest, company_background, source_label
+from services.framework.discovery_analysis.layout import _long_date, build_page_manifest, company_background, source_label
 from services.framework.discovery_analysis.model import M6_ROWS_PER_PAGE, validate_discovery_analysis
 from services.framework.discovery_analysis.pipeline import finalize, generate_discovery_analysis
 from services.presentation.master_deck.plan import build_master_plan
@@ -59,7 +59,7 @@ def background_pages(paper: dict[str, Any]) -> list[dict[str, Any]]:
 
 def test_successful_research_prints_the_company_background_with_sources() -> None:
     paper = analyse("Hansa Präzisionsteile", HANSA)
-    assert paper["status"] == "ready" and paper["generation"]["website_research"]["schema_version"] == "1.1"
+    assert paper["status"] == "ready" and paper["generation"]["website_research"]["schema_version"] == "1.2"
     pages = background_pages(paper)
     assert pages and all(page["type"] == "M6" and not page["dark"] for page in pages)
     ids = [page["id"] for page in paper["page_manifest"]]
@@ -69,7 +69,9 @@ def test_successful_research_prints_the_company_background_with_sources() -> Non
     content = pages[0]["content"]
     assert content["columns"] == ["Topic", "Statement on the website", "Source"]
     assert "quoted" in content["lead"] and "hypotheses to validate" in content["lead"]
-    assert content["footnote"] == "Read from hansa-praezision.test on 20 October 2026. Statements are quoted as published on the website and were not verified independently."
+    # The date is the day the website was read (the research record), not a fixed one.
+    read_on = _long_date(paper["generation"]["website_research"]["researched_at"])
+    assert content["footnote"] == f"Read from hansa-praezision.test on {read_on}. Statements are quoted as published on the website and were not verified independently."
     rows = [row for page in pages for row in page["content"]["rows"]]
     facts = [fact for fact in paper["analysis"]["research"]["known_facts"] if fact["origin"] == "SOURCE_FACT"]
     assert len(rows) == len(facts)
@@ -88,7 +90,7 @@ def test_no_generic_no_research_wording_after_successful_research() -> None:
     text = printed(paper) + json.dumps(paper["analysis"], ensure_ascii=False)
     for phrase in GENERIC:
         assert phrase not in text, phrase
-    assert paper["analysis"]["framing"]["chapters"]["overview"]["paragraphs"][0].startswith("From the client's website (quoted; the sources are listed in the company background table)")
+    assert paper["analysis"]["framing"]["chapters"]["overview"]["paragraphs"][0].startswith("From the Hansa Präzisionsteile website (sources in the company background table)")
 
 
 def _site_without_description() -> FixtureWeb:
@@ -134,7 +136,7 @@ def test_failed_research_is_not_presented_as_successful() -> None:
         assert not background_pages(paper)
         research = paper["analysis"]["research"]
         assert research["web_research"]["performed"] is False and research["company_profile"]["origin"] == "UNKNOWN"
-        assert paper["analysis"]["framing"]["chapters"]["overview"]["paragraphs"][0] == LIBRARY["chapters"]["overview"]["profile_unknown"]
+        assert paper["analysis"]["framing"]["chapters"]["overview"]["paragraphs"][0] == LIBRARY["chapters"]["overview"]["profile_unknown_named"].format(client="Client AG")
 
 
 def test_disabled_research_keeps_the_document_unchanged() -> None:

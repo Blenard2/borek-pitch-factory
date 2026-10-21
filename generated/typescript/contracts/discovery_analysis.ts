@@ -75,10 +75,10 @@ export interface Stage {
   status: "waiting" | "generating" | "ready" | "failed" | "skipped";
 }
 /**
- * BAP-5: what the research of the client's website found and why it is incomplete. Facts are quoted verbatim with their source (SOURCE_FACT); signals are interpretations to validate (AI_INFERENCE). Absent in analyses generated without a research provider. Version 1.1 (BAP-10) adds the printed company background page with the sources; 1.0 analyses keep their stored pages.
+ * BAP-5: what the research of the client's website found and why it is incomplete. Facts are quoted verbatim with their source (SOURCE_FACT); signals are interpretations to validate (AI_INFERENCE). Absent in analyses generated without a research provider. Version 1.1 (BAP-10) adds the printed company background page with the sources; 1.2 (BAP-9) introduces it in customer-facing words; earlier analyses keep their stored pages.
  */
 export interface WebsiteResearch {
-  schema_version: "1.0" | "1.1";
+  schema_version: "1.0" | "1.1" | "1.2";
   status: "complete" | "partial" | "failed" | "not_provided";
   requested_url: string | null;
   final_url?: string | null;

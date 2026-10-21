@@ -138,7 +138,7 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
         add_tables(
             "company-background",
             labels["overview"]["background_nav"],
-            labels["overview"]["background_lead"],
+            background_lead(paper),
             list(labels["overview"]["background_columns"]),
             background,
             background_note,
@@ -465,15 +465,34 @@ def _paginate_items(items: list[dict[str, Any]], lead: str) -> list[list[dict[st
 _MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
 
 
+# Research record versions that print the company background page (1.1: BAP-10, 1.2: BAP-9 wording).
+_BACKGROUND_VERSIONS = ("1.1", "1.2")
+
+
+def background_lead(paper: dict[str, Any]) -> str:
+    """The lead of the company background table.
+
+    The layout reads it whenever pages are rebuilt, and a stored document's pages must rebuild
+    exactly, so the wording is versioned with the research record: analyses recorded with 1.1
+    keep the BAP-10 sentence; 1.2 (BAP-9) names the company and speaks to it.
+    """
+    overview = load_library()["chapters"]["overview"]
+    if ((paper.get("generation") or {}).get("website_research") or {}).get("schema_version") == "1.1":
+        return overview["background_lead_1_1"]
+    company = str((paper.get("intake_context") or {}).get("client_name") or "").strip() or "the company"
+    lead = overview["background_lead"].replace("{company}", company)
+    return lead[0].upper() + lead[1:]
+
+
 def company_background(paper: dict[str, Any]) -> tuple[list[dict[str, Any]], str | None]:
     """BAP-10: the website facts as M6 rows - topic, quoted statement, source page - and the note.
 
-    Only for analyses whose website research succeeded and was recorded in version 1.1; earlier
-    analyses keep exactly the pages they were stored with.
+    Only for analyses whose website research succeeded and was recorded in version 1.1 or later;
+    earlier analyses keep exactly the pages they were stored with.
     """
     generation = paper.get("generation") or {}
     research = generation.get("website_research") or {}
-    if research.get("schema_version") != "1.1" or generation.get("research_mode") != "provider" or not paper.get("analysis"):
+    if research.get("schema_version") not in _BACKGROUND_VERSIONS or generation.get("research_mode") != "provider" or not paper.get("analysis"):
         return [], None
     rows = []
     for index, fact in enumerate(paper["analysis"]["research"]["known_facts"], start=1):

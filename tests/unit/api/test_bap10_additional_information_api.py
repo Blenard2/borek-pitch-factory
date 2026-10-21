@@ -123,7 +123,7 @@ def test_recovery_after_a_failed_website_analysis_uses_the_saved_information(cli
     # 1. The website cannot be analysed: the document has no company profile.
     first = client.post(f"/opportunities/{opportunity_id}/discovery-paper/generate", headers=headers()).json()
     assert first["generation"]["website_research"]["status"] == "failed"
-    assert first["analysis"]["framing"]["chapters"]["overview"]["paragraphs"][0] == library["chapters"]["overview"]["profile_unknown"]
+    assert first["analysis"]["framing"]["chapters"]["overview"]["paragraphs"][0] == library["chapters"]["overview"]["profile_unknown_named"].format(client="Schrauben Nord GmbH")
     approved = client.post(f"/opportunities/{opportunity_id}/discovery-paper/approve", headers=headers()).json()
     # 2. The user adds company information and saves it.
     assert save(client, opportunity_id, CONTEXT).status_code == 200

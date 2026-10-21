@@ -219,7 +219,7 @@ def _apply_website_research(paper: dict[str, Any], draft: dict[str, Any], contex
     if research["company_profile"]["origin"] == "UNKNOWN":
         profile = website_profile_text(listed)
         research["company_profile"] = {"text": profile, "origin": "SOURCE_FACT"}
-        paragraph = researched_profile_paragraph(profile)
+        paragraph = researched_profile_paragraph(profile, context["client_name"] or "")
         if paragraph:
             draft["framing"]["chapters"]["overview"]["paragraphs"][0] = paragraph
     document = draft["framing"]["document"]

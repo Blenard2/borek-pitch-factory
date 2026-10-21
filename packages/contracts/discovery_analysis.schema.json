@@ -72,11 +72,11 @@
     },
     "WebsiteResearch": {
       "type": "object",
-      "description": "BAP-5: what the research of the client's website found and why it is incomplete. Facts are quoted verbatim with their source (SOURCE_FACT); signals are interpretations to validate (AI_INFERENCE). Absent in analyses generated without a research provider. Version 1.1 (BAP-10) adds the printed company background page with the sources; 1.0 analyses keep their stored pages.",
+      "description": "BAP-5: what the research of the client's website found and why it is incomplete. Facts are quoted verbatim with their source (SOURCE_FACT); signals are interpretations to validate (AI_INFERENCE). Absent in analyses generated without a research provider. Version 1.1 (BAP-10) adds the printed company background page with the sources; 1.2 (BAP-9) introduces it in customer-facing words; earlier analyses keep their stored pages.",
       "additionalProperties": false,
       "required": ["schema_version", "status", "requested_url", "summary", "pages", "facts", "signals", "errors"],
       "properties": {
-        "schema_version": {"type": "string", "enum": ["1.0", "1.1"]},
+        "schema_version": {"type": "string", "enum": ["1.0", "1.1", "1.2"]},
         "status": {"type": "string", "enum": ["complete", "partial", "failed", "not_provided"]},
         "requested_url": {"type": ["string", "null"]},
         "final_url": {"type": ["string", "null"]},

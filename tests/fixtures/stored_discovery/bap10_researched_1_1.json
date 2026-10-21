@@ -1,0 +1,3223 @@
+{
+ "analysis": {
+  "areas": [
+   {
+    "business_case": {
+     "impact_ranges": [
+      {
+       "basis": "industry_benchmark",
+       "metric": "Quote turnaround time",
+       "range": "−50–70 %"
+      }
+     ],
+     "outcome": "win rates typically rise with response time",
+     "payback_type": "quick_win",
+     "value_levers": [
+      "Quote drafts in hours instead of days",
+      "pricing and feasibility consistent across the team",
+      "no open quote left unfollowed"
+     ]
+    },
+    "id": "sales_quoting",
+    "lead": "Four opportunities at the start of every order — where response time decides win rates.",
+    "name": "Sales & Quoting",
+    "opportunities": [
+     {
+      "ai_technology": "LLM extraction of inquiry requirements plus drafting from past quotes and price lists.",
+      "discovery_questions": [
+       "How many days does a full quote take today, from inquiry to send-out?",
+       "How much of a quote is genuinely new versus reusable?",
+       "Do you know your win rate as a function of response time?"
+      ],
+      "how_it_works": "Reads the inquiry, extracts scope, pulls comparable earlier quotes and drafts the offer; sales refines the strategy instead of formatting documents.",
+      "id": "inquiry_quote_drafting",
+      "opportunity_signal": "Quotes take days, and most of the content already exists somewhere.",
+      "result": "Quote drafts in hours instead of days — typically 50–70 % less turnaround time (industry benchmark).",
+      "solution": "AI-assisted quote production: requirements extracted, earlier quotes reused, draft generated in house format.",
+      "title": "Inquiry intake & quote drafting"
+     },
+     {
+      "ai_technology": "Estimation model over past orders with scope, effort and margin corridors.",
+      "discovery_questions": [
+       "How consistent are estimates across people for comparable requests?",
+       "How often does delivery discover that the estimate was optimistic?"
+      ],
+      "how_it_works": "Matches the request against delivered orders, proposes effort and price corridors and flags risk factors; the pricing decision gets a data floor.",
+      "id": "pricing_feasibility",
+      "opportunity_signal": "Estimates vary by estimator, and margins erode quietly in delivery.",
+      "result": "Estimates consistent across the team — margin erosion from optimistic one-off estimates stops.",
+      "solution": "Consistent price and feasibility estimates built from historical orders.",
+      "title": "Pricing & feasibility check"
+     },
+     {
+      "ai_technology": "Analytics over pipeline and win/loss history with prioritised signals.",
+      "discovery_questions": [
+       "What do you systematically learn from lost bids today?",
+       "How early do you see an opportunity going cold?"
+      ],
+      "how_it_works": "Links outcomes to request type, price and response time, surfaces patterns and flags at-risk opportunities with context.",
+      "id": "win_loss_signals",
+      "opportunity_signal": "Win/loss insight is anecdotal, and cold opportunities come as a surprise.",
+      "result": "Sales learns from every bid — systematically, not anecdotally.",
+      "solution": "Ongoing analysis of quotes, wins, losses and customer behaviour.",
+      "title": "Win/loss & pipeline signals"
+     },
+     {
+      "ai_technology": "LLM drafting of follow-ups prioritised by value and probability.",
+      "discovery_questions": [
+       "How systematically are open quotes followed up?",
+       "What share of quotes never receives a follow-up?"
+      ],
+      "how_it_works": "Detects open quotes, prioritises them and drafts individual follow-ups; sales sends with one click.",
+      "id": "quote_follow_up",
+      "opportunity_signal": "Follow-up depends on individual bandwidth — and stops in busy weeks.",
+      "result": "No quote goes quiet — win rate rises without additional sales time.",
+      "solution": "Automated, context-aware follow-up on open quotes.",
+      "title": "Quote follow-up"
+     }
+    ],
+    "priority": true
+   },
+   {
+    "business_case": {
+     "impact_ranges": [
+      {
+       "basis": "industry_benchmark",
+       "metric": "Forecast error",
+       "range": "−20–40 %"
+      }
+     ],
+     "outcome": "scarce capacity runs at plan",
+     "payback_type": "strategic",
+     "value_levers": [
+      "Demand and capacity planned on one forecast",
+      "slippage visible weeks earlier",
+      "hand-offs without lost context"
+     ]
+    },
+    "id": "operations_planning",
+    "lead": "Three opportunities in the engine room — where plans meet reality every day.",
+    "name": "Operations & Planning",
+    "opportunities": [
+     {
+      "ai_technology": "ML forecasting on order history, seasonality and open pipeline.",
+      "discovery_questions": [
+       "How is demand forecast today, and how often is it right?",
+       "What does one week of unplanned overtime or idle capacity cost?"
+      ],
+      "how_it_works": "Learns demand patterns, projects load against capacity and proposes adjustments; planners decide on the proposals instead of building spreadsheets.",
+      "id": "demand_capacity_forecast",
+      "opportunity_signal": "Planning runs on experience and spreadsheets, and surprises are routine.",
+      "result": "Forecast error typically down 20–40 % (industry benchmark) — fewer rush jobs, less idle capacity.",
+      "solution": "A rolling forecast that connects demand signals with available capacity.",
+      "title": "Demand & capacity forecast"
+     },
+     {
+      "ai_technology": "ML early warning on progress, resource and dependency signals.",
+      "discovery_questions": [
+       "When do you learn that an order will slip — before or at the review?",
+       "What did the last late-discovered delay cost in customer trust?"
+      ],
+      "how_it_works": "Learns from task progress and dependency chains and flags items at risk with causes and options.",
+      "id": "schedule_early_warning",
+      "opportunity_signal": "Slippage surfaces late, and customer calls happen without options.",
+      "result": "Slippage is managed, not discovered — customer conversations happen early, with options.",
+      "solution": "Early detection of slippage per order or project — weeks before the review finds it.",
+      "title": "Schedule early warning"
+     },
+     {
+      "ai_technology": "LLM summarisation of system events, notes and open items.",
+      "discovery_questions": [
+       "How is information handed over between shifts or sites today?",
+       "How often does something get lost at a hand-off?"
+      ],
+      "how_it_works": "Collects what happened, what is open and what needs a decision, and hands it over in one structured summary.",
+      "id": "handoff_summaries",
+      "opportunity_signal": "Hand-offs run on memory and chat messages, and context is lost at every pass.",
+      "result": "Hand-offs without lost context — the next shift starts informed.",
+      "solution": "Automatic hand-off summaries per team, shift or site.",
+      "title": "Shift & hand-off summaries"
+     }
+    ],
+    "priority": true
+   },
+   {
+    "business_case": {
+     "impact_ranges": [
+      {
+       "basis": "industry_benchmark",
+       "metric": "Review time per record",
+       "range": "−40–60 %"
+      }
+     ],
+     "outcome": "quality staff decide instead of reading every page",
+     "payback_type": "strategic",
+     "value_levers": [
+      "Records reviewed by exception",
+      "deviations drafted with precedent",
+      "audit evidence assembled automatically"
+     ]
+    },
+    "id": "quality_compliance",
+    "lead": "Three opportunities in the regulated core — automated drafting, human release, full trail.",
+    "name": "Quality & Compliance",
+    "opportunities": [
+     {
+      "ai_technology": "LLM and rule-based checks of records against specifications.",
+      "discovery_questions": [
+       "How many hours does a record review take today?",
+       "What share of review time goes to pages with no findings?"
+      ],
+      "how_it_works": "Reads each record, verifies completeness and limits and flags findings; reviewers confirm flagged pages instead of every page.",
+      "id": "document_review_by_exception",
+      "opportunity_signal": "Review reads every page, and most pages are clean.",
+      "result": "Review in minutes instead of hours — inside the existing quality system.",
+      "solution": "Quality records are checked automatically against specification; reviewers see deviations only.",
+      "title": "Document review by exception"
+     },
+     {
+      "ai_technology": "LLM drafting with retrieval of comparable deviations.",
+      "discovery_questions": [
+       "How long does an average deviation take from event to closure?",
+       "How consistent are investigations across authors?"
+      ],
+      "how_it_works": "Structures the event, retrieves comparable cases and drafts assessment and actions; quality classifies, decides and approves.",
+      "id": "deviation_drafting",
+      "opportunity_signal": "Deviations take weeks, and investigation quality varies by author.",
+      "result": "Deviations closed in days instead of weeks — with more consistent investigations.",
+      "solution": "AI-drafted deviation assessments and corrective-action proposals from precedent.",
+      "title": "Deviation & corrective actions"
+     },
+     {
+      "ai_technology": "Retrieval over the document landscape with gap lists.",
+      "discovery_questions": [
+       "How long does preparing an audit or customer questionnaire take?",
+       "How do you track what is still missing?"
+      ],
+      "how_it_works": "Maps requirements to available documents, assembles the pack and lists what is missing; experts close gaps instead of hunting files.",
+      "id": "audit_evidence",
+      "opportunity_signal": "Audit preparation is a document hunt, and gaps surface late.",
+      "result": "Audit packs in days — with a live view of what is still missing.",
+      "solution": "Evidence packs for audits and customer questionnaires assembled from existing documents.",
+      "title": "Audit evidence assembly"
+     }
+    ],
+    "priority": true
+   },
+   {
+    "business_case": {
+     "impact_ranges": [
+      {
+       "basis": "industry_benchmark",
+       "metric": "Dark processing on order intake",
+       "range": "60–90 %"
+      }
+     ],
+     "outcome": "peaks stop deciding the day",
+     "payback_type": "quick_win",
+     "value_levers": [
+      "Order intake largely without retyping",
+      "inquiries answered from one view",
+      "complaints decided with precedent on the table"
+     ]
+    },
+    "id": "order_service",
+    "lead": "Four opportunities in the daily volume — where retyping and inboxes decide the day.",
+    "name": "Order Processing & Customer Service",
+    "opportunities": [
+     {
+      "ai_technology": "LLM extraction plus validation rules against master data.",
+      "discovery_questions": [
+       "How many orders arrive per month, and in which formats?",
+       "How many minutes does one manual booking take today?"
+      ],
+      "how_it_works": "Reads every order, extracts positions, dates and prices, validates against master data and books clean cases; exceptions reach a person with full context.",
+      "id": "order_intake",
+      "opportunity_signal": "Order intake is retyping work, and peaks decide the day.",
+      "result": "60–90 % dark processing on order intake (industry benchmark) — the classic first win.",
+      "solution": "An AI pipeline that reads incoming orders (mail, PDF, spreadsheet) and books them into the order system.",
+      "title": "Order intake automation"
+     },
+     {
+      "ai_technology": "LLM classification and response drafting over the shared inbox.",
+      "discovery_questions": [
+       "How many inquiries reach the shared inbox per day?",
+       "How long does a customer wait for a first qualified answer?",
+       "How much of the answer is looking things up?"
+      ],
+      "how_it_works": "Sorts every message by intent and urgency, attaches order and delivery data and drafts the reply; service staff approve or adjust.",
+      "id": "inquiry_triage",
+      "opportunity_signal": "Service spends most of its time searching, not answering.",
+      "result": "First response in minutes instead of hours — without adding service headcount.",
+      "solution": "Incoming inquiries are classified, enriched with order context and answered with a draft.",
+      "title": "Customer inquiry triage"
+     },
+     {
+      "ai_technology": "LLM drafting with retrieval of precedent cases and terms.",
+      "discovery_questions": [
+       "How long does an average complaint take from receipt to closure?",
+       "How consistent are decisions across handlers?"
+      ],
+      "how_it_works": "Structures the case, retrieves comparable complaints and drafts assessment and reply; the responsible person classifies and decides.",
+      "id": "complaint_handling",
+      "opportunity_signal": "Complaints take weeks, and the outcome depends on who handles them.",
+      "result": "Complaints closed in days instead of weeks — with more consistent decisions.",
+      "solution": "AI-drafted assessments and proposals for complaints, built on comparable past cases.",
+      "title": "Complaint & claims handling"
+     },
+     {
+      "ai_technology": "Rule-based exception detection plus LLM message drafting.",
+      "discovery_questions": [
+       "How do customers learn about a delay today?",
+       "How many inbound contacts are pure status questions?"
+      ],
+      "how_it_works": "Watches orders against plan, detects delays early and drafts the customer update with the reason and the new date.",
+      "id": "delivery_status",
+      "opportunity_signal": "Status questions fill the inbox, and delays surface through the customer.",
+      "result": "Customers hear about delays from you first — status calls drop noticeably.",
+      "solution": "Proactive status updates generated from order and delivery data.",
+      "title": "Delivery status communication"
+     }
+    ],
+    "priority": false
+   },
+   {
+    "business_case": {
+     "impact_ranges": [
+      {
+       "basis": "industry_benchmark",
+       "metric": "Buyer time on administrative checks",
+       "range": "−30–50 %"
+      }
+     ],
+     "outcome": "buyers negotiate instead of administrating",
+     "payback_type": "strategic",
+     "value_levers": [
+      "Purchase requests routed and pre-checked automatically",
+      "supplier documents verified without manual reading",
+      "supplier risk visible weeks earlier"
+     ]
+    },
+    "id": "procurement",
+    "lead": "Three opportunities on the supply side — where documents and approvals bind buyer time.",
+    "name": "Procurement & Supplier Management",
+    "opportunities": [
+     {
+      "ai_technology": "LLM completion and classification plus approval rules.",
+      "discovery_questions": [
+       "How long does a purchase request take from entry to order?",
+       "How many requests bypass existing contracts?"
+      ],
+      "how_it_works": "Completes missing fields, matches the request to existing contracts and budgets and routes it; buyers see only cases that need a decision.",
+      "id": "purchase_request_routing",
+      "opportunity_signal": "Requests wait in approval loops, and contracts are bypassed unnoticed.",
+      "result": "Requests approved in hours instead of days — maverick buying becomes visible.",
+      "solution": "Purchase requests are completed, checked against contracts and routed to the right approver.",
+      "title": "Purchase request routing"
+     },
+     {
+      "ai_technology": "LLM extraction with validation against order and specification.",
+      "discovery_questions": [
+       "Who checks order confirmations against the order today?",
+       "How often are deviations noticed only at goods receipt?"
+      ],
+      "how_it_works": "Reads each document, compares it with the order and the specification and flags deviations; buyers handle the flagged cases only.",
+      "id": "supplier_document_checks",
+      "opportunity_signal": "Confirmations are filed unread, and deviations surface at the ramp.",
+      "result": "Document checks by exception — deviations are found before goods arrive.",
+      "solution": "Certificates, confirmations and delivery documents are read and checked automatically.",
+      "title": "Supplier document checks"
+     },
+     {
+      "ai_technology": "Analytics over delivery, quality and price history with ML risk signals.",
+      "discovery_questions": [
+       "When do you learn that a supplier is becoming unreliable?",
+       "How are supplier reviews prepared today?"
+      ],
+      "how_it_works": "Learns normal behaviour per supplier, flags drifting reliability or prices and prepares the facts for the next supplier conversation.",
+      "id": "supplier_performance",
+      "opportunity_signal": "Supplier problems are noticed when they have already cost a delivery.",
+      "result": "Supplier risk is managed, not discovered — conversations happen early, with data.",
+      "solution": "An early-warning view on delivery reliability, quality and price drift per supplier.",
+      "title": "Supplier performance signals"
+     }
+    ],
+    "priority": false
+   },
+   {
+    "business_case": {
+     "impact_ranges": [
+      {
+       "basis": "industry_benchmark",
+       "metric": "Dark processing on inbound invoices",
+       "range": "60–90 %"
+      }
+     ],
+     "outcome": "the close gets faster and calmer",
+     "payback_type": "quick_win",
+     "value_levers": [
+      "Invoices matched and released without manual touch",
+      "receivables followed up systematically",
+      "month-end commentary drafted from the numbers"
+     ]
+    },
+    "id": "finance_controlling",
+    "lead": "Four opportunities in the back office — fast to measure, fast to pay back.",
+    "name": "Finance & Controlling",
+    "opportunities": [
+     {
+      "ai_technology": "LLM extraction plus deterministic matching rules.",
+      "discovery_questions": [
+       "How many inbound invoices per month, across how many hands?",
+       "How long from receipt to release today?"
+      ],
+      "how_it_works": "Extracts, codes and matches; clean invoices flow through dark, exceptions reach a person with context and a suggested resolution.",
+      "id": "invoice_processing",
+      "opportunity_signal": "Invoice handling is manual, with idle time between steps.",
+      "result": "60–90 % dark processing (industry benchmark) — fast to measure, fast to pay back.",
+      "solution": "Automated matching of invoice, purchase order and goods receipt with automatic release.",
+      "title": "Invoice processing (three-way match)"
+     },
+     {
+      "ai_technology": "Scoring on payment behaviour plus LLM drafting.",
+      "discovery_questions": [
+       "How is the order of payment reminders decided today?",
+       "How much is overdue for more than 30 days?"
+      ],
+      "how_it_works": "Ranks open items by amount and risk, drafts the fitting reminder and logs every contact; accounting approves in batches.",
+      "id": "receivables_follow_up",
+      "opportunity_signal": "Reminders go out in bulk or not at all, and large overdue items wait.",
+      "result": "Days sales outstanding falls — without straining customer relationships.",
+      "solution": "Prioritised, individually worded payment reminders based on customer history.",
+      "title": "Receivables follow-up"
+     },
+     {
+      "ai_technology": "Analytics over actual versus plan with LLM narrative drafting.",
+      "discovery_questions": [
+       "How many days of the close go into explaining variances?",
+       "How much of that time is assembling numbers?"
+      ],
+      "how_it_works": "Finds the drivers behind each variance, drafts the explanation with numbers and marks what needs a human view.",
+      "id": "variance_commentary",
+      "opportunity_signal": "The close is a hunt for explanations, repeated every month.",
+      "result": "Controllers interpret instead of assembling — commentary ready on day one.",
+      "solution": "First drafts of variance explanations generated from the ledger and operational data.",
+      "title": "Month-end variance commentary"
+     },
+     {
+      "ai_technology": "LLM extraction plus rule-based matching.",
+      "discovery_questions": [
+       "How many deductions arrive per month, and what share is audited?",
+       "Have you ever quantified accepted-but-unjustified deductions?"
+      ],
+      "how_it_works": "Checks each claim systematically, flags unjustified ones and drafts the reclaim with evidence attached.",
+      "id": "deduction_audit",
+      "opportunity_signal": "Deductions are accepted by default because auditing seems dearer than the single case.",
+      "result": "Unjustified deductions get reclaimed — what dies as single cases today becomes routine.",
+      "solution": "Every deduction or credit claim is matched against agreed conditions and proof of delivery.",
+      "title": "Contract & deduction audit"
+     }
+    ],
+    "priority": false
+   },
+   {
+    "business_case": {
+     "impact_ranges": [
+      {
+       "basis": "industry_benchmark",
+       "metric": "Time spent searching for information",
+       "range": "−30–50 %"
+      }
+     ],
+     "outcome": "expertise becomes retrievable instead of person-bound",
+     "payback_type": "quick_win",
+     "value_levers": [
+      "Answers on procedures and precedent in seconds",
+      "new colleagues productive weeks earlier",
+      "decisions documented without extra work"
+     ]
+    },
+    "id": "knowledge_people",
+    "lead": "Three opportunities in the foundation — knowledge that outlives tenure.",
+    "name": "Knowledge & People",
+    "opportunities": [
+     {
+      "ai_technology": "RAG with rights-aware retrieval and source citations.",
+      "discovery_questions": [
+       "How long does finding internal information take today?",
+       "What knowledge leaves when experienced colleagues retire?"
+      ],
+      "how_it_works": "Employees ask in natural language and get answers with source links — knowledge stops depending on who is in the office.",
+      "id": "knowledge_assistant",
+      "opportunity_signal": "Knowledge lives in heads and folders, and the same questions are asked again and again.",
+      "result": "Answers in seconds instead of asking around — and onboarding time drops by weeks.",
+      "solution": "An internal assistant over documents, mails, wikis and drives that answers with sources.",
+      "title": "Company knowledge assistant"
+     },
+     {
+      "ai_technology": "RAG over procedures and role descriptions with guided learning paths.",
+      "discovery_questions": [
+       "How long until a new colleague is fully productive?",
+       "How much mentor time does one onboarding bind?"
+      ],
+      "how_it_works": "Answers role-specific questions, points to the applicable procedure and tracks what has been covered; mentors focus on judgement, not basics.",
+      "id": "onboarding_assistant",
+      "opportunity_signal": "Onboarding depends on who has time to explain.",
+      "result": "New colleagues reach productivity weeks earlier — mentors are relieved.",
+      "solution": "A guided onboarding companion that explains procedures, systems and contacts per role.",
+      "title": "Onboarding assistant"
+     },
+     {
+      "ai_technology": "LLM summarisation of transcripts and notes with task extraction.",
+      "discovery_questions": [
+       "Where are decisions from meetings documented today?",
+       "How often is something agreed and then forgotten?"
+      ],
+      "how_it_works": "Captures the meeting, extracts decisions and owners, drafts the follow-up and feeds the knowledge base.",
+      "id": "meeting_summaries",
+      "opportunity_signal": "Decisions live in memory and personal notes, and follow-ups depend on individuals.",
+      "result": "Decisions are documented without extra work — nothing agreed gets lost.",
+      "solution": "Meetings are summarised into decisions, tasks and open points — and filed where the work happens.",
+      "title": "Meeting & decision summaries"
+     }
+    ],
+    "priority": false
+   }
+  ],
+  "closing": {
+   "headline": "The baseline decides, not gut feeling",
+   "name": "Conclusion",
+   "paragraphs": [
+    "The answers to these questions form the baseline: where do quotes, orders, documents and reports bind days today — and which two opportunities carry the strongest validated value. Three steps follow: a baseline workshop, a pilot measurable within weeks, and scaling as a roadmap.",
+    "The quick wins typically pay back in three to six months and carry the programme on their own — in live operations, without replacing systems, with every approval where it belongs."
+   ],
+   "steps": [
+    {
+     "text": "A structured workshop with the people who steer the processes daily. Real volumes, cycle times and decision paths are recorded, and the benchmark ranges of this paper are validated or discarded. The result is a ranked list of two pilot candidates.",
+     "title": "Baseline workshop"
+    },
+    {
+     "text": "One opportunity is built on the existing systems via interfaces and measured against the baseline within weeks, not quarters. People keep every decision; the pilot proves the mechanism and the measured effect before anything is scaled.",
+     "title": "Pilot within weeks"
+    },
+    {
+     "text": "Proven blocks are chained step by step into the workflows of part 4. The roadmap sets the order by validated value, defines the human decision gates and makes the autonomy level per process a steerable metric.",
+     "title": "Scaling roadmap"
+    }
+   ]
+  },
+  "framing": {
+   "chapters": {
+    "deep_dive": {
+     "headline": "Where does Hansa Präzisionsteile stand today — and where is the real opportunity?",
+     "key_message": "We do not decide where the opportunity lies — the answers from your teams do.",
+     "name": "Deep dive per opportunity",
+     "paragraphs": [
+      "The following pages show, per opportunity, the solution including the AI technology, how it works and the result — plus the questions that reveal in conversation where days and specialist hours are bound today.",
+      "Every opportunity carries a signal — the answer that shows a deep dive is worth it. If the signal stays absent, that is valuable too: the area is not a pilot candidate. The result is a defensible priority list per function."
+     ]
+    },
+    "overview": {
+     "headline": "Where Hansa Präzisionsteile loses time today — and where AI gives it back",
+     "key_message": "Every removed hand-off is margin — and a faster promise the competition has to match.",
+     "name": "Overview: areas & opportunities",
+     "paragraphs": [
+      "From the client's website (quoted; the sources are listed in the company background table): Hansa Präzisionsteile GmbH manufactures precision CNC turned and milled parts for medical technology and aerospace customers.",
+      "The constraint is rarely the core work. It is the work around it: quotes, orders, documents, approvals, hand-offs. Each of these lives in inboxes, spreadsheets and individual experience — exactly the territory where AI drafts, checks, matches and orchestrates while people keep every decision."
+     ]
+    },
+    "shadow": {
+     "headline": "What runs on trackers, inboxes and experience today",
+     "key_message": "The defining judgement lives in no system. It lives in heads, trackers and inboxes.",
+     "name": "Processes outside the systems",
+     "paragraphs": [
+      "The systems carry the record — but not the steering around it: which order gets the contested slot, what date sales may promise, how an exception is judged. That runs on experience, meetings, personal inboxes and the famous spreadsheet.",
+      "These shadow processes are invisible to classic digitalisation: they appear in no system manual. That is exactly why they are the largest untapped potential — and the biggest risk at once: when the person leaves, the process leaves."
+     ]
+    },
+    "target": {
+     "headline": "When the building blocks interlock, automations become workflows",
+     "key_message": "Semi-autonomy emerges through chaining — people stand at the gates, not at the conveyor belt.",
+     "name": "Target picture: semi-autonomy",
+     "paragraphs": [
+      "Every opportunity from parts 2 and 3 is an efficiency gain on its own. Their real value emerges in the chain: the output of one block becomes the input of the next — the inquiry becomes the quote, the quote the order, the order the delivery, the data the report.",
+      "Step by step this builds a semi-autonomous organisation: routine flows run end-to-end without manual hand-offs, and people stand at defined decision gates instead of at the conveyor belt of intermediate steps."
+     ]
+    }
+   },
+   "document": {
+    "document_type": "Discussion basis",
+    "eyebrow": "AI & Automation · Discussion basis",
+    "in_short": [
+     "24 AI opportunities across 7 business areas — from quick wins to strategic levers.",
+     "Working hypothesis: the lever lies less in the core work than in the hand-offs, documents and decisions around it.",
+     "For every opportunity: the discovery questions for the conversation and the signal that real potential exists."
+    ],
+    "scope_note": "Prepared as a discussion basis for the conversation with Hansa Präzisionsteile. All impact figures are industry benchmarks as working hypotheses, not commitments. People retain every decision, release and sign-off.",
+    "short_title": "AI opportunity analysis",
+    "subtitle": "Opportunity map, business case and deep dives across 7 business areas and 24 opportunities. As a working basis for our conversation.",
+    "title": "AI opportunities for Hansa Präzisionsteile"
+   },
+   "leads": {
+    "business_case": "Industry-typical impact ranges from comparable organisations, ordered by payback horizon.",
+    "business_case_footnote": "Industry benchmarks as working hypotheses — to be validated against real metrics in the baseline workshop, not commitments. AI drafts, checks and orchestrates; people retain every approval, release and sign-off. Deployed via interfaces to the existing system landscape, no migration.",
+    "closing_steps": "Three steps lead from this discussion basis to a measured result:",
+    "map": "24 opportunities along the value chain — each deepened in part 2 with solution, mechanics, result and discovery questions.",
+    "shadow_findings": "Why these processes are the real lever — and how to unlock them:",
+    "shadow_footnote": "A selection of typical patterns from comparable organisations — the real map emerges in the baseline workshop through structured interviews. Some approaches pick up part-2 opportunities; here the object is the decision and its path, not the system behind it.",
+    "shadow_table": "Typical decisions and workflows that bypass the systems today — and the AI approach that supports each without replacing it:",
+    "target_findings": "How semi-autonomy emerges, is measured — and what it means competitively:",
+    "target_footnote": "Every chain connects blocks as a layer over the existing system landscape — via interfaces, not migration; approvals and releases remain with people. Chains grow stepwise: each block delivers value alone and is chained once the next one stands.",
+    "target_table": "6 workflow chains in which the blocks from parts 2 and 3 interlock — autonomous flow on the left, human decision gates on the right:"
+   }
+  },
+  "optional_deep_dives": {
+   "decision_map": null,
+   "roles_employees": null,
+   "system_interfaces": null
+  },
+  "provenance": {
+   "content_origin": "fixture_library",
+   "customer_facts_origin": "user_input_and_cited_research",
+   "figures_basis": "industry_benchmark_or_working_hypothesis",
+   "notes": [
+    "Opportunities, shadow processes and workflow chains are typical patterns from the Borek opportunity library, not findings about this company.",
+    "All impact figures are industry benchmarks used as working hypotheses; they are validated in the baseline workshop."
+   ],
+   "sources": [
+    {
+     "excerpt": "Hansa Präzisionsteile GmbH manufactures precision CNC turned and milled parts for medical technology and aerospace customers.",
+     "locator": "meta description",
+     "source_id": "https://www.hansa-praezision.test/"
+    },
+    {
+     "excerpt": "Founded in 1987 as a family business, Hansa Präzisionsteile today produces precision components for medical device manufacturers and aerospace suppliers across Europe.",
+     "locator": "about page",
+     "source_id": "https://www.hansa-praezision.test/about-us"
+    },
+    {
+     "excerpt": "Hafenstraße 12, 28217, Bremen, DE",
+     "locator": "structured data (schema.org address)",
+     "source_id": "https://www.hansa-praezision.test/"
+    },
+    {
+     "excerpt": "1987",
+     "locator": "structured data (schema.org foundingDate)",
+     "source_id": "https://www.hansa-praezision.test/"
+    },
+    {
+     "excerpt": "Bone screws and implant components",
+     "locator": "products page list",
+     "source_id": "https://www.hansa-praezision.test/products"
+    },
+    {
+     "excerpt": "Surgical instrument parts",
+     "locator": "products page list",
+     "source_id": "https://www.hansa-praezision.test/products"
+    },
+    {
+     "excerpt": "Aerospace brackets and housings",
+     "locator": "products page list",
+     "source_id": "https://www.hansa-praezision.test/products"
+    },
+    {
+     "excerpt": "CNC turning up to 65 mm diameter",
+     "locator": "services page heading",
+     "source_id": "https://www.hansa-praezision.test/services"
+    },
+    {
+     "excerpt": "5-axis milling",
+     "locator": "services page heading",
+     "source_id": "https://www.hansa-praezision.test/services"
+    },
+    {
+     "excerpt": "First article inspection",
+     "locator": "services page heading",
+     "source_id": "https://www.hansa-praezision.test/services"
+    },
+    {
+     "excerpt": "Medical technology",
+     "locator": "industries page heading",
+     "source_id": "https://www.hansa-praezision.test/industries"
+    },
+    {
+     "excerpt": "Aerospace",
+     "locator": "industries page heading",
+     "source_id": "https://www.hansa-praezision.test/industries"
+    }
+   ]
+  },
+  "research": {
+   "company_profile": {
+    "origin": "SOURCE_FACT",
+    "text": "Hansa Präzisionsteile GmbH manufactures precision CNC turned and milled parts for medical technology and aerospace customers."
+   },
+   "core_thesis": {
+    "origin": "WORKING_HYPOTHESIS",
+    "text": "Working hypothesis: the lever for “Faster quoting for the sales team” lies less in the core work than in the hand-offs, documents and decisions around it."
+   },
+   "known_facts": [
+    {
+     "label": "Company name",
+     "origin": "USER_INPUT",
+     "source_refs": [],
+     "value": "Hansa Präzisionsteile"
+    },
+    {
+     "label": "Website",
+     "origin": "USER_INPUT",
+     "source_refs": [],
+     "value": "https://www.hansa-praezision.test"
+    },
+    {
+     "label": "Meeting purpose",
+     "origin": "USER_INPUT",
+     "source_refs": [],
+     "value": "Faster quoting for the sales team"
+    },
+    {
+     "label": "Company description (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "Hansa Präzisionsteile GmbH manufactures precision CNC turned and milled parts for medical technology and aerospace customers.",
+       "locator": "meta description",
+       "source_id": "https://www.hansa-praezision.test/"
+      }
+     ],
+     "value": "Hansa Präzisionsteile GmbH manufactures precision CNC turned and milled parts for medical technology and aerospace customers."
+    },
+    {
+     "label": "About the company (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "Founded in 1987 as a family business, Hansa Präzisionsteile today produces precision components for medical device manufacturers and aerospace suppliers across Europe.",
+       "locator": "about page",
+       "source_id": "https://www.hansa-praezision.test/about-us"
+      }
+     ],
+     "value": "Founded in 1987 as a family business, Hansa Präzisionsteile today produces precision components for medical device manufacturers and aerospace suppliers across Europe."
+    },
+    {
+     "label": "Address (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "Hafenstraße 12, 28217, Bremen, DE",
+       "locator": "structured data (schema.org address)",
+       "source_id": "https://www.hansa-praezision.test/"
+      }
+     ],
+     "value": "Hafenstraße 12, 28217, Bremen, DE"
+    },
+    {
+     "label": "Founded (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "1987",
+       "locator": "structured data (schema.org foundingDate)",
+       "source_id": "https://www.hansa-praezision.test/"
+      }
+     ],
+     "value": "1987"
+    },
+    {
+     "label": "Product (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "Bone screws and implant components",
+       "locator": "products page list",
+       "source_id": "https://www.hansa-praezision.test/products"
+      }
+     ],
+     "value": "Bone screws and implant components"
+    },
+    {
+     "label": "Product (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "Surgical instrument parts",
+       "locator": "products page list",
+       "source_id": "https://www.hansa-praezision.test/products"
+      }
+     ],
+     "value": "Surgical instrument parts"
+    },
+    {
+     "label": "Product (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "Aerospace brackets and housings",
+       "locator": "products page list",
+       "source_id": "https://www.hansa-praezision.test/products"
+      }
+     ],
+     "value": "Aerospace brackets and housings"
+    },
+    {
+     "label": "Service (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "CNC turning up to 65 mm diameter",
+       "locator": "services page heading",
+       "source_id": "https://www.hansa-praezision.test/services"
+      }
+     ],
+     "value": "CNC turning up to 65 mm diameter"
+    },
+    {
+     "label": "Service (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "5-axis milling",
+       "locator": "services page heading",
+       "source_id": "https://www.hansa-praezision.test/services"
+      }
+     ],
+     "value": "5-axis milling"
+    },
+    {
+     "label": "Service (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "First article inspection",
+       "locator": "services page heading",
+       "source_id": "https://www.hansa-praezision.test/services"
+      }
+     ],
+     "value": "First article inspection"
+    },
+    {
+     "label": "Industry served (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "Medical technology",
+       "locator": "industries page heading",
+       "source_id": "https://www.hansa-praezision.test/industries"
+      }
+     ],
+     "value": "Medical technology"
+    },
+    {
+     "label": "Industry served (website)",
+     "origin": "SOURCE_FACT",
+     "source_refs": [
+      {
+       "excerpt": "Aerospace",
+       "locator": "industries page heading",
+       "source_id": "https://www.hansa-praezision.test/industries"
+      }
+     ],
+     "value": "Aerospace"
+    }
+   ],
+   "unknown_facts": [
+    "Contact person",
+    "Additional information",
+    "Company size, locations and revenue",
+    "System landscape",
+    "Process volumes and cycle times",
+    "Decision makers and organisation"
+   ],
+   "web_research": {
+    "note": "Website research read 6 pages of hansa-praezision.test and quotes 12 statements with their source. Challenges and opportunities derived from it remain hypotheses to validate.",
+    "performed": true
+   }
+  },
+  "shadow_findings": {
+   "cards": [
+    {
+     "label": "Typical finding",
+     "text": "The defining decisions run beside the systems — fast and experience-driven, but person-bound, scattered across inboxes and spreadsheets, and impossible to scale.",
+     "value": "Tracker + inbox"
+    },
+    {
+     "label": "Person-bound risk",
+     "text": "Judgement, precedent and customer context leave the company with their carriers — unless they are made explicit first.",
+     "value": "Knowledge in heads"
+    }
+   ],
+   "points": [
+    {
+     "text": "Shadow processes appear in no system manual and no process documentation — whoever looks only at systems will not find them. They surface in conversation with the people who steer them daily.",
+     "title": "Invisible to classic digitalisation"
+    },
+    {
+     "text": "Structured interviews translate judgement — what a planner weighs in a conflict, when an exception is granted — into documented decision logic. That is automation groundwork and knowledge preservation in one.",
+     "title": "Elicitation through structured interviews, not system analysis"
+    },
+    {
+     "text": "No system change, no migration: the assistants sit on top of the existing tools and connect via interfaces. The AI delivers the reasoned proposal with its data basis; approvals and customer relationships stay with people.",
+     "title": "AI as an assistance layer, not a system replacement"
+    }
+   ]
+  },
+  "shadow_processes": [
+   {
+    "ai_approach": "Rule-based proposal from order value, due-date risk and downstream impact — documented, human decides",
+    "decision": "Prioritisation under scarcity: which order gets the slot?",
+    "handled_today_via": "Escalation meetings, seniority and who shouts loudest",
+    "id": "prioritisation"
+   },
+   {
+    "ai_approach": "Data floor from delivered orders: realistic corridors per order type, visible before the promise",
+    "decision": "Delivery-date promises to customers",
+    "handled_today_via": "Experience and optimism of the individual planner",
+    "id": "date_promises"
+   },
+   {
+    "ai_approach": "Retrieved precedent with proposed corridor — sales decides with the history on the table",
+    "decision": "Discounts and commercial exceptions",
+    "handled_today_via": "Individual judgement, precedent from memory",
+    "id": "discounts_exceptions"
+   },
+   {
+    "ai_approach": "Comparable cases and customer value summarised — the handler decides, consistently",
+    "decision": "Goodwill in complaints",
+    "handled_today_via": "Judgement of the individual handler, mail threads",
+    "id": "goodwill"
+   },
+   {
+    "ai_approach": "Live status view from system data — the tracker updates itself",
+    "decision": "Order status and the “master tracker”",
+    "handled_today_via": "One spreadsheet per team, maintained beside the day job",
+    "id": "master_tracker"
+   },
+   {
+    "ai_approach": "Shared record with LLM summaries — anyone is instantly conversation-ready",
+    "decision": "Customer clarifications and technical Q&A",
+    "handled_today_via": "Personal inboxes — knowledge sits in individual mail threads",
+    "id": "clarifications"
+   },
+   {
+    "ai_approach": "Automatic hand-off summaries per order, team and shift",
+    "decision": "Hand-offs between teams, shifts and sites",
+    "handled_today_via": "Meetings and chat messages — context lost at every pass",
+    "id": "handoffs"
+   },
+   {
+    "ai_approach": "Knowledge assistant with citations — judgement preserved and retrievable",
+    "decision": "Expert know-how: edge cases and precedent",
+    "handled_today_via": "A few senior heads — bottleneck at holidays and retirements",
+    "id": "expert_know_how"
+   }
+  ],
+  "target_picture": {
+   "dark_processing_pattern": {
+    "label": "Autonomous base pattern",
+    "text": "Routine flows run autonomously through the chain; exceptions reach a person with full context — measured per block as a dark-processing rate.",
+    "value": "80 / 20"
+   },
+   "diagram_lead": "Each chain runs left to right through automated blocks to a human gate; the vertical band feeds every experience back to the start.",
+   "diagram_title": "The target picture at a glance",
+   "learning_loop": "Every completed order, decision and exception is fed back into pricing, planning corridors and precedent — so each run makes the next one better.",
+   "maturity_levels": {
+    "label": "Maturity per block",
+    "levels": [
+     "Assist",
+     "Semi-autonomous",
+     "Autonomous"
+    ],
+    "text": "Assist (AI proposes) → semi-autonomous (AI executes, human reviews exceptions) → autonomous (AI executes, human audits). Every block starts as a proposer.",
+    "value": "3 levels"
+   },
+   "points": [
+    {
+     "text": "Individual AI tools save minutes; chained workflows change the operating model. The target picture is planned per chain: which blocks exist, which are missing, where the flow breaks today.",
+     "title": "Chaining instead of point tools"
+    },
+    {
+     "text": "Semi-autonomy does not mean unstaffed: bids, approvals, releases and customer relationships remain deliberately human gates — with complete, automatically prepared decision material.",
+     "title": "People at the gates"
+    },
+    {
+     "text": "The autonomy level per process becomes a metric: dark-processing rate, days per quote, hours per review. That makes progress steerable — and competitively visible.",
+     "title": "Making autonomy measurable"
+    }
+   ]
+  },
+  "target_workflows": [
+   {
+    "autonomous_flow": "Inquiry is extracted and structured → pricing and feasibility build on precedent → quote draft emerges in house format → follow-up runs automatically",
+    "human_decision_gate": "The bid, the price and the strategic fit",
+    "id": "inquiry_to_order",
+    "name": "Inquiry to order",
+    "stages": [
+     "Inquiry extraction",
+     "Pricing & feasibility",
+     "Quote draft & follow-up"
+    ]
+   },
+   {
+    "autonomous_flow": "Orders book themselves by exception → capacity and schedule are planned as one system → status updates draft themselves",
+    "human_decision_gate": "Priorities and exceptions",
+    "id": "order_to_delivery",
+    "name": "Order to delivery",
+    "stages": [
+     "Order intake",
+     "Capacity & schedule",
+     "Status communication"
+    ]
+   },
+   {
+    "autonomous_flow": "Requests are completed and routed → supplier documents check themselves → invoices match and release without manual touch",
+    "human_decision_gate": "Supplier choice and release above limits",
+    "id": "purchase_to_pay",
+    "name": "Purchase to pay",
+    "stages": [
+     "Request routing",
+     "Document checks",
+     "Invoice matching"
+    ]
+   },
+   {
+    "autonomous_flow": "Complaints and deviations are structured → comparable cases are retrieved → assessment and reply draft themselves",
+    "human_decision_gate": "Classification, goodwill and approval",
+    "id": "issue_to_resolution",
+    "name": "Issue to resolution",
+    "stages": [
+     "Case triage",
+     "Precedent retrieval",
+     "Assessment draft"
+    ]
+   },
+   {
+    "autonomous_flow": "Demand and capacity forecast roll forward → slippage surfaces early → variance commentary drafts itself from the numbers",
+    "human_decision_gate": "Interpretation and steering decisions",
+    "id": "plan_to_report",
+    "name": "Plan to report",
+    "stages": [
+     "Forecast",
+     "Early warning",
+     "Variance commentary"
+    ]
+   },
+   {
+    "autonomous_flow": "Won and lost bids, planned versus actual dates and complaints are analysed → feed pricing, planning corridors and precedent → every order makes the next one smarter",
+    "human_decision_gate": "Which patterns become the house standard",
+    "id": "learning_loop",
+    "name": "Learning loop",
+    "stages": [
+     "Outcome capture",
+     "Pattern analysis",
+     "Knowledge base update"
+    ]
+   }
+  ]
+ },
+ "document_id": "22222222-2222-4222-8222-222222222222",
+ "generated_at": "2026-10-15T09:00:00Z",
+ "generation": {
+  "mode": "fixture",
+  "optional_parts": {
+   "decision_map": false,
+   "roles_employees": false,
+   "system_interfaces": false
+  },
+  "research_mode": "provider",
+  "specificity": "company",
+  "stages": [
+   {
+    "key": "research",
+    "label": "Research & core thesis",
+    "status": "ready"
+   },
+   {
+    "key": "overview",
+    "label": "Areas & business case",
+    "status": "ready"
+   },
+   {
+    "key": "deep_dives",
+    "label": "Opportunity deep dives",
+    "status": "ready"
+   },
+   {
+    "key": "shadow_processes",
+    "label": "Processes outside the systems",
+    "status": "ready"
+   },
+   {
+    "key": "target_picture",
+    "label": "Target picture",
+    "status": "ready"
+   },
+   {
+    "key": "optional_parts",
+    "label": "Optional deep dives",
+    "status": "skipped"
+   },
+   {
+    "key": "closing",
+    "label": "Closing",
+    "status": "ready"
+   },
+   {
+    "key": "validation",
+    "label": "Validation",
+    "status": "ready"
+   },
+   {
+    "key": "layout",
+    "label": "Page layout",
+    "status": "ready"
+   }
+  ],
+  "website_research": {
+   "errors": [],
+   "facts": [
+    {
+     "excerpt": "Hansa Präzisionsteile GmbH manufactures precision CNC turned and milled parts for medical technology and aerospace customers.",
+     "kind": "description",
+     "label": "Company description (website)",
+     "locator": "meta description",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/",
+     "value": "Hansa Präzisionsteile GmbH manufactures precision CNC turned and milled parts for medical technology and aerospace customers."
+    },
+    {
+     "excerpt": "Founded in 1987 as a family business, Hansa Präzisionsteile today produces precision components for medical device manufacturers and aerospace suppliers across Europe.",
+     "kind": "about",
+     "label": "About the company (website)",
+     "locator": "about page",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/about-us",
+     "value": "Founded in 1987 as a family business, Hansa Präzisionsteile today produces precision components for medical device manufacturers and aerospace suppliers across Europe."
+    },
+    {
+     "excerpt": "Hafenstraße 12, 28217, Bremen, DE",
+     "kind": "headquarters",
+     "label": "Address (website)",
+     "locator": "structured data (schema.org address)",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/",
+     "value": "Hafenstraße 12, 28217, Bremen, DE"
+    },
+    {
+     "excerpt": "1987",
+     "kind": "founded",
+     "label": "Founded (website)",
+     "locator": "structured data (schema.org foundingDate)",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/",
+     "value": "1987"
+    },
+    {
+     "excerpt": "Bone screws and implant components",
+     "kind": "offering",
+     "label": "Product (website)",
+     "locator": "products page list",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/products",
+     "value": "Bone screws and implant components"
+    },
+    {
+     "excerpt": "Surgical instrument parts",
+     "kind": "offering",
+     "label": "Product (website)",
+     "locator": "products page list",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/products",
+     "value": "Surgical instrument parts"
+    },
+    {
+     "excerpt": "Aerospace brackets and housings",
+     "kind": "offering",
+     "label": "Product (website)",
+     "locator": "products page list",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/products",
+     "value": "Aerospace brackets and housings"
+    },
+    {
+     "excerpt": "CNC turning up to 65 mm diameter",
+     "kind": "offering",
+     "label": "Service (website)",
+     "locator": "services page heading",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/services",
+     "value": "CNC turning up to 65 mm diameter"
+    },
+    {
+     "excerpt": "5-axis milling",
+     "kind": "offering",
+     "label": "Service (website)",
+     "locator": "services page heading",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/services",
+     "value": "5-axis milling"
+    },
+    {
+     "excerpt": "First article inspection",
+     "kind": "offering",
+     "label": "Service (website)",
+     "locator": "services page heading",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/services",
+     "value": "First article inspection"
+    },
+    {
+     "excerpt": "Medical technology",
+     "kind": "industry",
+     "label": "Industry served (website)",
+     "locator": "industries page heading",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/industries",
+     "value": "Medical technology"
+    },
+    {
+     "excerpt": "Aerospace",
+     "kind": "industry",
+     "label": "Industry served (website)",
+     "locator": "industries page heading",
+     "origin": "SOURCE_FACT",
+     "source_url": "https://www.hansa-praezision.test/industries",
+     "value": "Aerospace"
+    }
+   ],
+   "final_url": "https://www.hansa-praezision.test/",
+   "pages": [
+    {
+     "chars": 422,
+     "role": "home",
+     "status": "ok",
+     "title": "Hansa Präzisionsteile GmbH - Precision CNC parts",
+     "url": "https://www.hansa-praezision.test/"
+    },
+    {
+     "chars": 330,
+     "role": "about",
+     "status": "ok",
+     "title": "About us - Hansa Präzisionsteile",
+     "url": "https://www.hansa-praezision.test/about-us"
+    },
+    {
+     "chars": 98,
+     "role": "products",
+     "status": "ok",
+     "title": "Products - Hansa Präzisionsteile",
+     "url": "https://www.hansa-praezision.test/products"
+    },
+    {
+     "chars": 345,
+     "role": "services",
+     "status": "ok",
+     "title": "Services - Hansa Präzisionsteile",
+     "url": "https://www.hansa-praezision.test/services"
+    },
+    {
+     "chars": 218,
+     "role": "industries",
+     "status": "ok",
+     "title": "Industries - Hansa Präzisionsteile",
+     "url": "https://www.hansa-praezision.test/industries"
+    },
+    {
+     "chars": 88,
+     "role": "careers",
+     "status": "ok",
+     "title": "Careers",
+     "url": "https://www.hansa-praezision.test/careers"
+    }
+   ],
+   "requested_url": "https://www.hansa-praezision.test/",
+   "researched_at": "2026-10-21T06:44:21.709341Z",
+   "schema_version": "1.1",
+   "signals": [
+    {
+     "evidence": [
+      {
+       "excerpt": "Hansa Präzisionsteile manufactures turned and milled precision components in small and medium batches for medical technology and aerospace.",
+       "source_url": "https://www.hansa-praezision.test/"
+      },
+      {
+       "excerpt": "We offer prototyping, series production and certified quality inspection from one site in Bremen.",
+       "source_url": "https://www.hansa-praezision.test/"
+      }
+     ],
+     "key": "production",
+     "mentions": 6,
+     "origin": "AI_INFERENCE",
+     "statement": "The website mentions activities related to production and planning; whether this work is a bottleneck is unknown and should be asked.",
+     "status": "to_validate",
+     "topic": "Production and planning"
+    },
+    {
+     "evidence": [
+      {
+       "excerpt": "We offer prototyping, series production and certified quality inspection from one site in Bremen.",
+       "source_url": "https://www.hansa-praezision.test/"
+      },
+      {
+       "excerpt": "First article inspection",
+       "source_url": "https://www.hansa-praezision.test/services"
+      }
+     ],
+     "key": "field_service",
+     "mentions": 3,
+     "origin": "AI_INFERENCE",
+     "statement": "The website mentions activities related to field service and maintenance; whether this work is a bottleneck is unknown and should be asked.",
+     "status": "to_validate",
+     "topic": "Field service and maintenance"
+    },
+    {
+     "evidence": [
+      {
+       "excerpt": "We offer prototyping, series production and certified quality inspection from one site in Bremen.",
+       "source_url": "https://www.hansa-praezision.test/"
+      },
+      {
+       "excerpt": "Our production in Bremen combines CNC turning, 5-axis milling and a climate-controlled measuring room certified to ISO 9001 and EN 9100.",
+       "source_url": "https://www.hansa-praezision.test/about-us"
+      }
+     ],
+     "key": "documents_compliance",
+     "mentions": 3,
+     "origin": "AI_INFERENCE",
+     "statement": "The website mentions activities related to documentation, quality and compliance; whether this work is a bottleneck is unknown and should be asked.",
+     "status": "to_validate",
+     "topic": "Documentation, quality and compliance"
+    },
+    {
+     "evidence": [
+      {
+       "excerpt": "Request a quote within 48 hours",
+       "source_url": "https://www.hansa-praezision.test/"
+      },
+      {
+       "excerpt": "Send us your drawing and our sales team prepares a quotation for your parts within two working days.",
+       "source_url": "https://www.hansa-praezision.test/"
+      }
+     ],
+     "key": "quoting_sales",
+     "mentions": 2,
+     "origin": "AI_INFERENCE",
+     "statement": "The website mentions activities related to quotes, offers and sales; whether this work is a bottleneck is unknown and should be asked.",
+     "status": "to_validate",
+     "topic": "Quotes, offers and sales"
+    },
+    {
+     "evidence": [
+      {
+       "excerpt": "Careers",
+       "source_url": "https://www.hansa-praezision.test/careers"
+      },
+      {
+       "excerpt": "We are hiring CNC machinists and quality inspectors for our production in Bremen.",
+       "source_url": "https://www.hansa-praezision.test/careers"
+      }
+     ],
+     "key": "recruiting",
+     "mentions": 2,
+     "origin": "AI_INFERENCE",
+     "statement": "The website mentions activities related to recruiting and onboarding; whether this work is a bottleneck is unknown and should be asked.",
+     "status": "to_validate",
+     "topic": "Recruiting and onboarding"
+    }
+   ],
+   "site": "hansa-praezision.test",
+   "status": "complete",
+   "summary": "Website research read 6 pages of hansa-praezision.test and quotes 12 statements with their source. Challenges and opportunities derived from it remain hypotheses to validate.",
+   "user_agent": "BorekPitchFactory-WebsiteResearch/1.0 (+https://boreksolutions.de; sales preparation research)"
+  }
+ },
+ "intake_context": {
+  "additional_information": null,
+  "client_name": "Hansa Präzisionsteile",
+  "contact_name": null,
+  "meeting_purpose": "Faster quoting for the sales team",
+  "meeting_purpose_source": "sales_topic_description",
+  "website_url": "https://www.hansa-praezision.test"
+ },
+ "language": "en",
+ "latest_approved_version_id": null,
+ "opportunity_id": "11111111-1111-4111-8111-111111111111",
+ "page_manifest": [
+  {
+   "chapter": null,
+   "content": {
+    "as_of": "As of 10/26",
+    "document_type_line": "Discussion basis 2026",
+    "eyebrow": "AI & Automation · Discussion basis",
+    "place": "Borek Solutions Group · Braunschweig",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "AI opportunity analysis"
+    },
+    "subtitle": "Opportunity map, business case and deep dives across 7 business areas and 24 opportunities. As a working basis for our conversation.",
+    "title": "AI opportunities for Hansa Präzisionsteile",
+    "url": "boreksolutions.de"
+   },
+   "dark": true,
+   "edit_targets": [
+    "framing"
+   ],
+   "id": "cover",
+   "nav_label": "Cover",
+   "number": 1,
+   "type": "M1"
+  },
+  {
+   "chapter": null,
+   "content": {
+    "entries": [
+     {
+      "label": "Part 1 · Overview: areas & opportunities",
+      "number": "01",
+      "page": 3,
+      "page_id": "ch-overview"
+     },
+     {
+      "label": "Part 2 · Deep dive per opportunity",
+      "number": "02",
+      "page": 9,
+      "page_id": "ch-deep-dive"
+     },
+     {
+      "label": "Part 3 · Processes outside the systems",
+      "number": "03",
+      "page": 24,
+      "page_id": "ch-shadow"
+     },
+     {
+      "label": "Part 4 · Target picture: semi-autonomy",
+      "number": "04",
+      "page": 28,
+      "page_id": "ch-target"
+     },
+     {
+      "label": "Conclusion",
+      "number": "05",
+      "page": 33,
+      "page_id": "closing-steps"
+     }
+    ],
+    "in_short": [
+     "24 AI opportunities across 7 business areas — from quick wins to strategic levers.",
+     "Working hypothesis: the lever lies less in the core work than in the hand-offs, documents and decisions around it.",
+     "For every opportunity: the discovery questions for the conversation and the signal that real potential exists."
+    ],
+    "publisher": {
+     "address": "Altewiekring 20 A · 38102 Braunschweig",
+     "company": "BOREK Solutions Group",
+     "group": "Borek Solutions Group",
+     "phone": "T +49 531 283 541 61",
+     "unit": "AI & Automation",
+     "url": "boreksolutions.de"
+    },
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "AI opportunity analysis"
+    },
+    "scope_note": "Prepared as a discussion basis for the conversation with Hansa Präzisionsteile. All impact figures are industry benchmarks as working hypotheses, not commitments. People retain every decision, release and sign-off.",
+    "title": "Contents"
+   },
+   "dark": false,
+   "edit_targets": [
+    "framing"
+   ],
+   "id": "contents",
+   "nav_label": "Contents",
+   "number": 2,
+   "type": "M2"
+  },
+  {
+   "chapter": {
+    "name": "Overview: areas & opportunities",
+    "number": 1
+   },
+   "content": {
+    "chapter_name": "Overview: areas & opportunities",
+    "chapter_number": "01",
+    "headline": "Where Hansa Präzisionsteile loses time today — and where AI gives it back",
+    "key_message": "Every removed hand-off is margin — and a faster promise the competition has to match.",
+    "paragraphs": [
+     "From the client's website (quoted; the sources are listed in the company background table): Hansa Präzisionsteile GmbH manufactures precision CNC turned and milled parts for medical technology and aerospace customers.",
+     "The constraint is rarely the core work. It is the work around it: quotes, orders, documents, approvals, hand-offs. Each of these lives in inboxes, spreadsheets and individual experience — exactly the territory where AI drafts, checks, matches and orchestrates while people keep every decision."
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "01 · Overview: areas & opportunities"
+    }
+   },
+   "dark": true,
+   "edit_targets": [
+    "framing"
+   ],
+   "id": "ch-overview",
+   "nav_label": "Overview: areas & opportunities",
+   "number": 3,
+   "type": "M3"
+  },
+  {
+   "chapter": {
+    "name": "Overview: areas & opportunities",
+    "number": 1
+   },
+   "content": {
+    "columns": [
+     "Topic",
+     "Statement on the website",
+     "Source"
+    ],
+    "footnote": "Read from hansa-praezision.test on 21 October 2026. Statements are quoted as published on the website and were not verified independently.",
+    "lead": "What the client's public website states about the company, quoted with the page it comes from. These are the company's own statements; the challenges and opportunities in this analysis remain hypotheses to validate.",
+    "rows": [
+     {
+      "description": "Hansa Präzisionsteile GmbH manufactures precision CNC turned and milled parts for medical technology and aerospace customers.",
+      "grouped": false,
+      "id": "website_fact_4",
+      "source_url": "https://www.hansa-praezision.test/",
+      "subject": "Company description",
+      "verdict": "hansa-praezision.test"
+     },
+     {
+      "description": "Founded in 1987 as a family business, Hansa Präzisionsteile today produces precision components for medical device manufacturers and aerospace suppliers across Europe.",
+      "grouped": false,
+      "id": "website_fact_5",
+      "source_url": "https://www.hansa-praezision.test/about-us",
+      "subject": "About the company",
+      "verdict": "hansa-praezision.test/about-us"
+     },
+     {
+      "description": "Hafenstraße 12, 28217, Bremen, DE",
+      "grouped": false,
+      "id": "website_fact_6",
+      "source_url": "https://www.hansa-praezision.test/",
+      "subject": "Address",
+      "verdict": "hansa-praezision.test"
+     },
+     {
+      "description": "1987",
+      "grouped": false,
+      "id": "website_fact_7",
+      "source_url": "https://www.hansa-praezision.test/",
+      "subject": "Founded",
+      "verdict": "hansa-praezision.test"
+     },
+     {
+      "description": "Bone screws and implant components",
+      "grouped": false,
+      "id": "website_fact_8",
+      "source_url": "https://www.hansa-praezision.test/products",
+      "subject": "Product",
+      "verdict": "hansa-praezision.test/products"
+     },
+     {
+      "description": "Surgical instrument parts",
+      "grouped": false,
+      "id": "website_fact_9",
+      "source_url": "https://www.hansa-praezision.test/products",
+      "subject": "Product",
+      "verdict": "hansa-praezision.test/products"
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "01 · Overview: areas & opportunities"
+    }
+   },
+   "dark": false,
+   "edit_targets": [],
+   "id": "company-background-1",
+   "nav_label": "Company background (1/2)",
+   "number": 4,
+   "type": "M6"
+  },
+  {
+   "chapter": {
+    "name": "Overview: areas & opportunities",
+    "number": 1
+   },
+   "content": {
+    "columns": [
+     "Topic",
+     "Statement on the website",
+     "Source"
+    ],
+    "footnote": "Read from hansa-praezision.test on 21 October 2026. Statements are quoted as published on the website and were not verified independently.",
+    "lead": "What the client's public website states about the company, quoted with the page it comes from. These are the company's own statements; the challenges and opportunities in this analysis remain hypotheses to validate.",
+    "rows": [
+     {
+      "description": "Aerospace brackets and housings",
+      "grouped": false,
+      "id": "website_fact_10",
+      "source_url": "https://www.hansa-praezision.test/products",
+      "subject": "Product",
+      "verdict": "hansa-praezision.test/products"
+     },
+     {
+      "description": "CNC turning up to 65 mm diameter",
+      "grouped": false,
+      "id": "website_fact_11",
+      "source_url": "https://www.hansa-praezision.test/services",
+      "subject": "Service",
+      "verdict": "hansa-praezision.test/services"
+     },
+     {
+      "description": "5-axis milling",
+      "grouped": false,
+      "id": "website_fact_12",
+      "source_url": "https://www.hansa-praezision.test/services",
+      "subject": "Service",
+      "verdict": "hansa-praezision.test/services"
+     },
+     {
+      "description": "First article inspection",
+      "grouped": false,
+      "id": "website_fact_13",
+      "source_url": "https://www.hansa-praezision.test/services",
+      "subject": "Service",
+      "verdict": "hansa-praezision.test/services"
+     },
+     {
+      "description": "Medical technology",
+      "grouped": false,
+      "id": "website_fact_14",
+      "source_url": "https://www.hansa-praezision.test/industries",
+      "subject": "Industry served",
+      "verdict": "hansa-praezision.test/industries"
+     },
+     {
+      "description": "Aerospace",
+      "grouped": false,
+      "id": "website_fact_15",
+      "source_url": "https://www.hansa-praezision.test/industries",
+      "subject": "Industry served",
+      "verdict": "hansa-praezision.test/industries"
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "01 · Overview: areas & opportunities"
+    }
+   },
+   "dark": false,
+   "edit_targets": [],
+   "id": "company-background-2",
+   "nav_label": "Company background (2/2)",
+   "number": 5,
+   "type": "M6"
+  },
+  {
+   "chapter": {
+    "name": "Overview: areas & opportunities",
+    "number": 1
+   },
+   "content": {
+    "footnotes": [],
+    "kpis": [],
+    "lead": "24 opportunities along the value chain — each deepened in part 2 with solution, mechanics, result and discovery questions.",
+    "points": [
+     {
+      "number": "01",
+      "text": "The lever for “Faster quoting for the sales team” lies less in the core work than in the hand-offs, documents and decisions around it.",
+      "title": "Working hypothesis"
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "01 · Overview: areas & opportunities"
+    },
+    "table": {
+     "columns": [
+      "Area",
+      "Opportunities"
+     ],
+     "rows": [
+      {
+       "highlighted": true,
+       "id": "sales_quoting",
+       "label": "Sales & Quoting",
+       "text": "Inquiry intake & quote drafting · Pricing & feasibility check · Win/loss & pipeline signals · Quote follow-up"
+      },
+      {
+       "highlighted": true,
+       "id": "operations_planning",
+       "label": "Operations & Planning",
+       "text": "Demand & capacity forecast · Schedule early warning · Shift & hand-off summaries"
+      },
+      {
+       "highlighted": true,
+       "id": "quality_compliance",
+       "label": "Quality & Compliance",
+       "text": "Document review by exception · Deviation & corrective actions · Audit evidence assembly"
+      },
+      {
+       "highlighted": false,
+       "id": "order_service",
+       "label": "Order Processing & Customer Service",
+       "text": "Order intake automation · Customer inquiry triage · Complaint & claims handling · Delivery status communication"
+      },
+      {
+       "highlighted": false,
+       "id": "procurement",
+       "label": "Procurement & Supplier Management",
+       "text": "Purchase request routing · Supplier document checks · Supplier performance signals"
+      },
+      {
+       "highlighted": false,
+       "id": "finance_controlling",
+       "label": "Finance & Controlling",
+       "text": "Invoice processing (three-way match) · Receivables follow-up · Month-end variance commentary · Contract & deduction audit"
+      },
+      {
+       "highlighted": false,
+       "id": "knowledge_people",
+       "label": "Knowledge & People",
+       "text": "Company knowledge assistant · Onboarding assistant · Meeting & decision summaries"
+      }
+     ]
+    }
+   },
+   "dark": false,
+   "edit_targets": [
+    "thesis",
+    "framing"
+   ],
+   "id": "overview-map-1",
+   "nav_label": "Opportunity map",
+   "number": 6,
+   "type": "M4"
+  },
+  {
+   "chapter": {
+    "name": "Overview: areas & opportunities",
+    "number": 1
+   },
+   "content": {
+    "columns": [
+     "Area",
+     "Value levers & typical impact",
+     "Payback"
+    ],
+    "footnote": "Industry benchmarks as working hypotheses — to be validated against real metrics in the baseline workshop, not commitments. AI drafts, checks and orchestrates; people retain every approval, release and sign-off. Deployed via interfaces to the existing system landscape, no migration.",
+    "lead": "Industry-typical impact ranges from comparable organisations, ordered by payback horizon.",
+    "rows": [
+     {
+      "description": "Quote drafts in hours instead of days · pricing and feasibility consistent across the team · no open quote left unfollowed — win rates typically rise with response time. Quote turnaround time −50–70 % (industry benchmark).",
+      "grouped": false,
+      "id": "sales_quoting",
+      "subject": "Sales & Quoting",
+      "verdict": "Quick win · 3–6 mo."
+     },
+     {
+      "description": "Order intake largely without retyping · inquiries answered from one view · complaints decided with precedent on the table — peaks stop deciding the day. Dark processing on order intake 60–90 % (industry benchmark).",
+      "grouped": false,
+      "id": "order_service",
+      "subject": "Order Processing & Customer Service",
+      "verdict": "Quick win · 3–6 mo."
+     },
+     {
+      "description": "Invoices matched and released without manual touch · receivables followed up systematically · month-end commentary drafted from the numbers — the close gets faster and calmer. Dark processing on inbound invoices 60–90 % (industry benchmark).",
+      "grouped": false,
+      "id": "finance_controlling",
+      "subject": "Finance & Controlling",
+      "verdict": "Quick win · 3–6 mo."
+     },
+     {
+      "description": "Answers on procedures and precedent in seconds · new colleagues productive weeks earlier · decisions documented without extra work — expertise becomes retrievable instead of person-bound. Time spent searching for information −30–50 % (industry benchmark).",
+      "grouped": false,
+      "id": "knowledge_people",
+      "subject": "Knowledge & People",
+      "verdict": "Quick win · 3–6 mo."
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "01 · Overview: areas & opportunities"
+    }
+   },
+   "dark": false,
+   "edit_targets": [
+    "framing",
+    "area:sales_quoting",
+    "area:order_service",
+    "area:finance_controlling",
+    "area:knowledge_people"
+   ],
+   "id": "overview-business-case-1",
+   "nav_label": "Business case (1/2)",
+   "number": 7,
+   "type": "M6"
+  },
+  {
+   "chapter": {
+    "name": "Overview: areas & opportunities",
+    "number": 1
+   },
+   "content": {
+    "columns": [
+     "Area",
+     "Value levers & typical impact",
+     "Payback"
+    ],
+    "footnote": "Industry benchmarks as working hypotheses — to be validated against real metrics in the baseline workshop, not commitments. AI drafts, checks and orchestrates; people retain every approval, release and sign-off. Deployed via interfaces to the existing system landscape, no migration.",
+    "lead": "Industry-typical impact ranges from comparable organisations, ordered by payback horizon.",
+    "rows": [
+     {
+      "description": "Demand and capacity planned on one forecast · slippage visible weeks earlier · hand-offs without lost context — scarce capacity runs at plan. Forecast error −20–40 % (industry benchmark).",
+      "grouped": true,
+      "id": "operations_planning",
+      "subject": "Operations & Planning",
+      "verdict": "Strategic · 12–24 mo."
+     },
+     {
+      "description": "Records reviewed by exception · deviations drafted with precedent · audit evidence assembled automatically — quality staff decide instead of reading every page. Review time per record −40–60 % (industry benchmark).",
+      "grouped": true,
+      "id": "quality_compliance",
+      "subject": "Quality & Compliance",
+      "verdict": "Strategic · 12–24 mo."
+     },
+     {
+      "description": "Purchase requests routed and pre-checked automatically · supplier documents verified without manual reading · supplier risk visible weeks earlier — buyers negotiate instead of administrating. Buyer time on administrative checks −30–50 % (industry benchmark).",
+      "grouped": true,
+      "id": "procurement",
+      "subject": "Procurement & Supplier Management",
+      "verdict": "Strategic · 12–24 mo."
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "01 · Overview: areas & opportunities"
+    }
+   },
+   "dark": false,
+   "edit_targets": [
+    "framing",
+    "area:operations_planning",
+    "area:quality_compliance",
+    "area:procurement"
+   ],
+   "id": "overview-business-case-2",
+   "nav_label": "Business case (2/2)",
+   "number": 8,
+   "type": "M6"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "chapter_name": "Deep dive per opportunity",
+    "chapter_number": "02",
+    "headline": "Where does Hansa Präzisionsteile stand today — and where is the real opportunity?",
+    "key_message": "We do not decide where the opportunity lies — the answers from your teams do.",
+    "paragraphs": [
+     "The following pages show, per opportunity, the solution including the AI technology, how it works and the result — plus the questions that reveal in conversation where days and specialist hours are bound today.",
+     "Every opportunity carries a signal — the answer that shows a deep dive is worth it. If the signal stays absent, that is valuable too: the area is not a pilot candidate. The result is a defensible priority list per function."
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    }
+   },
+   "dark": true,
+   "edit_targets": [
+    "framing"
+   ],
+   "id": "ch-deep-dive",
+   "nav_label": "Deep dive per opportunity",
+   "number": 9,
+   "type": "M3"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Reads the inquiry, extracts scope, pulls comparable earlier quotes and drafts the offer; sales refines the strategy instead of formatting documents.",
+      "id": "inquiry_quote_drafting",
+      "number": "01",
+      "questions": [
+       "How many days does a full quote take today, from inquiry to send-out?",
+       "How much of a quote is genuinely new versus reusable?",
+       "Do you know your win rate as a function of response time?"
+      ],
+      "result": "Quote drafts in hours instead of days — typically 50–70 % less turnaround time (industry benchmark).",
+      "signal": "Quotes take days, and most of the content already exists somewhere.",
+      "solution": "AI-assisted quote production: requirements extracted, earlier quotes reused, draft generated in house format. Technically: LLM extraction of inquiry requirements plus drafting from past quotes and price lists.",
+      "title": "Inquiry intake & quote drafting"
+     },
+     {
+      "how_it_works": "Matches the request against delivered orders, proposes effort and price corridors and flags risk factors; the pricing decision gets a data floor.",
+      "id": "pricing_feasibility",
+      "number": "02",
+      "questions": [
+       "How consistent are estimates across people for comparable requests?",
+       "How often does delivery discover that the estimate was optimistic?"
+      ],
+      "result": "Estimates consistent across the team — margin erosion from optimistic one-off estimates stops.",
+      "signal": "Estimates vary by estimator, and margins erode quietly in delivery.",
+      "solution": "Consistent price and feasibility estimates built from historical orders. Technically: Estimation model over past orders with scope, effort and margin corridors.",
+      "title": "Pricing & feasibility check"
+     }
+    ],
+    "lead": "Four opportunities at the start of every order — where response time decides win rates.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Sales & Quoting (1/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:sales_quoting",
+    "opportunity:sales_quoting/inquiry_quote_drafting",
+    "opportunity:sales_quoting/pricing_feasibility"
+   ],
+   "id": "area-sales_quoting-1",
+   "nav_label": "Sales & Quoting (1/2)",
+   "number": 10,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Links outcomes to request type, price and response time, surfaces patterns and flags at-risk opportunities with context.",
+      "id": "win_loss_signals",
+      "number": "03",
+      "questions": [
+       "What do you systematically learn from lost bids today?",
+       "How early do you see an opportunity going cold?"
+      ],
+      "result": "Sales learns from every bid — systematically, not anecdotally.",
+      "signal": "Win/loss insight is anecdotal, and cold opportunities come as a surprise.",
+      "solution": "Ongoing analysis of quotes, wins, losses and customer behaviour. Technically: Analytics over pipeline and win/loss history with prioritised signals.",
+      "title": "Win/loss & pipeline signals"
+     },
+     {
+      "how_it_works": "Detects open quotes, prioritises them and drafts individual follow-ups; sales sends with one click.",
+      "id": "quote_follow_up",
+      "number": "04",
+      "questions": [
+       "How systematically are open quotes followed up?",
+       "What share of quotes never receives a follow-up?"
+      ],
+      "result": "No quote goes quiet — win rate rises without additional sales time.",
+      "signal": "Follow-up depends on individual bandwidth — and stops in busy weeks.",
+      "solution": "Automated, context-aware follow-up on open quotes. Technically: LLM drafting of follow-ups prioritised by value and probability.",
+      "title": "Quote follow-up"
+     }
+    ],
+    "lead": "Four opportunities at the start of every order — where response time decides win rates.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Sales & Quoting (2/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:sales_quoting",
+    "opportunity:sales_quoting/win_loss_signals",
+    "opportunity:sales_quoting/quote_follow_up"
+   ],
+   "id": "area-sales_quoting-2",
+   "nav_label": "Sales & Quoting (2/2)",
+   "number": 11,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Learns demand patterns, projects load against capacity and proposes adjustments; planners decide on the proposals instead of building spreadsheets.",
+      "id": "demand_capacity_forecast",
+      "number": "01",
+      "questions": [
+       "How is demand forecast today, and how often is it right?",
+       "What does one week of unplanned overtime or idle capacity cost?"
+      ],
+      "result": "Forecast error typically down 20–40 % (industry benchmark) — fewer rush jobs, less idle capacity.",
+      "signal": "Planning runs on experience and spreadsheets, and surprises are routine.",
+      "solution": "A rolling forecast that connects demand signals with available capacity. Technically: ML forecasting on order history, seasonality and open pipeline.",
+      "title": "Demand & capacity forecast"
+     },
+     {
+      "how_it_works": "Learns from task progress and dependency chains and flags items at risk with causes and options.",
+      "id": "schedule_early_warning",
+      "number": "02",
+      "questions": [
+       "When do you learn that an order will slip — before or at the review?",
+       "What did the last late-discovered delay cost in customer trust?"
+      ],
+      "result": "Slippage is managed, not discovered — customer conversations happen early, with options.",
+      "signal": "Slippage surfaces late, and customer calls happen without options.",
+      "solution": "Early detection of slippage per order or project — weeks before the review finds it. Technically: ML early warning on progress, resource and dependency signals.",
+      "title": "Schedule early warning"
+     }
+    ],
+    "lead": "Three opportunities in the engine room — where plans meet reality every day.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Operations & Planning (1/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:operations_planning",
+    "opportunity:operations_planning/demand_capacity_forecast",
+    "opportunity:operations_planning/schedule_early_warning"
+   ],
+   "id": "area-operations_planning-1",
+   "nav_label": "Operations & Planning (1/2)",
+   "number": 12,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Collects what happened, what is open and what needs a decision, and hands it over in one structured summary.",
+      "id": "handoff_summaries",
+      "number": "03",
+      "questions": [
+       "How is information handed over between shifts or sites today?",
+       "How often does something get lost at a hand-off?"
+      ],
+      "result": "Hand-offs without lost context — the next shift starts informed.",
+      "signal": "Hand-offs run on memory and chat messages, and context is lost at every pass.",
+      "solution": "Automatic hand-off summaries per team, shift or site. Technically: LLM summarisation of system events, notes and open items.",
+      "title": "Shift & hand-off summaries"
+     }
+    ],
+    "lead": "Three opportunities in the engine room — where plans meet reality every day.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Operations & Planning (2/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:operations_planning",
+    "opportunity:operations_planning/handoff_summaries"
+   ],
+   "id": "area-operations_planning-2",
+   "nav_label": "Operations & Planning (2/2)",
+   "number": 13,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Reads each record, verifies completeness and limits and flags findings; reviewers confirm flagged pages instead of every page.",
+      "id": "document_review_by_exception",
+      "number": "01",
+      "questions": [
+       "How many hours does a record review take today?",
+       "What share of review time goes to pages with no findings?"
+      ],
+      "result": "Review in minutes instead of hours — inside the existing quality system.",
+      "signal": "Review reads every page, and most pages are clean.",
+      "solution": "Quality records are checked automatically against specification; reviewers see deviations only. Technically: LLM and rule-based checks of records against specifications.",
+      "title": "Document review by exception"
+     },
+     {
+      "how_it_works": "Structures the event, retrieves comparable cases and drafts assessment and actions; quality classifies, decides and approves.",
+      "id": "deviation_drafting",
+      "number": "02",
+      "questions": [
+       "How long does an average deviation take from event to closure?",
+       "How consistent are investigations across authors?"
+      ],
+      "result": "Deviations closed in days instead of weeks — with more consistent investigations.",
+      "signal": "Deviations take weeks, and investigation quality varies by author.",
+      "solution": "AI-drafted deviation assessments and corrective-action proposals from precedent. Technically: LLM drafting with retrieval of comparable deviations.",
+      "title": "Deviation & corrective actions"
+     }
+    ],
+    "lead": "Three opportunities in the regulated core — automated drafting, human release, full trail.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Quality & Compliance (1/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:quality_compliance",
+    "opportunity:quality_compliance/document_review_by_exception",
+    "opportunity:quality_compliance/deviation_drafting"
+   ],
+   "id": "area-quality_compliance-1",
+   "nav_label": "Quality & Compliance (1/2)",
+   "number": 14,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Maps requirements to available documents, assembles the pack and lists what is missing; experts close gaps instead of hunting files.",
+      "id": "audit_evidence",
+      "number": "03",
+      "questions": [
+       "How long does preparing an audit or customer questionnaire take?",
+       "How do you track what is still missing?"
+      ],
+      "result": "Audit packs in days — with a live view of what is still missing.",
+      "signal": "Audit preparation is a document hunt, and gaps surface late.",
+      "solution": "Evidence packs for audits and customer questionnaires assembled from existing documents. Technically: Retrieval over the document landscape with gap lists.",
+      "title": "Audit evidence assembly"
+     }
+    ],
+    "lead": "Three opportunities in the regulated core — automated drafting, human release, full trail.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Quality & Compliance (2/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:quality_compliance",
+    "opportunity:quality_compliance/audit_evidence"
+   ],
+   "id": "area-quality_compliance-2",
+   "nav_label": "Quality & Compliance (2/2)",
+   "number": 15,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Reads every order, extracts positions, dates and prices, validates against master data and books clean cases; exceptions reach a person with full context.",
+      "id": "order_intake",
+      "number": "01",
+      "questions": [
+       "How many orders arrive per month, and in which formats?",
+       "How many minutes does one manual booking take today?"
+      ],
+      "result": "60–90 % dark processing on order intake (industry benchmark) — the classic first win.",
+      "signal": "Order intake is retyping work, and peaks decide the day.",
+      "solution": "An AI pipeline that reads incoming orders (mail, PDF, spreadsheet) and books them into the order system. Technically: LLM extraction plus validation rules against master data.",
+      "title": "Order intake automation"
+     },
+     {
+      "how_it_works": "Sorts every message by intent and urgency, attaches order and delivery data and drafts the reply; service staff approve or adjust.",
+      "id": "inquiry_triage",
+      "number": "02",
+      "questions": [
+       "How many inquiries reach the shared inbox per day?",
+       "How long does a customer wait for a first qualified answer?",
+       "How much of the answer is looking things up?"
+      ],
+      "result": "First response in minutes instead of hours — without adding service headcount.",
+      "signal": "Service spends most of its time searching, not answering.",
+      "solution": "Incoming inquiries are classified, enriched with order context and answered with a draft. Technically: LLM classification and response drafting over the shared inbox.",
+      "title": "Customer inquiry triage"
+     }
+    ],
+    "lead": "Four opportunities in the daily volume — where retyping and inboxes decide the day.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Order Processing & Customer Service (1/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:order_service",
+    "opportunity:order_service/order_intake",
+    "opportunity:order_service/inquiry_triage"
+   ],
+   "id": "area-order_service-1",
+   "nav_label": "Order Processing & Customer Service (1/2)",
+   "number": 16,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Structures the case, retrieves comparable complaints and drafts assessment and reply; the responsible person classifies and decides.",
+      "id": "complaint_handling",
+      "number": "03",
+      "questions": [
+       "How long does an average complaint take from receipt to closure?",
+       "How consistent are decisions across handlers?"
+      ],
+      "result": "Complaints closed in days instead of weeks — with more consistent decisions.",
+      "signal": "Complaints take weeks, and the outcome depends on who handles them.",
+      "solution": "AI-drafted assessments and proposals for complaints, built on comparable past cases. Technically: LLM drafting with retrieval of precedent cases and terms.",
+      "title": "Complaint & claims handling"
+     },
+     {
+      "how_it_works": "Watches orders against plan, detects delays early and drafts the customer update with the reason and the new date.",
+      "id": "delivery_status",
+      "number": "04",
+      "questions": [
+       "How do customers learn about a delay today?",
+       "How many inbound contacts are pure status questions?"
+      ],
+      "result": "Customers hear about delays from you first — status calls drop noticeably.",
+      "signal": "Status questions fill the inbox, and delays surface through the customer.",
+      "solution": "Proactive status updates generated from order and delivery data. Technically: Rule-based exception detection plus LLM message drafting.",
+      "title": "Delivery status communication"
+     }
+    ],
+    "lead": "Four opportunities in the daily volume — where retyping and inboxes decide the day.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Order Processing & Customer Service (2/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:order_service",
+    "opportunity:order_service/complaint_handling",
+    "opportunity:order_service/delivery_status"
+   ],
+   "id": "area-order_service-2",
+   "nav_label": "Order Processing & Customer Service (2/2)",
+   "number": 17,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Completes missing fields, matches the request to existing contracts and budgets and routes it; buyers see only cases that need a decision.",
+      "id": "purchase_request_routing",
+      "number": "01",
+      "questions": [
+       "How long does a purchase request take from entry to order?",
+       "How many requests bypass existing contracts?"
+      ],
+      "result": "Requests approved in hours instead of days — maverick buying becomes visible.",
+      "signal": "Requests wait in approval loops, and contracts are bypassed unnoticed.",
+      "solution": "Purchase requests are completed, checked against contracts and routed to the right approver. Technically: LLM completion and classification plus approval rules.",
+      "title": "Purchase request routing"
+     },
+     {
+      "how_it_works": "Reads each document, compares it with the order and the specification and flags deviations; buyers handle the flagged cases only.",
+      "id": "supplier_document_checks",
+      "number": "02",
+      "questions": [
+       "Who checks order confirmations against the order today?",
+       "How often are deviations noticed only at goods receipt?"
+      ],
+      "result": "Document checks by exception — deviations are found before goods arrive.",
+      "signal": "Confirmations are filed unread, and deviations surface at the ramp.",
+      "solution": "Certificates, confirmations and delivery documents are read and checked automatically. Technically: LLM extraction with validation against order and specification.",
+      "title": "Supplier document checks"
+     }
+    ],
+    "lead": "Three opportunities on the supply side — where documents and approvals bind buyer time.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Procurement & Supplier Management (1/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:procurement",
+    "opportunity:procurement/purchase_request_routing",
+    "opportunity:procurement/supplier_document_checks"
+   ],
+   "id": "area-procurement-1",
+   "nav_label": "Procurement & Supplier Management (1/2)",
+   "number": 18,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Learns normal behaviour per supplier, flags drifting reliability or prices and prepares the facts for the next supplier conversation.",
+      "id": "supplier_performance",
+      "number": "03",
+      "questions": [
+       "When do you learn that a supplier is becoming unreliable?",
+       "How are supplier reviews prepared today?"
+      ],
+      "result": "Supplier risk is managed, not discovered — conversations happen early, with data.",
+      "signal": "Supplier problems are noticed when they have already cost a delivery.",
+      "solution": "An early-warning view on delivery reliability, quality and price drift per supplier. Technically: Analytics over delivery, quality and price history with ML risk signals.",
+      "title": "Supplier performance signals"
+     }
+    ],
+    "lead": "Three opportunities on the supply side — where documents and approvals bind buyer time.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Procurement & Supplier Management (2/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:procurement",
+    "opportunity:procurement/supplier_performance"
+   ],
+   "id": "area-procurement-2",
+   "nav_label": "Procurement & Supplier Management (2/2)",
+   "number": 19,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Extracts, codes and matches; clean invoices flow through dark, exceptions reach a person with context and a suggested resolution.",
+      "id": "invoice_processing",
+      "number": "01",
+      "questions": [
+       "How many inbound invoices per month, across how many hands?",
+       "How long from receipt to release today?"
+      ],
+      "result": "60–90 % dark processing (industry benchmark) — fast to measure, fast to pay back.",
+      "signal": "Invoice handling is manual, with idle time between steps.",
+      "solution": "Automated matching of invoice, purchase order and goods receipt with automatic release. Technically: LLM extraction plus deterministic matching rules.",
+      "title": "Invoice processing (three-way match)"
+     },
+     {
+      "how_it_works": "Ranks open items by amount and risk, drafts the fitting reminder and logs every contact; accounting approves in batches.",
+      "id": "receivables_follow_up",
+      "number": "02",
+      "questions": [
+       "How is the order of payment reminders decided today?",
+       "How much is overdue for more than 30 days?"
+      ],
+      "result": "Days sales outstanding falls — without straining customer relationships.",
+      "signal": "Reminders go out in bulk or not at all, and large overdue items wait.",
+      "solution": "Prioritised, individually worded payment reminders based on customer history. Technically: Scoring on payment behaviour plus LLM drafting.",
+      "title": "Receivables follow-up"
+     }
+    ],
+    "lead": "Four opportunities in the back office — fast to measure, fast to pay back.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Finance & Controlling (1/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:finance_controlling",
+    "opportunity:finance_controlling/invoice_processing",
+    "opportunity:finance_controlling/receivables_follow_up"
+   ],
+   "id": "area-finance_controlling-1",
+   "nav_label": "Finance & Controlling (1/2)",
+   "number": 20,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Finds the drivers behind each variance, drafts the explanation with numbers and marks what needs a human view.",
+      "id": "variance_commentary",
+      "number": "03",
+      "questions": [
+       "How many days of the close go into explaining variances?",
+       "How much of that time is assembling numbers?"
+      ],
+      "result": "Controllers interpret instead of assembling — commentary ready on day one.",
+      "signal": "The close is a hunt for explanations, repeated every month.",
+      "solution": "First drafts of variance explanations generated from the ledger and operational data. Technically: Analytics over actual versus plan with LLM narrative drafting.",
+      "title": "Month-end variance commentary"
+     },
+     {
+      "how_it_works": "Checks each claim systematically, flags unjustified ones and drafts the reclaim with evidence attached.",
+      "id": "deduction_audit",
+      "number": "04",
+      "questions": [
+       "How many deductions arrive per month, and what share is audited?",
+       "Have you ever quantified accepted-but-unjustified deductions?"
+      ],
+      "result": "Unjustified deductions get reclaimed — what dies as single cases today becomes routine.",
+      "signal": "Deductions are accepted by default because auditing seems dearer than the single case.",
+      "solution": "Every deduction or credit claim is matched against agreed conditions and proof of delivery. Technically: LLM extraction plus rule-based matching.",
+      "title": "Contract & deduction audit"
+     }
+    ],
+    "lead": "Four opportunities in the back office — fast to measure, fast to pay back.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Finance & Controlling (2/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:finance_controlling",
+    "opportunity:finance_controlling/variance_commentary",
+    "opportunity:finance_controlling/deduction_audit"
+   ],
+   "id": "area-finance_controlling-2",
+   "nav_label": "Finance & Controlling (2/2)",
+   "number": 21,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Employees ask in natural language and get answers with source links — knowledge stops depending on who is in the office.",
+      "id": "knowledge_assistant",
+      "number": "01",
+      "questions": [
+       "How long does finding internal information take today?",
+       "What knowledge leaves when experienced colleagues retire?"
+      ],
+      "result": "Answers in seconds instead of asking around — and onboarding time drops by weeks.",
+      "signal": "Knowledge lives in heads and folders, and the same questions are asked again and again.",
+      "solution": "An internal assistant over documents, mails, wikis and drives that answers with sources. Technically: RAG with rights-aware retrieval and source citations.",
+      "title": "Company knowledge assistant"
+     },
+     {
+      "how_it_works": "Answers role-specific questions, points to the applicable procedure and tracks what has been covered; mentors focus on judgement, not basics.",
+      "id": "onboarding_assistant",
+      "number": "02",
+      "questions": [
+       "How long until a new colleague is fully productive?",
+       "How much mentor time does one onboarding bind?"
+      ],
+      "result": "New colleagues reach productivity weeks earlier — mentors are relieved.",
+      "signal": "Onboarding depends on who has time to explain.",
+      "solution": "A guided onboarding companion that explains procedures, systems and contacts per role. Technically: RAG over procedures and role descriptions with guided learning paths.",
+      "title": "Onboarding assistant"
+     }
+    ],
+    "lead": "Three opportunities in the foundation — knowledge that outlives tenure.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Knowledge & People (1/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:knowledge_people",
+    "opportunity:knowledge_people/knowledge_assistant",
+    "opportunity:knowledge_people/onboarding_assistant"
+   ],
+   "id": "area-knowledge_people-1",
+   "nav_label": "Knowledge & People (1/2)",
+   "number": 22,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Deep dive per opportunity",
+    "number": 2
+   },
+   "content": {
+    "items": [
+     {
+      "how_it_works": "Captures the meeting, extracts decisions and owners, drafts the follow-up and feeds the knowledge base.",
+      "id": "meeting_summaries",
+      "number": "03",
+      "questions": [
+       "Where are decisions from meetings documented today?",
+       "How often is something agreed and then forgotten?"
+      ],
+      "result": "Decisions are documented without extra work — nothing agreed gets lost.",
+      "signal": "Decisions live in memory and personal notes, and follow-ups depend on individuals.",
+      "solution": "Meetings are summarised into decisions, tasks and open points — and filed where the work happens. Technically: LLM summarisation of transcripts and notes with task extraction.",
+      "title": "Meeting & decision summaries"
+     }
+    ],
+    "lead": "Three opportunities in the foundation — knowledge that outlives tenure.",
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "02 · Deep dive per opportunity"
+    },
+    "title": "Knowledge & People (2/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "area:knowledge_people",
+    "opportunity:knowledge_people/meeting_summaries"
+   ],
+   "id": "area-knowledge_people-2",
+   "nav_label": "Knowledge & People (2/2)",
+   "number": 23,
+   "type": "M5"
+  },
+  {
+   "chapter": {
+    "name": "Processes outside the systems",
+    "number": 3
+   },
+   "content": {
+    "chapter_name": "Processes outside the systems",
+    "chapter_number": "03",
+    "headline": "What runs on trackers, inboxes and experience today",
+    "key_message": "The defining judgement lives in no system. It lives in heads, trackers and inboxes.",
+    "paragraphs": [
+     "The systems carry the record — but not the steering around it: which order gets the contested slot, what date sales may promise, how an exception is judged. That runs on experience, meetings, personal inboxes and the famous spreadsheet.",
+     "These shadow processes are invisible to classic digitalisation: they appear in no system manual. That is exactly why they are the largest untapped potential — and the biggest risk at once: when the person leaves, the process leaves."
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "03 · Processes outside the systems"
+    }
+   },
+   "dark": true,
+   "edit_targets": [
+    "framing"
+   ],
+   "id": "ch-shadow",
+   "nav_label": "Processes outside the systems",
+   "number": 24,
+   "type": "M3"
+  },
+  {
+   "chapter": {
+    "name": "Processes outside the systems",
+    "number": 3
+   },
+   "content": {
+    "columns": [
+     "Decision / process",
+     "Steered today via",
+     "AI approach"
+    ],
+    "footnote": "A selection of typical patterns from comparable organisations — the real map emerges in the baseline workshop through structured interviews. Some approaches pick up part-2 opportunities; here the object is the decision and its path, not the system behind it.",
+    "lead": "Typical decisions and workflows that bypass the systems today — and the AI approach that supports each without replacing it:",
+    "rows": [
+     {
+      "description": "Escalation meetings, seniority and who shouts loudest",
+      "grouped": false,
+      "id": "prioritisation",
+      "subject": "Prioritisation under scarcity: which order gets the slot?",
+      "verdict": "Rule-based proposal from order value, due-date risk and downstream impact — documented, human decides"
+     },
+     {
+      "description": "Experience and optimism of the individual planner",
+      "grouped": false,
+      "id": "date_promises",
+      "subject": "Delivery-date promises to customers",
+      "verdict": "Data floor from delivered orders: realistic corridors per order type, visible before the promise"
+     },
+     {
+      "description": "Individual judgement, precedent from memory",
+      "grouped": false,
+      "id": "discounts_exceptions",
+      "subject": "Discounts and commercial exceptions",
+      "verdict": "Retrieved precedent with proposed corridor — sales decides with the history on the table"
+     },
+     {
+      "description": "Judgement of the individual handler, mail threads",
+      "grouped": false,
+      "id": "goodwill",
+      "subject": "Goodwill in complaints",
+      "verdict": "Comparable cases and customer value summarised — the handler decides, consistently"
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "03 · Processes outside the systems"
+    }
+   },
+   "dark": false,
+   "edit_targets": [
+    "framing",
+    "shadow_process:prioritisation",
+    "shadow_process:date_promises",
+    "shadow_process:discounts_exceptions",
+    "shadow_process:goodwill"
+   ],
+   "id": "shadow-table-1",
+   "nav_label": "Shadow processes (1/2)",
+   "number": 25,
+   "type": "M6"
+  },
+  {
+   "chapter": {
+    "name": "Processes outside the systems",
+    "number": 3
+   },
+   "content": {
+    "columns": [
+     "Decision / process",
+     "Steered today via",
+     "AI approach"
+    ],
+    "footnote": "A selection of typical patterns from comparable organisations — the real map emerges in the baseline workshop through structured interviews. Some approaches pick up part-2 opportunities; here the object is the decision and its path, not the system behind it.",
+    "lead": "Typical decisions and workflows that bypass the systems today — and the AI approach that supports each without replacing it:",
+    "rows": [
+     {
+      "description": "One spreadsheet per team, maintained beside the day job",
+      "grouped": false,
+      "id": "master_tracker",
+      "subject": "Order status and the “master tracker”",
+      "verdict": "Live status view from system data — the tracker updates itself"
+     },
+     {
+      "description": "Personal inboxes — knowledge sits in individual mail threads",
+      "grouped": false,
+      "id": "clarifications",
+      "subject": "Customer clarifications and technical Q&A",
+      "verdict": "Shared record with LLM summaries — anyone is instantly conversation-ready"
+     },
+     {
+      "description": "Meetings and chat messages — context lost at every pass",
+      "grouped": false,
+      "id": "handoffs",
+      "subject": "Hand-offs between teams, shifts and sites",
+      "verdict": "Automatic hand-off summaries per order, team and shift"
+     },
+     {
+      "description": "A few senior heads — bottleneck at holidays and retirements",
+      "grouped": false,
+      "id": "expert_know_how",
+      "subject": "Expert know-how: edge cases and precedent",
+      "verdict": "Knowledge assistant with citations — judgement preserved and retrievable"
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "03 · Processes outside the systems"
+    }
+   },
+   "dark": false,
+   "edit_targets": [
+    "framing",
+    "shadow_process:master_tracker",
+    "shadow_process:clarifications",
+    "shadow_process:handoffs",
+    "shadow_process:expert_know_how"
+   ],
+   "id": "shadow-table-2",
+   "nav_label": "Shadow processes (2/2)",
+   "number": 26,
+   "type": "M6"
+  },
+  {
+   "chapter": {
+    "name": "Processes outside the systems",
+    "number": 3
+   },
+   "content": {
+    "cards": [
+     {
+      "label": "Typical finding",
+      "text": "The defining decisions run beside the systems — fast and experience-driven, but person-bound, scattered across inboxes and spreadsheets, and impossible to scale.",
+      "value": "Tracker + inbox"
+     },
+     {
+      "label": "Person-bound risk",
+      "text": "Judgement, precedent and customer context leave the company with their carriers — unless they are made explicit first.",
+      "value": "Knowledge in heads"
+     }
+    ],
+    "lead": "Why these processes are the real lever — and how to unlock them:",
+    "points": [
+     {
+      "number": "01",
+      "text": "Shadow processes appear in no system manual and no process documentation — whoever looks only at systems will not find them. They surface in conversation with the people who steer them daily.",
+      "title": "Invisible to classic digitalisation"
+     },
+     {
+      "number": "02",
+      "text": "Structured interviews translate judgement — what a planner weighs in a conflict, when an exception is granted — into documented decision logic. That is automation groundwork and knowledge preservation in one.",
+      "title": "Elicitation through structured interviews, not system analysis"
+     },
+     {
+      "number": "03",
+      "text": "No system change, no migration: the assistants sit on top of the existing tools and connect via interfaces. The AI delivers the reasoned proposal with its data basis; approvals and customer relationships stay with people.",
+      "title": "AI as an assistance layer, not a system replacement"
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "03 · Processes outside the systems"
+    }
+   },
+   "dark": false,
+   "edit_targets": [
+    "shadow_findings",
+    "framing"
+   ],
+   "id": "shadow-findings",
+   "nav_label": "Why it matters",
+   "number": 27,
+   "type": "M8"
+  },
+  {
+   "chapter": {
+    "name": "Target picture: semi-autonomy",
+    "number": 4
+   },
+   "content": {
+    "chapter_name": "Target picture: semi-autonomy",
+    "chapter_number": "04",
+    "headline": "When the building blocks interlock, automations become workflows",
+    "key_message": "Semi-autonomy emerges through chaining — people stand at the gates, not at the conveyor belt.",
+    "paragraphs": [
+     "Every opportunity from parts 2 and 3 is an efficiency gain on its own. Their real value emerges in the chain: the output of one block becomes the input of the next — the inquiry becomes the quote, the quote the order, the order the delivery, the data the report.",
+     "Step by step this builds a semi-autonomous organisation: routine flows run end-to-end without manual hand-offs, and people stand at defined decision gates instead of at the conveyor belt of intermediate steps."
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "04 · Target picture: semi-autonomy"
+    }
+   },
+   "dark": true,
+   "edit_targets": [
+    "framing"
+   ],
+   "id": "ch-target",
+   "nav_label": "Target picture: semi-autonomy",
+   "number": 28,
+   "type": "M3"
+  },
+  {
+   "chapter": {
+    "name": "Target picture: semi-autonomy",
+    "number": 4
+   },
+   "content": {
+    "columns": [
+     "Workflow",
+     "Autonomous flow (block chain)",
+     "Human decides on"
+    ],
+    "footnote": "Every chain connects blocks as a layer over the existing system landscape — via interfaces, not migration; approvals and releases remain with people. Chains grow stepwise: each block delivers value alone and is chained once the next one stands.",
+    "lead": "6 workflow chains in which the blocks from parts 2 and 3 interlock — autonomous flow on the left, human decision gates on the right:",
+    "rows": [
+     {
+      "description": "Inquiry is extracted and structured → pricing and feasibility build on precedent → quote draft emerges in house format → follow-up runs automatically",
+      "grouped": false,
+      "id": "inquiry_to_order",
+      "subject": "Inquiry to order",
+      "verdict": "The bid, the price and the strategic fit"
+     },
+     {
+      "description": "Orders book themselves by exception → capacity and schedule are planned as one system → status updates draft themselves",
+      "grouped": false,
+      "id": "order_to_delivery",
+      "subject": "Order to delivery",
+      "verdict": "Priorities and exceptions"
+     },
+     {
+      "description": "Requests are completed and routed → supplier documents check themselves → invoices match and release without manual touch",
+      "grouped": false,
+      "id": "purchase_to_pay",
+      "subject": "Purchase to pay",
+      "verdict": "Supplier choice and release above limits"
+     },
+     {
+      "description": "Complaints and deviations are structured → comparable cases are retrieved → assessment and reply draft themselves",
+      "grouped": false,
+      "id": "issue_to_resolution",
+      "subject": "Issue to resolution",
+      "verdict": "Classification, goodwill and approval"
+     },
+     {
+      "description": "Demand and capacity forecast roll forward → slippage surfaces early → variance commentary drafts itself from the numbers",
+      "grouped": false,
+      "id": "plan_to_report",
+      "subject": "Plan to report",
+      "verdict": "Interpretation and steering decisions"
+     },
+     {
+      "description": "Won and lost bids, planned versus actual dates and complaints are analysed → feed pricing, planning corridors and precedent → every order makes the next one smarter",
+      "grouped": false,
+      "id": "learning_loop",
+      "subject": "Learning loop",
+      "verdict": "Which patterns become the house standard"
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "04 · Target picture: semi-autonomy"
+    }
+   },
+   "dark": false,
+   "edit_targets": [
+    "framing",
+    "target_workflow:inquiry_to_order",
+    "target_workflow:order_to_delivery",
+    "target_workflow:purchase_to_pay",
+    "target_workflow:issue_to_resolution",
+    "target_workflow:plan_to_report",
+    "target_workflow:learning_loop"
+   ],
+   "id": "target-chains-1",
+   "nav_label": "Workflow chains",
+   "number": 29,
+   "type": "M6"
+  },
+  {
+   "chapter": {
+    "name": "Target picture: semi-autonomy",
+    "number": 4
+   },
+   "content": {
+    "lead": "Each chain runs left to right through automated blocks to a human gate; the vertical band feeds every experience back to the start.",
+    "rows": [
+     {
+      "gate": "The bid, the price and the strategic fit",
+      "id": "inquiry_to_order",
+      "name": "Inquiry to order",
+      "stages": [
+       "Inquiry extraction",
+       "Pricing & feasibility",
+       "Quote draft & follow-up"
+      ]
+     },
+     {
+      "gate": "Priorities and exceptions",
+      "id": "order_to_delivery",
+      "name": "Order to delivery",
+      "stages": [
+       "Order intake",
+       "Capacity & schedule",
+       "Status communication"
+      ]
+     },
+     {
+      "gate": "Supplier choice and release above limits",
+      "id": "purchase_to_pay",
+      "name": "Purchase to pay",
+      "stages": [
+       "Request routing",
+       "Document checks",
+       "Invoice matching"
+      ]
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "04 · Target picture: semi-autonomy"
+    },
+    "title": "The target picture at a glance (1/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "target_picture",
+    "target_workflow:inquiry_to_order",
+    "target_workflow:order_to_delivery",
+    "target_workflow:purchase_to_pay"
+   ],
+   "id": "target-diagram-1",
+   "nav_label": "Target picture (1/2)",
+   "number": 30,
+   "type": "M7"
+  },
+  {
+   "chapter": {
+    "name": "Target picture: semi-autonomy",
+    "number": 4
+   },
+   "content": {
+    "lead": "Each chain runs left to right through automated blocks to a human gate; the vertical band feeds every experience back to the start.",
+    "rows": [
+     {
+      "gate": "Classification, goodwill and approval",
+      "id": "issue_to_resolution",
+      "name": "Issue to resolution",
+      "stages": [
+       "Case triage",
+       "Precedent retrieval",
+       "Assessment draft"
+      ]
+     },
+     {
+      "gate": "Interpretation and steering decisions",
+      "id": "plan_to_report",
+      "name": "Plan to report",
+      "stages": [
+       "Forecast",
+       "Early warning",
+       "Variance commentary"
+      ]
+     },
+     {
+      "gate": "Which patterns become the house standard",
+      "id": "learning_loop",
+      "name": "Learning loop",
+      "stages": [
+       "Outcome capture",
+       "Pattern analysis",
+       "Knowledge base update"
+      ]
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "04 · Target picture: semi-autonomy"
+    },
+    "title": "The target picture at a glance (2/2)"
+   },
+   "dark": false,
+   "edit_targets": [
+    "target_picture",
+    "target_workflow:issue_to_resolution",
+    "target_workflow:plan_to_report",
+    "target_workflow:learning_loop"
+   ],
+   "id": "target-diagram-2",
+   "nav_label": "Target picture (2/2)",
+   "number": 31,
+   "type": "M7"
+  },
+  {
+   "chapter": {
+    "name": "Target picture: semi-autonomy",
+    "number": 4
+   },
+   "content": {
+    "cards": [
+     {
+      "label": "Autonomous base pattern",
+      "text": "Routine flows run autonomously through the chain; exceptions reach a person with full context — measured per block as a dark-processing rate.",
+      "value": "80 / 20"
+     },
+     {
+      "label": "Maturity per block",
+      "text": "Assist (AI proposes) → semi-autonomous (AI executes, human reviews exceptions) → autonomous (AI executes, human audits). Every block starts as a proposer.",
+      "value": "3 levels"
+     }
+    ],
+    "lead": "How semi-autonomy emerges, is measured — and what it means competitively:",
+    "points": [
+     {
+      "number": "01",
+      "text": "Individual AI tools save minutes; chained workflows change the operating model. The target picture is planned per chain: which blocks exist, which are missing, where the flow breaks today.",
+      "title": "Chaining instead of point tools"
+     },
+     {
+      "number": "02",
+      "text": "Semi-autonomy does not mean unstaffed: bids, approvals, releases and customer relationships remain deliberately human gates — with complete, automatically prepared decision material.",
+      "title": "People at the gates"
+     },
+     {
+      "number": "03",
+      "text": "The autonomy level per process becomes a metric: dark-processing rate, days per quote, hours per review. That makes progress steerable — and competitively visible.",
+      "title": "Making autonomy measurable"
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "04 · Target picture: semi-autonomy"
+    }
+   },
+   "dark": false,
+   "edit_targets": [
+    "target_picture",
+    "framing"
+   ],
+   "id": "target-findings",
+   "nav_label": "How it emerges",
+   "number": 32,
+   "type": "M8"
+  },
+  {
+   "chapter": {
+    "name": "Conclusion",
+    "number": 5
+   },
+   "content": {
+    "footnotes": [],
+    "kpis": [],
+    "lead": "Three steps lead from this discussion basis to a measured result:",
+    "points": [
+     {
+      "number": "01",
+      "text": "A structured workshop with the people who steer the processes daily. Real volumes, cycle times and decision paths are recorded, and the benchmark ranges of this paper are validated or discarded. The result is a ranked list of two pilot candidates.",
+      "title": "Baseline workshop"
+     },
+     {
+      "number": "02",
+      "text": "One opportunity is built on the existing systems via interfaces and measured against the baseline within weeks, not quarters. People keep every decision; the pilot proves the mechanism and the measured effect before anything is scaled.",
+      "title": "Pilot within weeks"
+     },
+     {
+      "number": "03",
+      "text": "Proven blocks are chained step by step into the workflows of part 4. The roadmap sets the order by validated value, defines the human decision gates and makes the autonomy level per process a steerable metric.",
+      "title": "Scaling roadmap"
+     }
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "05 · Conclusion"
+    },
+    "table": {
+     "columns": [],
+     "rows": []
+    }
+   },
+   "dark": false,
+   "edit_targets": [
+    "closing",
+    "framing"
+   ],
+   "id": "closing-steps",
+   "nav_label": "Three steps",
+   "number": 33,
+   "type": "M4"
+  },
+  {
+   "chapter": {
+    "name": "Conclusion",
+    "number": 5
+   },
+   "content": {
+    "address": "Altewiekring 20 A · 38102 Braunschweig",
+    "brand_claim": "Your AI Department. Delivered, not built.",
+    "chapter_name": "Conclusion",
+    "chapter_number": "05",
+    "closing_line": "Let us establish the first baseline together.",
+    "contact_line": "T +49 531 283 541 61 · boreksolutions.de",
+    "headline": "The baseline decides, not gut feeling",
+    "paragraphs": [
+     "The answers to these questions form the baseline: where do quotes, orders, documents and reports bind days today — and which two opportunities carry the strongest validated value. Three steps follow: a baseline workshop, a pilot measurable within weeks, and scaling as a roadmap.",
+     "The quick wins typically pay back in three to six months and carry the programme on their own — in live operations, without replacing systems, with every approval where it belongs."
+    ],
+    "running": {
+     "footer": "BOREK SOLUTIONS GROUP · 10/2026",
+     "left": "AI & Automation · Discussion basis 2026",
+     "right": "05 · Conclusion"
+    }
+   },
+   "dark": true,
+   "edit_targets": [
+    "closing"
+   ],
+   "id": "closing",
+   "nav_label": "Conclusion",
+   "number": 34,
+   "type": "M9"
+  }
+ ],
+ "presentation_brief": {
+  "client_name": "Hansa Präzisionsteile",
+  "core_thesis": "Working hypothesis: the lever for “Faster quoting for the sales team” lies less in the core work than in the hand-offs, documents and decisions around it.",
+  "document_title": "AI opportunities for Hansa Präzisionsteile",
+  "meeting_purpose": "Faster quoting for the sales team",
+  "opportunity_signals": [
+   "Quotes take days, and most of the content already exists somewhere.",
+   "Planning runs on experience and spreadsheets, and surprises are routine.",
+   "Review reads every page, and most pages are clean.",
+   "Order intake is retyping work, and peaks decide the day.",
+   "Invoice handling is manual, with idle time between steps."
+  ],
+  "priority_opportunities": [
+   {
+    "area": "Sales & Quoting",
+    "payback_type": "quick_win",
+    "result": "Quote drafts in hours instead of days — typically 50–70 % less turnaround time (industry benchmark).",
+    "title": "Inquiry intake & quote drafting"
+   },
+   {
+    "area": "Operations & Planning",
+    "payback_type": "strategic",
+    "result": "Forecast error typically down 20–40 % (industry benchmark) — fewer rush jobs, less idle capacity.",
+    "title": "Demand & capacity forecast"
+   },
+   {
+    "area": "Quality & Compliance",
+    "payback_type": "strategic",
+    "result": "Review in minutes instead of hours — inside the existing quality system.",
+    "title": "Document review by exception"
+   },
+   {
+    "area": "Order Processing & Customer Service",
+    "payback_type": "quick_win",
+    "result": "60–90 % dark processing on order intake (industry benchmark) — the classic first win.",
+    "title": "Order intake automation"
+   },
+   {
+    "area": "Finance & Controlling",
+    "payback_type": "quick_win",
+    "result": "60–90 % dark processing (industry benchmark) — fast to measure, fast to pay back.",
+    "title": "Invoice processing (three-way match)"
+   }
+  ],
+  "provenance": {
+   "customer_facts_origin": "user_input_and_cited_research",
+   "figures_basis": "industry_benchmark_or_working_hypothesis",
+   "source_refs": [
+    {
+     "excerpt": "Hansa Präzisionsteile GmbH manufactures precision CNC turned and milled parts for medical technology and aerospace customers.",
+     "locator": "meta description",
+     "source_id": "https://www.hansa-praezision.test/"
+    },
+    {
+     "excerpt": "Founded in 1987 as a family business, Hansa Präzisionsteile today produces precision components for medical device manufacturers and aerospace suppliers across Europe.",
+     "locator": "about page",
+     "source_id": "https://www.hansa-praezision.test/about-us"
+    },
+    {
+     "excerpt": "Hafenstraße 12, 28217, Bremen, DE",
+     "locator": "structured data (schema.org address)",
+     "source_id": "https://www.hansa-praezision.test/"
+    },
+    {
+     "excerpt": "1987",
+     "locator": "structured data (schema.org foundingDate)",
+     "source_id": "https://www.hansa-praezision.test/"
+    },
+    {
+     "excerpt": "Bone screws and implant components",
+     "locator": "products page list",
+     "source_id": "https://www.hansa-praezision.test/products"
+    },
+    {
+     "excerpt": "Surgical instrument parts",
+     "locator": "products page list",
+     "source_id": "https://www.hansa-praezision.test/products"
+    },
+    {
+     "excerpt": "Aerospace brackets and housings",
+     "locator": "products page list",
+     "source_id": "https://www.hansa-praezision.test/products"
+    },
+    {
+     "excerpt": "CNC turning up to 65 mm diameter",
+     "locator": "services page heading",
+     "source_id": "https://www.hansa-praezision.test/services"
+    },
+    {
+     "excerpt": "5-axis milling",
+     "locator": "services page heading",
+     "source_id": "https://www.hansa-praezision.test/services"
+    },
+    {
+     "excerpt": "First article inspection",
+     "locator": "services page heading",
+     "source_id": "https://www.hansa-praezision.test/services"
+    },
+    {
+     "excerpt": "Medical technology",
+     "locator": "industries page heading",
+     "source_id": "https://www.hansa-praezision.test/industries"
+    },
+    {
+     "excerpt": "Aerospace",
+     "locator": "industries page heading",
+     "source_id": "https://www.hansa-praezision.test/industries"
+    }
+   ]
+  },
+  "schema_version": "1.0",
+  "target_picture_summary": {
+   "human_gates": [
+    "The bid, the price and the strategic fit",
+    "Priorities and exceptions",
+    "Supplier choice and release above limits",
+    "Classification, goodwill and approval",
+    "Interpretation and steering decisions",
+    "Which patterns become the house standard"
+   ],
+   "statement": "Semi-autonomy emerges through chaining — people stand at the gates, not at the conveyor belt.",
+   "workflows": [
+    "Inquiry to order",
+    "Order to delivery",
+    "Purchase to pay",
+    "Issue to resolution",
+    "Plan to report",
+    "Learning loop"
+   ]
+  }
+ },
+ "schema_version": "2.0",
+ "status": "ready"
+}
