@@ -100,6 +100,16 @@ test("Word downloads use the saved version endpoints and never generate", async 
   noGeneration();
 });
 
+test("a meeting version that cannot be determined is shown as unavailable with its reason", () => {
+  const unclear = adaptDiscoveryDocuments({
+    ...payload(),
+    pre_meeting: { state: "unavailable", label: "x", reason: "FIRST_MEETING_ORIGIN_AMBIGUOUS", message: "Presentation V1 was rebuilt after the first meeting, and the Discovery version used in the meeting cannot be determined." },
+  }, opportunity);
+  assert.ok(unclear.pre_meeting.state === "unavailable" && unclear.pre_meeting.reason === "FIRST_MEETING_ORIGIN_AMBIGUOUS");
+  assert.equal(unclear.pre_meeting.label, PRE_MEETING_LABEL);
+  assert.equal(unclear.post_meeting.state, "available", "the other documents stay");
+});
+
 test("the earlier format offers no Word file", async () => {
   const legacy = adaptDiscoveryDocuments(payload({ format: "legacy", docx_available: false, docx_download_path: null } as never), opportunity);
   assert.ok(legacy.pre_meeting.state === "available" && legacy.pre_meeting.format === "legacy");
@@ -176,5 +186,9 @@ test("the post-meeting workspace shows the documents section independently of th
   assert.ok(section.includes("Retry</button>"), "a failed load can be retried");
   assert.ok(section.includes('{post?.state === "available" ? <li data-testid="document-post-meeting-discovery">'), "the post-meeting document appears once approved");
   assert.ok(section.includes(".catch(() => undefined);"), "a version list that cannot be read does not hide the presentations");
+  assert.ok(
+    section.includes('const v1Version = (pre?.state === "available" && pre.presentation_version_id) || ppt1?.latest_ready_version_id || null;'),
+    "Presentation V1 is the version the resolved Pre-Meeting Discovery Document belongs to, even after V1 was rebuilt",
+  );
   assert.doesNotMatch(section, /\b\w*(?:generate|approve)\w*\(/i, "the list never calls a generation or approval");
 });

@@ -7,6 +7,7 @@ Presentation V1 was built from, and separately the approved Post-Meeting Discove
 from __future__ import annotations
 
 import copy
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -176,3 +177,103 @@ def test_only_the_owner_reads_the_documents_and_a_new_session_sees_the_same(clie
     assert get(client, first["pre_meeting"]["docx_download_path"], OTHER).status_code == 404
     with TestClient(create_app()) as again:  # refresh / log in again: server-side state only
         assert again.get(path, headers=headers()).json() == first
+
+
+# ------------------------------------------------------------------ PR #11 review: V1 rebuilt after the meeting
+
+
+def _approve_later_discovery(client: TestClient, opportunity_id: str) -> str:
+    edited = client.patch(
+        f"/opportunities/{opportunity_id}/discovery-paper", headers=headers(),
+        json={"edits": [{"target": "thesis", "value": {"text": "Working hypothesis: approved after the first meeting"}}]},
+    )
+    assert edited.status_code == 200, edited.text
+    return ok(post(client, f"/opportunities/{opportunity_id}/discovery-paper/approve"))["id"]
+
+
+def test_presentation_v1_rebuilt_after_the_meeting_keeps_the_discovery_used_in_the_meeting(client: TestClient) -> None:
+    # 1-3: Discovery A approved, Presentation V1-A ready, first meeting completed (inside prepared()).
+    base = prepared(client)
+    opportunity_id, presentation_id, discovery_a = base["opportunity"], base["presentation"], base["approved"]
+    v1_a = stored_versions(presentation_id)[0]
+    # 4-5: the workflow allows approving Discovery B and rebuilding V1 after the meeting.
+    discovery_b = _approve_later_discovery(client, opportunity_id)
+    ok(post(client, f"/opportunities/{opportunity_id}/stage1-outputs/presentation/regenerate"))
+    rebuilt = [row for row in stored_versions(presentation_id) if row["id"] != v1_a["id"]]
+    assert rebuilt and rebuilt[-1]["status"] == "ready", "V1 was rebuilt after the meeting"
+    assert rebuilt[-1]["generation_source_manifest"]["approved_discovery_version_id"] == discovery_b
+    # 6: the Pre-Meeting Discovery Document is still Discovery A, anchored on V1-A.
+    pre = documents(client, opportunity_id)["pre_meeting"]
+    assert pre["state"] == "available", pre
+    assert pre["version_id"] == discovery_a, "the Discovery used in the first meeting, not the later approval"
+    assert pre["presentation_version_id"] == str(v1_a["id"])
+    assert pre["resolution"] == "first_meeting_presentation_v1"
+
+    # V2 and the final package then build on the rebuilt V1; the meeting's V1 still decides.
+    confirm(client, opportunity_id)
+    v2 = ok(generate_v2(client, opportunity_id))
+    v2_row = get_memory_store().presentation_versions[UUID(v2["presentation_version_id"])]
+    assert v2_row["generation_source_manifest"]["base_presentation_version_id"] == str(rebuilt[-1]["id"])
+    ok(post(client, f"/opportunities/{opportunity_id}/workflow/owner-reviewed"))
+    ok(post(client, f"/opportunities/{opportunity_id}/workflow/finalize"))
+    final = documents(client, opportunity_id)["pre_meeting"]
+    assert (final["version_id"], final["presentation_version_id"]) == (discovery_a, str(v1_a["id"]))
+    before = counts()
+    assert get(client, final["docx_download_path"]).content.startswith(b"PK")
+    assert counts() == before, "still read-only"
+
+
+def _forget_meeting_audit(opportunity_id: str) -> None:
+    store = get_memory_store()
+    for key, row in list(store.audit_logs.items()):
+        if row["action"] == "workflow.first_meeting_completed" and str(row["object_id"]) == opportunity_id:
+            del store.audit_logs[key]
+
+
+def test_without_the_meeting_record_the_meeting_time_decides(client: TestClient) -> None:
+    base = prepared(client)
+    opportunity_id, presentation_id, discovery_a = base["opportunity"], base["presentation"], base["approved"]
+    v1_a = stored_versions(presentation_id)[0]
+    _approve_later_discovery(client, opportunity_id)
+    ok(post(client, f"/opportunities/{opportunity_id}/stage1-outputs/presentation/regenerate"))
+    _forget_meeting_audit(opportunity_id)  # audit writes are best-effort
+    pre = documents(client, opportunity_id)["pre_meeting"]
+    assert (pre["version_id"], pre["presentation_version_id"], pre["resolution"]) == (discovery_a, str(v1_a["id"]), "first_meeting_presentation_v1")
+    # The same holds for the earlier PPT #1 records.
+    for row in stored_versions(presentation_id):
+        get_memory_store().presentation_versions[row["id"]]["generation_source_manifest"]["kind"] = "ppt1"
+    assert documents(client, opportunity_id)["pre_meeting"]["version_id"] == discovery_a
+
+
+def test_an_unclear_meeting_version_is_reported_not_guessed(client: TestClient) -> None:
+    base = prepared(client)
+    opportunity_id, presentation_id = base["opportunity"], base["presentation"]
+    store = get_memory_store()
+    v1_a = store.presentation_versions[stored_versions(presentation_id)[0]["id"]]
+    discovery_b = _approve_later_discovery(client, opportunity_id)
+    ok(post(client, f"/opportunities/{opportunity_id}/stage1-outputs/presentation/regenerate"))
+    _forget_meeting_audit(opportunity_id)
+    # Two V1 versions from different Discovery versions before the meeting, one rebuilt after it.
+    earlier = copy.deepcopy(v1_a)
+    earlier.update(id=uuid4(), version_number=0, generation_source_manifest={**v1_a["generation_source_manifest"], "approved_discovery_version_id": discovery_b})
+    store.presentation_versions[earlier["id"]] = earlier
+    pre = documents(client, opportunity_id)["pre_meeting"]
+    assert (pre["state"], pre["reason"]) == ("unavailable", "FIRST_MEETING_ORIGIN_AMBIGUOUS"), pre
+    assert pre["label"] == "Pre-Meeting Discovery Document"
+
+
+def test_a_rebuild_from_the_same_discovery_changes_nothing(client: TestClient) -> None:
+    base = prepared(client)
+    opportunity_id, presentation_id, discovery_a = base["opportunity"], base["presentation"], base["approved"]
+    store = get_memory_store()
+    v1_a = store.presentation_versions[stored_versions(presentation_id)[0]["id"]]
+    # The API reuses the version for an unchanged Discovery; a re-render after the meeting is stored directly.
+    ok(post(client, f"/opportunities/{opportunity_id}/stage1-outputs/presentation/regenerate"))
+    assert len(stored_versions(presentation_id)) == 1
+    rerender = copy.deepcopy(v1_a)
+    rerender.update(id=uuid4(), version_number=2, created_at=datetime.now(UTC) + timedelta(minutes=5))
+    store.presentation_versions[rerender["id"]] = rerender
+    _forget_meeting_audit(opportunity_id)
+    pre = documents(client, opportunity_id)["pre_meeting"]
+    assert (pre["state"], pre["version_id"]) == ("available", discovery_a)
+    assert pre["presentation_version_id"] == str(v1_a["id"]), "the V1 ready at the meeting"
