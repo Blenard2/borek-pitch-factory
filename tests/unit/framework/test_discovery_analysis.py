@@ -347,7 +347,8 @@ def test_blank_client_generates_a_clearly_generic_analysis_without_fake_facts() 
     assert paper["analysis"]["provenance"]["customer_facts_origin"] == "none"
     assert paper["analysis"]["provenance"]["sources"] == []
     assert paper["analysis"]["framing"]["document"]["title"] == "AI opportunity analysis"
-    assert "generic discussion basis" in paper["analysis"]["framing"]["document"]["scope_note"]
+    # Without any context the document says what it is based on - patterns of comparable organisations.
+    assert "patterns from comparable organisations" in paper["analysis"]["framing"]["document"]["scope_note"]
     assert not any(area["priority"] for area in paper["analysis"]["areas"])
     rendered = json.dumps(paper, ensure_ascii=False)
     for placeholder in ("Unknown Company", "Example GmbH", "N/A", "Not provided", "{client}", "{purpose}"):

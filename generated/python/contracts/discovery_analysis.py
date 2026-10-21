@@ -121,6 +121,7 @@ class OptionalParts(BaseModel):
 class SchemaVersion(Enum):
     field_1_0 = '1.0'
     field_1_1 = '1.1'
+    field_1_2 = '1.2'
 
 
 class Status2(Enum):

@@ -181,7 +181,7 @@
      "Working hypothesis: the lever lies less in the core work than in the hand-offs, documents and decisions around it.",
      "For every opportunity: the discovery questions for the conversation and the signal that real potential exists."
     ],
-    "scope_note": "Prepared as a generic discussion basis: no company context was available, so nothing here is a statement about a specific organisation. All impact figures are industry benchmarks as working hypotheses, not commitments.",
+    "scope_note": "Prepared as a discussion basis drawing on patterns from comparable organisations. All impact figures are industry benchmarks as working hypotheses, not commitments. People retain every decision, release and sign-off.",
     "publisher": {
      "company": "BOREK Solutions Group",
      "address": "Altewiekring 20 A · 38102 Braunschweig",
@@ -210,7 +210,7 @@
     "chapter_name": "Overview: areas & opportunities",
     "headline": "Where organisations lose time today — and where AI gives it back",
     "paragraphs": [
-     "No company profile is available for this analysis: no verified company research has been performed and no company description was provided. The areas below are therefore typical patterns, not statements about a specific organisation.",
+     "The areas and opportunities in this document follow patterns we see in comparable organisations. They are a starting point for our conversation and are confirmed or set aside together with your teams.",
      "The constraint is rarely the core work. It is the work around it: quotes, orders, documents, approvals, hand-offs. Each of these lives in inboxes, spreadsheets and individual experience — exactly the territory where AI drafts, checks, matches and orchestrates while people keep every decision."
     ],
     "key_message": "Every removed hand-off is margin — and a faster promise the competition has to match.",
@@ -580,7 +580,7 @@
       "title": "Order intake automation",
       "solution": "An AI pipeline that reads incoming orders (mail, PDF, spreadsheet) and books them into the order system. Technically: LLM extraction plus validation rules against master data.",
       "how_it_works": "Reads every order, extracts positions, dates and prices, validates against master data and books clean cases; exceptions reach a person with full context.",
-      "result": "60–90 % dark processing on order intake (industry benchmark) — the classic first win.",
+      "result": "60–90 % dark processing on order intake (industry benchmark) — typically the first measurable win.",
       "questions": [
        "How many orders arrive per month, and in which formats?",
        "How many minutes does one manual booking take today?"
@@ -1154,7 +1154,7 @@
     "chapter_name": "Processes outside the systems",
     "headline": "What runs on trackers, inboxes and experience today",
     "paragraphs": [
-     "The systems carry the record — but not the steering around it: which order gets the contested slot, what date sales may promise, how an exception is judged. That runs on experience, meetings, personal inboxes and the famous spreadsheet.",
+     "The systems carry the record — but not the steering around it: which order gets the contested slot, what date sales may promise, how an exception is judged. That runs on experience, meetings, personal inboxes and spreadsheets.",
      "These shadow processes are invisible to classic digitalisation: they appear in no system manual. That is exactly why they are the largest untapped potential — and the biggest risk at once: when the person leaves, the process leaves."
     ],
     "key_message": "The defining judgement lives in no system. It lives in heads, trackers and inboxes.",
@@ -1219,7 +1219,7 @@
       "grouped": false
      }
     ],
-    "footnote": "A selection of typical patterns from comparable organisations — the real map emerges in the baseline workshop through structured interviews. Some approaches pick up part-2 opportunities; here the object is the decision and its path, not the system behind it.",
+    "footnote": "A selection of typical patterns from comparable organisations — the actual map emerges in the baseline workshop through structured interviews. The focus is the decision and how it is reached, not the system behind it.",
     "running": {
      "left": "AI & Automation · Discussion basis 2026",
      "right": "03 · Processes outside the systems",
@@ -1281,7 +1281,7 @@
       "grouped": false
      }
     ],
-    "footnote": "A selection of typical patterns from comparable organisations — the real map emerges in the baseline workshop through structured interviews. Some approaches pick up part-2 opportunities; here the object is the decision and its path, not the system behind it.",
+    "footnote": "A selection of typical patterns from comparable organisations — the actual map emerges in the baseline workshop through structured interviews. The focus is the decision and how it is reached, not the system behind it.",
     "running": {
      "left": "AI & Automation · Discussion basis 2026",
      "right": "03 · Processes outside the systems",

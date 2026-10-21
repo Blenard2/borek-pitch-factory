@@ -124,8 +124,9 @@ def test_empty_client_moves_through_discovery_and_ppt1_without_invented_facts(cl
     assert research["unknown_facts"][:4] == ["Company name", "Contact person", "Website", "Meeting purpose"]
     assert paper["analysis"]["provenance"]["customer_facts_origin"] == "none"
     assert page(paper, "cover")["title"] == "AI opportunity analysis"
-    assert "generic discussion basis" in page(paper, "contents")["scope_note"]
-    assert "No company profile is available" in page(paper, "ch-overview")["paragraphs"][0]
+    # BAP-9: the empty-input document says what it is based on, in customer-facing words.
+    assert "patterns from comparable organisations" in page(paper, "contents")["scope_note"]
+    assert "follow patterns we see in comparable organisations" in page(paper, "ch-overview")["paragraphs"][0]
     rendered = json.dumps(paper)
     for placeholder in INVENTED_PLACEHOLDERS:
         assert f'"{placeholder}"' not in rendered
