@@ -1,0 +1,528 @@
+{
+  "library_version": "1.1",
+  "language": "de",
+  "note": "BAP-13: deutsche Fassung der branchenneutralen Opportunity-Bibliothek für die deterministische (Fixture-)Generierung und die festen Texte des Live-Modus. Enthält nur typische Muster und Branchen-Benchmarks – nie Fakten über ein bestimmtes Unternehmen. Gleiche Struktur und gleiche ids wie library.json.",
+  "areas": [
+    {
+      "id": "sales_quoting",
+      "name": "Vertrieb & Angebote",
+      "keywords": ["sales", "quote", "quoting", "offer", "proposal", "tender", "pricing", "crm", "lead", "pipeline", "bid", "rfp", "rfq", "vertrieb", "angebot", "angebote", "anfrage", "anfragen", "ausschreibung", "kalkulation", "preis", "preise"],
+      "lead": "Vier Opportunities am Anfang jedes Auftrags – dort, wo Reaktionszeit über Abschlussquoten entscheidet.",
+      "business_case": {
+        "value_levers": ["Angebotsentwürfe in Stunden statt Tagen", "Preise und Machbarkeit im Team einheitlich", "kein offenes Angebot ohne Nachfassen"],
+        "impact_ranges": [{"metric": "Angebotsdurchlaufzeit", "range": "−50–70 %", "basis": "industry_benchmark"}],
+        "outcome": "Abschlussquoten steigen typischerweise mit der Reaktionszeit",
+        "payback_type": "quick_win"
+      },
+      "opportunities": [
+        {
+          "id": "inquiry_quote_drafting",
+          "title": "Anfrageerfassung & Angebotsentwurf",
+          "solution": "KI-gestützte Angebotserstellung: Anforderungen erfasst, frühere Angebote genutzt, Entwurf im Hausformat.",
+          "ai_technology": "LLM-Extraktion der Anfrageanforderungen und Entwurf aus früheren Angeboten und Preislisten.",
+          "how_it_works": "Liest die Anfrage, erfasst den Umfang, zieht vergleichbare Angebote heran und entwirft das Angebot; der Vertrieb verfeinert die Strategie statt Dokumente zu formatieren.",
+          "result": "Angebotsentwürfe in Stunden statt Tagen – typischerweise 50–70 % kürzere Durchlaufzeit (Branchen-Benchmark).",
+          "discovery_questions": ["Wie viele Tage dauert ein vollständiges Angebot heute – von der Anfrage bis zum Versand?", "Wie viel eines Angebots ist wirklich neu und wie viel wiederverwendbar?", "Kennen Sie Ihre Abschlussquote in Abhängigkeit von der Reaktionszeit?"],
+          "opportunity_signal": "Angebote dauern Tage, und der Großteil der Inhalte existiert bereits irgendwo."
+        },
+        {
+          "id": "pricing_feasibility",
+          "title": "Preis- & Machbarkeitsprüfung",
+          "solution": "Einheitliche Preis- und Machbarkeitsschätzungen auf Basis historischer Aufträge.",
+          "ai_technology": "Schätzmodell über frühere Aufträge mit Korridoren für Umfang, Aufwand und Marge.",
+          "how_it_works": "Gleicht die Anfrage mit gelieferten Aufträgen ab, schlägt Aufwands- und Preiskorridore vor und markiert Risiken; der Kalkulator entscheidet den Preis mit dieser Datenbasis.",
+          "result": "Schätzungen im Team einheitlich – die Margenerosion durch optimistische Einzelschätzungen endet.",
+          "discovery_questions": ["Wie einheitlich sind Schätzungen verschiedener Personen bei vergleichbaren Anfragen?", "Wie oft stellt die Umsetzung fest, dass die Schätzung zu optimistisch war?"],
+          "opportunity_signal": "Schätzungen hängen vom Bearbeiter ab, und Margen erodieren still in der Umsetzung."
+        },
+        {
+          "id": "win_loss_signals",
+          "title": "Gewinn-/Verlustanalyse & Pipeline-Signale",
+          "solution": "Laufende Analyse von Angeboten, Abschlüssen, Verlusten und Kundenverhalten.",
+          "ai_technology": "Analytik über Pipeline und Gewinn-/Verlusthistorie mit priorisierten Signalen.",
+          "how_it_works": "Verknüpft Ergebnisse mit Anfrageart, Preis und Reaktionszeit, zeigt Muster und markiert gefährdete Chancen; der Vertrieb entscheidet, wo nachgefasst und was geändert wird.",
+          "result": "Der Vertrieb lernt aus jedem Angebot – systematisch statt anekdotisch.",
+          "discovery_questions": ["Was lernen Sie heute systematisch aus verlorenen Angeboten?", "Wie früh erkennen Sie, dass eine Chance abkühlt?"],
+          "opportunity_signal": "Erkenntnisse aus Verlusten sind anekdotisch, und abkühlende Chancen kommen überraschend."
+        },
+        {
+          "id": "quote_follow_up",
+          "title": "Angebotsnachverfolgung",
+          "solution": "Automatisches, kontextbezogenes Nachfassen bei offenen Angeboten.",
+          "ai_technology": "LLM-Entwürfe für Nachfassungen, priorisiert nach Wert und Wahrscheinlichkeit.",
+          "how_it_works": "Erkennt offene Angebote, priorisiert sie und entwirft individuelle Nachfassungen; der Vertrieb sendet mit einem Klick.",
+          "result": "Kein Angebot versandet – die Abschlussquote steigt ohne zusätzliche Vertriebszeit.",
+          "discovery_questions": ["Wie systematisch wird bei offenen Angeboten heute nachgefasst?", "Welcher Anteil der Angebote erhält nie eine Nachfassung?"],
+          "opportunity_signal": "Nachfassen hängt an der Kapazität Einzelner – und bleibt in vollen Wochen liegen."
+        }
+      ]
+    },
+    {
+      "id": "order_service",
+      "name": "Auftragsabwicklung & Kundenservice",
+      "keywords": ["order", "orders", "customer service", "support", "service", "ticket", "complaint", "claim", "inbox", "mail", "delivery", "shipment", "logistics", "auftrag", "aufträge", "bestellung", "bestellungen", "kundenservice", "reklamation", "reklamationen", "lieferung", "versand", "logistik", "postfach"],
+      "lead": "Vier Opportunities im Tagesgeschäft – dort, wo Abtippen und Postfächer den Tag bestimmen.",
+      "business_case": {
+        "value_levers": ["Auftragserfassung weitgehend ohne Abtippen", "Anfragen aus einer Sicht beantwortet", "Reklamationen mit Präzedenzfällen entschieden"],
+        "impact_ranges": [{"metric": "Dunkelverarbeitung Auftragseingang", "range": "60–90 %", "basis": "industry_benchmark"}],
+        "outcome": "Spitzen bestimmen nicht mehr den Tag",
+        "payback_type": "quick_win"
+      },
+      "opportunities": [
+        {
+          "id": "order_intake",
+          "title": "Automatisierte Auftragserfassung",
+          "solution": "Eine KI-Strecke, die eingehende Aufträge (Mail, PDF, Tabelle) liest und im Auftragssystem bucht.",
+          "ai_technology": "LLM-Extraktion und Prüfregeln gegen die Stammdaten.",
+          "how_it_works": "Liest jeden Auftrag, erfasst Positionen, Termine und Preise, prüft gegen Stammdaten und bucht saubere Fälle; Ausnahmen gehen mit vollem Kontext an eine Person.",
+          "result": "60–90 % Dunkelverarbeitung im Auftragseingang (Branchen-Benchmark) – typischerweise der erste messbare Erfolg.",
+          "discovery_questions": ["Wie viele Aufträge gehen pro Monat ein, und in welchen Formaten?", "Wie viele Minuten dauert eine manuelle Buchung heute?"],
+          "opportunity_signal": "Auftragserfassung ist Abtipparbeit, und Spitzen bestimmen den Tag."
+        },
+        {
+          "id": "inquiry_triage",
+          "title": "Vorsortierung von Kundenanfragen",
+          "solution": "Eingehende Anfragen werden klassifiziert, mit Auftragskontext angereichert und mit einem Antwortentwurf versehen.",
+          "ai_technology": "LLM-Klassifikation und Antwortentwürfe im gemeinsamen Postfach.",
+          "how_it_works": "Sortiert jede Nachricht nach Anliegen und Dringlichkeit, ergänzt Auftrags- und Lieferdaten und entwirft die Antwort; der Service gibt frei oder passt an.",
+          "result": "Erste Antwort in Minuten statt Stunden – ohne zusätzliches Servicepersonal.",
+          "discovery_questions": ["Wie viele Anfragen erreichen das gemeinsame Postfach pro Tag?", "Wie lange wartet ein Kunde auf eine erste fundierte Antwort?", "Wie viel der Antwort ist Nachschlagen?"],
+          "opportunity_signal": "Der Service verbringt die meiste Zeit mit Suchen, nicht mit Antworten."
+        },
+        {
+          "id": "complaint_handling",
+          "title": "Reklamations- & Schadensbearbeitung",
+          "solution": "KI-Entwürfe für Bewertungen und Vorschläge zu Reklamationen auf Basis vergleichbarer Fälle.",
+          "ai_technology": "LLM-Entwürfe mit Abruf von Präzedenzfällen und Konditionen.",
+          "how_it_works": "Strukturiert den Fall, zieht vergleichbare Reklamationen heran und entwirft Bewertung und Antwort; die zuständige Person klassifiziert und entscheidet.",
+          "result": "Reklamationen in Tagen statt Wochen abgeschlossen – mit einheitlicheren Entscheidungen.",
+          "discovery_questions": ["Wie lange dauert eine durchschnittliche Reklamation vom Eingang bis zum Abschluss?", "Wie einheitlich entscheiden verschiedene Bearbeiter?"],
+          "opportunity_signal": "Reklamationen dauern Wochen, und das Ergebnis hängt vom Bearbeiter ab."
+        },
+        {
+          "id": "delivery_status",
+          "title": "Kommunikation zum Lieferstatus",
+          "solution": "Proaktive Statusmeldungen aus Auftrags- und Lieferdaten.",
+          "ai_technology": "Regelbasierte Ausnahmeerkennung und LLM-Nachrichtenentwürfe.",
+          "how_it_works": "Überwacht Aufträge gegen den Plan, erkennt Verzögerungen früh und entwirft die Kundeninformation mit Grund und neuem Termin; der Auftragsverantwortliche bestätigt vor dem Versand.",
+          "result": "Kunden erfahren von Verzögerungen zuerst von Ihnen – Statusanrufe gehen spürbar zurück.",
+          "discovery_questions": ["Wie erfahren Kunden heute von einer Verzögerung?", "Wie viele eingehende Kontakte sind reine Statusfragen?"],
+          "opportunity_signal": "Statusfragen füllen das Postfach, und Verzögerungen werden über den Kunden bekannt."
+        }
+      ]
+    },
+    {
+      "id": "procurement",
+      "name": "Einkauf & Lieferantenmanagement",
+      "keywords": ["procurement", "purchasing", "purchase", "supplier", "vendor", "sourcing", "material", "supply", "einkauf", "beschaffung", "lieferant", "lieferanten", "bestellanforderung"],
+      "lead": "Drei Opportunities auf der Beschaffungsseite – dort, wo Dokumente und Freigaben Einkäuferzeit binden.",
+      "business_case": {
+        "value_levers": ["Bedarfsanforderungen automatisch geprüft und geleitet", "Lieferantendokumente ohne manuelles Lesen geprüft", "Lieferantenrisiken Wochen früher sichtbar"],
+        "impact_ranges": [{"metric": "Einkäuferzeit für Routineprüfungen", "range": "−30–50 %", "basis": "industry_benchmark"}],
+        "outcome": "Einkäufer verhandeln statt zu verwalten",
+        "payback_type": "strategic"
+      },
+      "opportunities": [
+        {
+          "id": "purchase_request_routing",
+          "title": "Steuerung von Bedarfsanforderungen",
+          "solution": "Bedarfsanforderungen werden vervollständigt, gegen Verträge geprüft und an den richtigen Freigeber geleitet.",
+          "ai_technology": "LLM-Vervollständigung und -Klassifikation mit Freigaberegeln.",
+          "how_it_works": "Ergänzt fehlende Felder, ordnet die Anforderung bestehenden Verträgen und Budgets zu und leitet sie weiter; Einkäufer entscheiden nur noch über Fälle mit Klärungsbedarf.",
+          "result": "Anforderungen in Stunden statt Tagen freigegeben – Maverick Buying wird sichtbar.",
+          "discovery_questions": ["Wie lange dauert eine Bedarfsanforderung von der Erfassung bis zur Bestellung?", "Wie viele Anforderungen umgehen bestehende Verträge?"],
+          "opportunity_signal": "Anforderungen warten in Freigabeschleifen, und Verträge werden unbemerkt umgangen."
+        },
+        {
+          "id": "supplier_document_checks",
+          "title": "Prüfung von Lieferantendokumenten",
+          "solution": "Zertifikate, Bestätigungen und Lieferpapiere werden automatisch gelesen und geprüft.",
+          "ai_technology": "LLM-Extraktion mit Prüfung gegen Bestellung und Spezifikation.",
+          "how_it_works": "Liest jedes Dokument, vergleicht es mit Bestellung und Spezifikation und markiert Abweichungen; Einkäufer entscheiden nur über die markierten Fälle.",
+          "result": "Dokumentenprüfung nach dem Ausnahmeprinzip – Abweichungen fallen auf, bevor die Ware eintrifft.",
+          "discovery_questions": ["Wer prüft Auftragsbestätigungen heute gegen die Bestellung?", "Wie oft fallen Abweichungen erst im Wareneingang auf?"],
+          "opportunity_signal": "Bestätigungen werden ungelesen abgelegt, und Abweichungen zeigen sich an der Rampe."
+        },
+        {
+          "id": "supplier_performance",
+          "title": "Signale zur Lieferantenleistung",
+          "solution": "Eine Frühwarnsicht auf Liefertreue, Qualität und Preisentwicklung je Lieferant.",
+          "ai_technology": "Analytik über Liefer-, Qualitäts- und Preishistorie mit ML-Risikosignalen.",
+          "how_it_works": "Lernt das normale Verhalten je Lieferant, markiert nachlassende Liefertreue oder steigende Preise und bereitet die Fakten für das nächste Gespräch auf; der Einkäufer entscheidet über Maßnahmen.",
+          "result": "Lieferantenrisiken werden gesteuert statt entdeckt – Gespräche finden früh und mit Daten statt.",
+          "discovery_questions": ["Wann erfahren Sie, dass ein Lieferant unzuverlässig wird?", "Wie werden Lieferantengespräche heute vorbereitet?"],
+          "opportunity_signal": "Lieferantenprobleme fallen erst auf, wenn sie bereits eine Lieferung gekostet haben."
+        }
+      ]
+    },
+    {
+      "id": "operations_planning",
+      "name": "Betrieb & Planung",
+      "keywords": ["operations", "planning", "production", "manufacturing", "capacity", "schedule", "scheduling", "warehouse", "shift", "forecast", "demand", "erp", "betrieb", "planung", "produktion", "fertigung", "kapazität", "lager", "schicht", "prognose", "bedarf"],
+      "lead": "Drei Opportunities im Maschinenraum – dort, wo Pläne jeden Tag auf die Realität treffen.",
+      "business_case": {
+        "value_levers": ["Bedarf und Kapazität auf einer Prognose geplant", "Verzögerungen Wochen früher sichtbar", "Übergaben ohne Kontextverlust"],
+        "impact_ranges": [{"metric": "Prognosefehler", "range": "−20–40 %", "basis": "industry_benchmark"}],
+        "outcome": "knappe Kapazität läuft nach Plan",
+        "payback_type": "strategic"
+      },
+      "opportunities": [
+        {
+          "id": "demand_capacity_forecast",
+          "title": "Bedarfs- & Kapazitätsprognose",
+          "solution": "Eine rollierende Prognose, die Bedarfssignale mit verfügbarer Kapazität verbindet.",
+          "ai_technology": "ML-Prognose auf Auftragshistorie, Saisonalität und offener Pipeline.",
+          "how_it_works": "Lernt Bedarfsmuster, stellt die Last der Kapazität gegenüber und schlägt Anpassungen vor; Planer entscheiden über die Vorschläge statt Tabellen zu bauen.",
+          "result": "Prognosefehler typischerweise 20–40 % niedriger (Branchen-Benchmark) – weniger Eilaufträge, weniger Leerlauf.",
+          "discovery_questions": ["Wie wird der Bedarf heute prognostiziert, und wie oft stimmt die Prognose?", "Was kostet eine Woche ungeplanter Überstunden oder Leerlauf?"],
+          "opportunity_signal": "Planung läuft über Erfahrung und Tabellen, und Überraschungen sind Routine."
+        },
+        {
+          "id": "schedule_early_warning",
+          "title": "Frühwarnung bei Terminen",
+          "solution": "Früherkennung von Verzögerungen je Auftrag oder Projekt – Wochen bevor die Durchsprache sie findet.",
+          "ai_technology": "ML-Frühwarnung aus Fortschritts-, Ressourcen- und Abhängigkeitssignalen.",
+          "how_it_works": "Lernt aus Fortschritt und Abhängigkeitsketten und markiert gefährdete Vorgänge mit Ursachen und Optionen; Planer entscheiden, welche Option gilt.",
+          "result": "Verzögerungen werden gesteuert statt entdeckt – Kundengespräche finden früh und mit Optionen statt.",
+          "discovery_questions": ["Wann erfahren Sie, dass sich ein Auftrag verzögert – vor oder in der Durchsprache?", "Was hat die letzte spät entdeckte Verzögerung an Kundenvertrauen gekostet?"],
+          "opportunity_signal": "Verzögerungen zeigen sich spät, und Kundengespräche finden ohne Optionen statt."
+        },
+        {
+          "id": "handoff_summaries",
+          "title": "Schicht- & Übergabezusammenfassungen",
+          "solution": "Automatische Übergabezusammenfassungen je Team, Schicht oder Standort.",
+          "ai_technology": "LLM-Zusammenfassung von Systemereignissen, Notizen und offenen Punkten.",
+          "how_it_works": "Sammelt, was passiert ist, was offen ist und was eine Entscheidung braucht, in einer strukturierten Zusammenfassung; die nachfolgende Schichtleitung bestätigt die offenen Punkte.",
+          "result": "Übergaben ohne Kontextverlust – die nächste Schicht startet informiert.",
+          "discovery_questions": ["Wie werden Informationen heute zwischen Schichten oder Standorten übergeben?", "Wie oft geht bei einer Übergabe etwas verloren?"],
+          "opportunity_signal": "Übergaben laufen über Gedächtnis und Chatnachrichten, und bei jedem Wechsel geht Kontext verloren."
+        }
+      ]
+    },
+    {
+      "id": "finance_controlling",
+      "name": "Finanzen & Controlling",
+      "keywords": ["finance", "controlling", "invoice", "invoices", "accounting", "receivable", "payment", "month-end", "closing", "audit", "deduction", "billing", "finanzen", "rechnung", "rechnungen", "buchhaltung", "forderungen", "zahlung", "monatsabschluss", "abrechnung", "gutschrift"],
+      "lead": "Vier Opportunities im Backoffice – schnell messbar, schnell amortisiert.",
+      "business_case": {
+        "value_levers": ["Rechnungen ohne manuellen Eingriff abgeglichen und freigegeben", "Forderungen systematisch nachverfolgt", "Abweichungskommentare aus den Zahlen entworfen"],
+        "impact_ranges": [{"metric": "Dunkelverarbeitung Eingangsrechnungen", "range": "60–90 %", "basis": "industry_benchmark"}],
+        "outcome": "der Abschluss wird schneller und ruhiger",
+        "payback_type": "quick_win"
+      },
+      "opportunities": [
+        {
+          "id": "invoice_processing",
+          "title": "Rechnungsprüfung (Dreiwege-Abgleich)",
+          "solution": "Automatischer Abgleich von Rechnung, Bestellung und Wareneingang mit automatischer Freigabe.",
+          "ai_technology": "LLM-Extraktion und deterministische Abgleichregeln.",
+          "how_it_works": "Extrahiert, kontiert und gleicht ab; saubere Rechnungen laufen dunkel durch, die Kreditorenbuchhaltung entscheidet jede Ausnahme mit Kontext und Lösungsvorschlag.",
+          "result": "60–90 % Dunkelverarbeitung (Branchen-Benchmark) – schnell messbar, schnell amortisiert.",
+          "discovery_questions": ["Wie viele Eingangsrechnungen pro Monat, über wie viele Hände?", "Wie lange dauert es heute vom Eingang bis zur Freigabe?"],
+          "opportunity_signal": "Die Rechnungsbearbeitung ist manuell, mit Liegezeiten zwischen den Schritten."
+        },
+        {
+          "id": "receivables_follow_up",
+          "title": "Forderungsmanagement",
+          "solution": "Priorisierte, individuell formulierte Zahlungserinnerungen auf Basis der Kundenhistorie.",
+          "ai_technology": "Scoring des Zahlungsverhaltens und LLM-Entwürfe.",
+          "how_it_works": "Ordnet offene Posten nach Betrag und Risiko, entwirft die passende Erinnerung und protokolliert jeden Kontakt; die Buchhaltung gibt gesammelt frei.",
+          "result": "Die Forderungslaufzeit sinkt – ohne Kundenbeziehungen zu belasten.",
+          "discovery_questions": ["Wie wird die Reihenfolge der Zahlungserinnerungen heute festgelegt?", "Wie viel ist seit mehr als 30 Tagen überfällig?"],
+          "opportunity_signal": "Erinnerungen gehen pauschal oder gar nicht hinaus, und große überfällige Posten warten."
+        },
+        {
+          "id": "variance_commentary",
+          "title": "Abweichungskommentare zum Monatsabschluss",
+          "solution": "Erste Entwürfe von Abweichungserläuterungen aus Hauptbuch und operativen Daten.",
+          "ai_technology": "Analytik von Ist gegen Plan mit LLM-Textentwürfen.",
+          "how_it_works": "Findet die Treiber jeder Abweichung und entwirft die Erläuterung mit Zahlen; das Controlling prüft und interpretiert sie vor dem Berichten.",
+          "result": "Controller interpretieren statt zusammenzutragen – Kommentare am ersten Tag bereit.",
+          "discovery_questions": ["Wie viele Tage des Abschlusses fließen in Abweichungserläuterungen?", "Wie viel dieser Zeit ist Zusammentragen von Zahlen?"],
+          "opportunity_signal": "Der Abschluss ist jeden Monat eine Suche nach Erklärungen."
+        },
+        {
+          "id": "deduction_audit",
+          "title": "Vertrags- & Abzugsprüfung",
+          "solution": "Jeder Abzug und jede Gutschriftforderung wird gegen vereinbarte Konditionen und Liefernachweise geprüft.",
+          "ai_technology": "LLM-Extraktion und regelbasierter Abgleich.",
+          "how_it_works": "Prüft jede Forderung systematisch, markiert unberechtigte und entwirft die Rückforderung mit Belegen; die Finanzabteilung entscheidet, welche Rückforderungen gestellt werden.",
+          "result": "Unberechtigte Abzüge werden zurückgefordert – was heute als Einzelfall untergeht, wird Routine.",
+          "discovery_questions": ["Wie viele Abzüge gehen pro Monat ein, und welcher Anteil wird geprüft?", "Haben Sie akzeptierte, aber unberechtigte Abzüge je beziffert?"],
+          "opportunity_signal": "Abzüge werden standardmäßig akzeptiert, weil die Prüfung teurer scheint als der Einzelfall."
+        }
+      ]
+    },
+    {
+      "id": "quality_compliance",
+      "name": "Qualität & Compliance",
+      "keywords": ["quality", "compliance", "qa", "qm", "iso", "gmp", "regulatory", "regulation", "certification", "deviation", "capa", "documentation", "qualität", "qualitätssicherung", "regulatorisch", "zertifizierung", "abweichung", "dokumentation", "audit"],
+      "lead": "Drei Opportunities im regulierten Kern – automatisierte Entwürfe, menschliche Freigabe, lückenloser Nachweis.",
+      "business_case": {
+        "value_levers": ["Aufzeichnungen nach dem Ausnahmeprinzip geprüft", "Abweichungen mit Präzedenzfällen entworfen", "Auditnachweise automatisch zusammengestellt"],
+        "impact_ranges": [{"metric": "Prüfzeit je Aufzeichnung", "range": "−40–60 %", "basis": "industry_benchmark"}],
+        "outcome": "Qualitätsfachleute entscheiden, statt jede Seite zu lesen",
+        "payback_type": "strategic"
+      },
+      "opportunities": [
+        {
+          "id": "document_review_by_exception",
+          "title": "Dokumentenprüfung nach Ausnahmeprinzip",
+          "solution": "Qualitätsaufzeichnungen werden automatisch gegen die Spezifikation geprüft; Prüfer sehen nur Abweichungen.",
+          "ai_technology": "LLM- und regelbasierte Prüfung der Aufzeichnungen gegen Spezifikationen.",
+          "how_it_works": "Liest jede Aufzeichnung, prüft Vollständigkeit und Grenzwerte und markiert Befunde; Prüfer bestätigen markierte Seiten statt jeder Seite.",
+          "result": "Prüfung in Minuten statt Stunden – innerhalb des bestehenden Qualitätssystems.",
+          "discovery_questions": ["Wie viele Stunden dauert eine Prüfung heute?", "Welcher Anteil der Prüfzeit entfällt auf Seiten ohne Befund?"],
+          "opportunity_signal": "Die Prüfung liest jede Seite, und die meisten Seiten sind ohne Befund."
+        },
+        {
+          "id": "deviation_drafting",
+          "title": "Abweichungen & Korrekturmaßnahmen",
+          "solution": "KI-Entwürfe für Abweichungsbewertungen und Vorschläge zu Korrekturmaßnahmen aus Präzedenzfällen.",
+          "ai_technology": "LLM-Entwürfe mit Abruf vergleichbarer Abweichungen.",
+          "how_it_works": "Strukturiert das Ereignis, zieht vergleichbare Fälle heran und entwirft Bewertung und Maßnahmen; die Qualitätssicherung klassifiziert, entscheidet und gibt frei.",
+          "result": "Abweichungen in Tagen statt Wochen abgeschlossen – mit einheitlicheren Untersuchungen.",
+          "discovery_questions": ["Wie lange dauert eine durchschnittliche Abweichung vom Ereignis bis zum Abschluss?", "Wie einheitlich sind Untersuchungen verschiedener Autoren?"],
+          "opportunity_signal": "Abweichungen dauern Wochen, und die Untersuchungsqualität hängt vom Autor ab."
+        },
+        {
+          "id": "audit_evidence",
+          "title": "Zusammenstellung von Auditnachweisen",
+          "solution": "Nachweispakete für Audits und Kundenfragebögen aus vorhandenen Dokumenten zusammengestellt.",
+          "ai_technology": "Abruf über die Dokumentenlandschaft mit Lückenlisten.",
+          "how_it_works": "Ordnet Anforderungen vorhandenen Dokumenten zu, stellt das Paket zusammen und listet, was fehlt; Fachleute schließen Lücken und geben das Paket frei.",
+          "result": "Auditpakete in Tagen – mit einem aktuellen Blick darauf, was noch fehlt.",
+          "discovery_questions": ["Wie lange dauert die Vorbereitung eines Audits oder Kundenfragebogens?", "Wie verfolgen Sie, was noch fehlt?"],
+          "opportunity_signal": "Auditvorbereitung ist Dokumentensuche, und Lücken zeigen sich spät."
+        }
+      ]
+    },
+    {
+      "id": "knowledge_people",
+      "name": "Wissen & Mitarbeitende",
+      "keywords": ["knowledge", "onboarding", "hr", "people", "training", "documentation", "wiki", "sharepoint", "retire", "retirement", "skills", "wissen", "einarbeitung", "personal", "schulung", "mitarbeitende", "ruhestand", "kompetenzen"],
+      "lead": "Drei Opportunities im Fundament – Wissen, das über die Betriebszugehörigkeit hinaus bleibt.",
+      "business_case": {
+        "value_levers": ["Antworten zu Abläufen und Präzedenzfällen in Sekunden", "neue Kolleginnen und Kollegen Wochen früher produktiv", "Entscheidungen ohne Mehraufwand dokumentiert"],
+        "impact_ranges": [{"metric": "Suchzeit nach Informationen", "range": "−30–50 %", "basis": "industry_benchmark"}],
+        "outcome": "Expertise wird abrufbar statt personengebunden",
+        "payback_type": "quick_win"
+      },
+      "opportunities": [
+        {
+          "id": "knowledge_assistant",
+          "title": "Wissensassistent für das Unternehmen",
+          "solution": "Ein interner Assistent über Dokumente, Mails, Wikis und Laufwerke, der mit Quellen antwortet.",
+          "ai_technology": "RAG mit rechtebewusstem Abruf und Quellenangaben.",
+          "how_it_works": "Mitarbeitende fragen in natürlicher Sprache und erhalten Antworten mit Quellenlinks; Prozessverantwortliche entscheiden, aus welchen Dokumenten er antwortet.",
+          "result": "Antworten in Sekunden statt Herumfragen – und die Einarbeitung verkürzt sich um Wochen.",
+          "discovery_questions": ["Wie lange dauert es heute, interne Informationen zu finden?", "Welches Wissen geht, wenn erfahrene Kolleginnen und Kollegen in den Ruhestand gehen?"],
+          "opportunity_signal": "Wissen steckt in Köpfen und Ordnern, und dieselben Fragen werden immer wieder gestellt."
+        },
+        {
+          "id": "onboarding_assistant",
+          "title": "Einarbeitungsassistent",
+          "solution": "Ein geführter Begleiter für die Einarbeitung, der Abläufe, Systeme und Ansprechpartner je Rolle erklärt.",
+          "ai_technology": "RAG über Abläufe und Rollenbeschreibungen mit geführten Lernpfaden.",
+          "how_it_works": "Beantwortet rollenspezifische Fragen, verweist auf den geltenden Ablauf und verfolgt, was behandelt wurde; Mentoren prüfen den Fortschritt und konzentrieren sich auf Urteilsvermögen.",
+          "result": "Neue Kolleginnen und Kollegen sind Wochen früher produktiv – Mentoren werden entlastet.",
+          "discovery_questions": ["Wie lange dauert es, bis neue Kolleginnen und Kollegen voll produktiv sind?", "Wie viel Mentorenzeit bindet eine Einarbeitung?"],
+          "opportunity_signal": "Die Einarbeitung hängt davon ab, wer gerade Zeit zum Erklären hat."
+        },
+        {
+          "id": "meeting_summaries",
+          "title": "Besprechungs- & Entscheidungsprotokolle",
+          "solution": "Besprechungen werden zu Entscheidungen, Aufgaben und offenen Punkten zusammengefasst – und dort abgelegt, wo gearbeitet wird.",
+          "ai_technology": "LLM-Zusammenfassung von Transkripten und Notizen mit Aufgabenerkennung.",
+          "how_it_works": "Erfasst die Besprechung, extrahiert Entscheidungen und Verantwortliche und entwirft das Follow-up; der Besprechungsverantwortliche bestätigt es vor dem Teilen und Ablegen.",
+          "result": "Entscheidungen werden ohne Mehraufwand dokumentiert – nichts Vereinbartes geht verloren.",
+          "discovery_questions": ["Wo werden Entscheidungen aus Besprechungen heute dokumentiert?", "Wie oft wird etwas vereinbart und dann vergessen?"],
+          "opportunity_signal": "Entscheidungen leben in Erinnerung und persönlichen Notizen, und Folgeaufgaben hängen an Einzelnen."
+        }
+      ]
+    }
+  ],
+  "shadow_processes": [
+    {"id": "prioritisation", "decision": "Priorisierung bei Engpässen: Welcher Auftrag bekommt den Slot?", "handled_today_via": "Eskalationsrunden, Seniorität und wer am lautesten ist", "ai_approach": "Regelbasierter Vorschlag aus Auftragswert, Terminrisiko und Folgewirkung – dokumentiert, der Mensch entscheidet"},
+    {"id": "date_promises", "decision": "Liefertermin-Zusagen an Kunden", "handled_today_via": "Erfahrung und Optimismus des einzelnen Planers", "ai_approach": "Datenbasis aus gelieferten Aufträgen: realistische Korridore je Auftragsart, sichtbar vor der Zusage"},
+    {"id": "discounts_exceptions", "decision": "Rabatte und kaufmännische Ausnahmen", "handled_today_via": "Einzelurteil, Präzedenzfälle aus dem Gedächtnis", "ai_approach": "Abgerufene Präzedenzfälle mit vorgeschlagenem Korridor – der Vertrieb entscheidet mit der Historie auf dem Tisch"},
+    {"id": "goodwill", "decision": "Kulanz bei Reklamationen", "handled_today_via": "Urteil des einzelnen Bearbeiters, Mailverläufe", "ai_approach": "Vergleichbare Fälle und Kundenwert zusammengefasst – der Bearbeiter entscheidet einheitlich"},
+    {"id": "master_tracker", "decision": "Auftragsstatus und die „Master-Liste“", "handled_today_via": "Eine Tabelle je Team, neben dem Tagesgeschäft gepflegt", "ai_approach": "Live-Statussicht aus Systemdaten – die Liste aktualisiert sich selbst"},
+    {"id": "clarifications", "decision": "Kundenklärungen und fachliche Rückfragen", "handled_today_via": "Persönliche Postfächer – Wissen steckt in einzelnen Mailverläufen", "ai_approach": "Gemeinsame Akte mit LLM-Zusammenfassungen – jeder ist sofort gesprächsfähig"},
+    {"id": "handoffs", "decision": "Übergaben zwischen Teams, Schichten und Standorten", "handled_today_via": "Besprechungen und Chatnachrichten – Kontextverlust bei jedem Wechsel", "ai_approach": "Automatische Übergabezusammenfassungen je Auftrag, Team und Schicht"},
+    {"id": "expert_know_how", "decision": "Expertenwissen: Sonderfälle und Präzedenzfälle", "handled_today_via": "Wenige erfahrene Köpfe – Engpass bei Urlaub und Ruhestand", "ai_approach": "Wissensassistent mit Quellenangaben – Urteilsvermögen bleibt erhalten und abrufbar"}
+  ],
+  "shadow_findings": {
+    "cards": [
+      {"label": "Typischer Befund", "value": "Liste + Postfach", "text": "Die prägenden Entscheidungen laufen neben den Systemen – schnell und erfahrungsgetragen, aber personengebunden, verteilt über Postfächer und Tabellen und nicht skalierbar."},
+      {"label": "Personengebundenes Risiko", "value": "Wissen in Köpfen", "text": "Urteilsvermögen, Präzedenzfälle und Kundenkontext verlassen das Unternehmen mit ihren Trägern – wenn sie nicht vorher explizit gemacht werden."}
+    ],
+    "points": [
+      {"title": "Unsichtbar für klassische Digitalisierung", "text": "Schattenprozesse stehen in keinem Systemhandbuch und keiner Prozessdokumentation – wer nur Systeme betrachtet, findet sie nicht. Sie zeigen sich erst im Gespräch mit denen, die sie täglich steuern."},
+      {"title": "Erhebung per strukturiertem Interview statt Systemanalyse", "text": "Strukturierte Interviews übersetzen Urteilsvermögen – was ein Planer im Konflikt abwägt, wann eine Ausnahme gewährt wird – in dokumentierte Entscheidungslogik. Das ist Automatisierungsgrundlage und Wissenssicherung zugleich."},
+      {"title": "KI als Assistenzschicht statt Systemersatz", "text": "Kein Systemwechsel, keine Migration: Die Assistenten legen sich über die bestehenden Werkzeuge und docken über Schnittstellen an. Die KI liefert den begründeten Vorschlag mit Datenbasis; Freigaben und Kundenbeziehungen bleiben beim Menschen."}
+    ]
+  },
+  "target_workflows": [
+    {"id": "inquiry_to_order", "name": "Anfrage zu Auftrag", "stages": ["Anfragen erfassen", "Preis & Machbarkeit", "Angebot & Nachfassen"], "autonomous_flow": "Die Anfrage wird erfasst und strukturiert → Preis und Machbarkeit bauen auf Präzedenzfällen auf → der Angebotsentwurf entsteht im Hausformat → das Nachfassen läuft automatisch", "human_decision_gate": "Angebot, Preis und strategische Passung"},
+    {"id": "order_to_delivery", "name": "Auftrag zu Lieferung", "stages": ["Aufträge erfassen", "Kapazität & Termin", "Status melden"], "autonomous_flow": "Aufträge buchen sich nach dem Ausnahmeprinzip → Kapazität und Termin werden als ein System geplant → Statusmeldungen entwerfen sich selbst", "human_decision_gate": "Prioritäten und Ausnahmen"},
+    {"id": "purchase_to_pay", "name": "Bestellung zu Zahlung", "stages": ["Bedarfe steuern", "Dokumente prüfen", "Rechnungen abgleichen"], "autonomous_flow": "Anforderungen werden vervollständigt und geleitet → Lieferantendokumente prüfen sich selbst → Rechnungen werden ohne manuellen Eingriff abgeglichen und freigegeben", "human_decision_gate": "Lieferantenwahl, Freigaben über Limit"},
+    {"id": "issue_to_resolution", "name": "Fall zu Lösung", "stages": ["Reklamationen & Schäden", "Abweichungen bewerten", "Maßnahmen entwerfen"], "autonomous_flow": "Reklamationen und Abweichungen werden strukturiert → vergleichbare Fälle werden abgerufen → Bewertung und Antwort entwerfen sich selbst", "human_decision_gate": "Klassifikation, Kulanz und Freigabe"},
+    {"id": "plan_to_report", "name": "Plan zu Bericht", "stages": ["Prognose", "Frühwarnung", "Abweichungen erläutern"], "autonomous_flow": "Bedarfs- und Kapazitätsprognose rollieren weiter → Verzögerungen zeigen sich früh → Abweichungskommentare entstehen aus den Zahlen", "human_decision_gate": "Interpretation und Steuerung"},
+    {"id": "learning_loop", "name": "Lernender Kreislauf", "stages": ["Ergebnisse erfassen", "Muster analysieren", "Wissensbasis pflegen"], "autonomous_flow": "Gewonnene und verlorene Angebote, Plan- und Ist-Termine sowie Reklamationen werden ausgewertet → speisen Preise, Planungskorridore und Präzedenzfälle → jeder Auftrag macht den nächsten besser", "human_decision_gate": "Welche Muster Hausstandard werden"}
+  ],
+  "target_picture": {
+    "diagram_title": "Das Zielbild auf einen Blick",
+    "diagram_lead": "Jede Kette läuft von links nach rechts durch automatisierte Bausteine zu einem menschlichen Tor; das senkrechte Band führt jede Erfahrung an den Anfang zurück.",
+    "dark_processing_pattern": {"label": "Autonomes Grundmuster", "value": "80 / 20", "text": "Routinevorgänge laufen autonom durch die Kette; Ausnahmen gehen mit vollem Kontext an eine Person – gemessen je Baustein als Dunkelverarbeitungsquote."},
+    "maturity_levels": {
+      "label": "Reifegrad je Baustein",
+      "value": "3 Stufen",
+      "text": "Assistenz (KI schlägt vor) → Teilautonomie (KI führt aus, Mensch prüft Ausnahmen) → Autonomie (KI führt aus, Mensch auditiert). Jeder Baustein startet als Vorschlagsgeber.",
+      "levels": ["Assistenz", "Teilautonomie", "Autonomie"]
+    },
+    "learning_loop": "Jeder abgeschlossene Auftrag, jede Entscheidung und jede Ausnahme fließt zurück in Preise, Planungskorridore und Präzedenzfälle – so macht jeder Durchlauf den nächsten besser.",
+    "points": [
+      {"title": "Verkettung statt Einzeltools", "text": "Einzelne KI-Tools sparen Minuten; verkettete Workflows verändern das Betriebsmodell. Das Zielbild wird je Kette geplant: Welche Bausteine existieren, welche fehlen, wo reißt der Fluss heute ab."},
+      {"title": "Der Mensch an den Toren", "text": "Teilautonomie heißt nicht menschenleer: Angebote, Freigaben und Kundenbeziehungen bleiben bewusst menschliche Tore – mit vollständiger, automatisch aufbereiteter Entscheidungsgrundlage."},
+      {"title": "Autonomie messbar machen", "text": "Der Autonomiegrad je Prozess wird zur Kennzahl: Dunkelverarbeitungsquote, Tage je Angebot, Stunden je Prüfung. Das macht Fortschritt steuerbar – und im Wettbewerb sichtbar."}
+    ]
+  },
+  "chapters": {
+    "overview": {
+      "name": "Überblick: Bereiche & Opportunities",
+      "headline_named": "Wo {client} heute Zeit verliert – und wo KI sie zurückgibt",
+      "headline_generic": "Wo Unternehmen heute Zeit verlieren – und wo KI sie zurückgibt",
+      "profile_unknown": "Die Bereiche und Opportunities in diesem Dokument folgen Mustern, die wir in vergleichbaren Unternehmen sehen. Sie sind ein Ausgangspunkt für unser Gespräch und werden gemeinsam mit Ihren Teams bestätigt oder verworfen.",
+      "profile_unknown_named": "Die Bereiche und Opportunities in diesem Dokument folgen Mustern, die wir in Unternehmen sehen, die mit {client} vergleichbar sind. Sie sind ein Ausgangspunkt für unser Gespräch und werden gemeinsam mit Ihren Teams bestätigt oder verworfen.",
+      "context_paragraph": "Der Engpass ist selten die Kernarbeit. Es ist die Arbeit drumherum: Angebote, Aufträge, Dokumente, Freigaben, Übergaben. All das lebt in Postfächern, Tabellen und individueller Erfahrung – genau dort, wo KI entwirft, prüft, abgleicht und orchestriert, während Menschen jede Entscheidung behalten.",
+      "key_message": "Jede entfallene Übergabe ist Marge – und ein schnelleres Versprechen, mit dem der Wettbewerb mithalten muss.",
+      "map_lead": "{count} Opportunities entlang der Wertschöpfungskette – jede in Teil 2 mit Lösung, Funktionsweise, Ergebnis und Discovery-Fragen vertieft.",
+      "business_case_lead": "Branchenübliche Wirkungskorridore vergleichbarer Unternehmen, geordnet nach Payback-Horizont.",
+      "business_case_footnote": "Branchen-Benchmarks als Arbeitshypothesen – im Baseline-Workshop gegen reale Kennzahlen zu validieren, keine Zusagen. KI entwirft, prüft und orchestriert; Menschen behalten jede Freigabe und Abnahme. Anbindung an die bestehende Systemlandschaft über Schnittstellen, keine Migration.",
+      "profile_provided": "Hintergrund zu diesem Gespräch: {text}",
+      "profile_researched": "Von der Website von {client} (Quellen in der Tabelle zum Unternehmenshintergrund): {text}",
+      "profile_researched_unnamed": "Von der Website des Unternehmens (Quellen in der Tabelle zum Unternehmenshintergrund): {text}",
+      "background_nav": "Unternehmenshintergrund",
+      "background_lead": "Was {company} auf der eigenen Website über sich veröffentlicht, zitiert mit der Seite, von der es stammt. Es sind die eigenen Aussagen des Unternehmens; die Herausforderungen und Opportunities in diesem Dokument bleiben Hypothesen, die wir gemeinsam validieren.",
+      "background_lead_1_1": "Was die öffentliche Website über das Unternehmen sagt, zitiert mit der Seite, von der es stammt. Es sind die eigenen Aussagen des Unternehmens; die Herausforderungen und Opportunities dieser Analyse bleiben Hypothesen, die zu validieren sind.",
+      "background_columns": ["Thema", "Aussage auf der Website", "Quelle"],
+      "background_footnote": "Gelesen von {site} am {date}. Die Aussagen sind wie auf der Website veröffentlicht zitiert und wurden nicht unabhängig geprüft.",
+      "thesis_title": "Arbeitshypothese",
+      "map_columns": ["Bereich", "Opportunities"],
+      "business_case_columns": ["Bereich", "Werthebel & typische Wirkung", "Payback"]
+    },
+    "deep_dive": {
+      "name": "Deep Dive je Opportunity",
+      "headline_named": "Wo steht {client} heute – und wo liegt die echte Opportunity?",
+      "headline_generic": "Wo stehen Sie heute – und wo liegt die echte Opportunity?",
+      "paragraphs": [
+        "Die folgenden Seiten zeigen je Opportunity die Lösung samt KI-Technologie, ihre Funktionsweise und das Ergebnis – und die Fragen, mit denen sich im Gespräch klären lässt, wo heute Tage und Fachstunden gebunden sind.",
+        "Zu jeder Opportunity gehört ein Signal – die Antwort, die zeigt, dass sich eine Vertiefung lohnt. Bleibt das Signal aus, ist auch das wertvoll: Dann ist der Bereich kein Kandidat für den Piloten. So entsteht eine belastbare Prioritätenliste je Funktion."
+      ],
+      "key_message": "Nicht wir entscheiden, wo die Opportunity liegt – die Antworten Ihrer Teams tun es."
+    },
+    "shadow": {
+      "name": "Prozesse außerhalb der Systeme",
+      "headline": "Was heute über Listen, Postfächer und Erfahrung läuft",
+      "paragraphs": [
+        "Die Systeme tragen den Vorgang – aber nicht die Steuerung drumherum: welcher Auftrag den umkämpften Slot bekommt, welchen Termin der Vertrieb zusagen darf, wie eine Ausnahme bewertet wird. Das läuft über Erfahrung, Besprechungen, persönliche Postfächer und Tabellen.",
+        "Diese Schattenprozesse sind für klassische Digitalisierung unsichtbar: Sie stehen in keinem Systemhandbuch. Genau deshalb sind sie das größte ungenutzte Potenzial – und zugleich das größte Risiko: Geht die Person, geht der Prozess."
+      ],
+      "key_message": "Das prägende Urteil steht in keinem System. Es lebt in Köpfen, Listen und Postfächern.",
+      "table_lead": "Typische Entscheidungen und Abläufe, die heute an den Systemen vorbeilaufen – und der KI-Ansatz, der sie unterstützt, ohne sie zu ersetzen:",
+      "table_footnote": "Eine Auswahl typischer Muster aus vergleichbaren Unternehmen – die tatsächliche Landkarte entsteht im Baseline-Workshop per strukturiertem Interview. Im Mittelpunkt steht die Entscheidung und wie sie zustande kommt, nicht das System dahinter.",
+      "findings_lead": "Warum diese Prozesse der eigentliche Hebel sind – und wie man sie erschließt:",
+      "table_columns": ["Entscheidung / Prozess", "Heute gesteuert über", "KI-Ansatz"]
+    },
+    "target": {
+      "name": "Zielbild: Teilautonomie",
+      "headline": "Wenn die Bausteine ineinandergreifen, werden aus Automatisierungen Workflows",
+      "paragraphs": [
+        "Jede Opportunity aus Teil 2 und 3 ist für sich ein Effizienzgewinn. Ihr eigentlicher Wert entsteht in der Kette: Der Output eines Bausteins wird zum Input des nächsten – aus der Anfrage wird das Angebot, aus dem Angebot der Auftrag, aus dem Auftrag die Lieferung, aus den Daten der Bericht.",
+        "So entsteht Schritt für Schritt ein teilautonomes Unternehmen: Routinevorgänge laufen durchgängig ohne manuelle Übergaben, und Menschen stehen an definierten Entscheidungstoren statt am Fließband der Zwischenschritte."
+      ],
+      "key_message": "Teilautonomie entsteht durch Verkettung – der Mensch steht an den Toren, nicht am Fließband.",
+      "table_lead": "{count} Workflow-Ketten, in denen die Bausteine aus Teil 2 und 3 ineinandergreifen – autonomer Fluss links, menschliche Entscheidungstore rechts:",
+      "table_footnote": "Jede Kette verbindet Bausteine als Schicht über der bestehenden Systemlandschaft – über Schnittstellen statt Migration; Freigaben bleiben beim Menschen. Ketten entstehen schrittweise: Jeder Baustein liefert einzeln Nutzen und wird verkettet, sobald der nächste steht.",
+      "findings_lead": "Wie Teilautonomie entsteht, gemessen wird – und was sie im Wettbewerb bedeutet:",
+      "table_columns": ["Workflow", "Autonomer Ablauf (Baustein-Kette)", "Mensch entscheidet bei"]
+    },
+    "closing": {
+      "name": "Fazit",
+      "headline": "Die Baseline entscheidet, nicht das Bauchgefühl",
+      "paragraphs": [
+        "Die Antworten auf diese Fragen ergeben die Baseline: Wo binden Angebote, Aufträge, Dokumente und Berichte heute Tage – und welche zwei Opportunities tragen den stärksten validierten Nutzen. Drei Schritte folgen: ein Baseline-Workshop, ein Pilot, der binnen Wochen messbar ist, und die Skalierung als Roadmap.",
+        "Die Quick Wins amortisieren sich typischerweise in drei bis sechs Monaten und tragen das Programm allein – im laufenden Betrieb, ohne Systemwechsel, mit jeder Freigabe dort, wo sie hingehört."
+      ],
+      "steps": [
+        {"title": "Baseline-Workshop", "text": "Ein strukturierter Workshop mit den Menschen, die die Prozesse täglich steuern. Reale Mengen, Durchlaufzeiten und Entscheidungswege werden erfasst, und die Benchmark-Korridore dieses Papiers werden bestätigt oder verworfen. Ergebnis ist eine priorisierte Liste mit zwei Pilotkandidaten."},
+        {"title": "Pilot binnen Wochen", "text": "Eine Opportunity wird über Schnittstellen auf den bestehenden Systemen umgesetzt und binnen Wochen, nicht Quartalen, gegen die Baseline gemessen. Menschen behalten jede Entscheidung; der Pilot belegt Mechanismus und messbare Wirkung, bevor etwas skaliert wird."},
+        {"title": "Roadmap zur Skalierung", "text": "Bewährte Bausteine werden Schritt für Schritt zu den Workflows aus Teil 4 verkettet. Die Roadmap ordnet nach validiertem Nutzen, legt die menschlichen Entscheidungstore fest und macht den Autonomiegrad je Prozess zu einer steuerbaren Kennzahl."}
+      ],
+      "steps_lead": "Drei Schritte führen von dieser Diskussionsgrundlage zu einem gemessenen Ergebnis:"
+    }
+  },
+  "cover": {
+    "eyebrow": "KI & Automatisierung · Diskussionsgrundlage",
+    "title_named": "KI-Potenziale für {client}",
+    "title_generic": "KI-Potenzialanalyse",
+    "subtitle": "Potenziallandkarte, Business Case und Deep Dives über {area_count} Unternehmensbereiche und {opportunity_count} Opportunities. Als Arbeitsgrundlage für unser Gespräch.",
+    "document_type": "Diskussionsgrundlage",
+    "short_title": "KI-Potenzialanalyse"
+  },
+  "in_short": {
+    "first_statement": "{opportunity_count} KI-Opportunities in {area_count} Unternehmensbereichen – von Quick Wins bis zu strategischen Hebeln.",
+    "second_statement": "Arbeitshypothese: Der Hebel liegt weniger in der Kernarbeit als in Übergaben, Dokumenten und Entscheidungen.",
+    "third_statement": "Zu jeder Opportunity: die Fragen für das Gespräch und das Signal, ob echtes Potenzial vorliegt.",
+    "scope_named": "Erstellt als Diskussionsgrundlage für das Gespräch mit {client}. Alle Wirkungsangaben sind Branchen-Benchmarks als Arbeitshypothesen, keine Zusagen. Menschen behalten jede Entscheidung, Freigabe und Abnahme.",
+    "scope_context": "Erstellt als Diskussionsgrundlage für unser Gespräch. Alle Wirkungsangaben sind Branchen-Benchmarks als Arbeitshypothesen, keine Zusagen. Menschen behalten jede Entscheidung, Freigabe und Abnahme.",
+    "scope_researched": "Erstellt als Diskussionsgrundlage für unser Gespräch, gestützt auf die öffentliche Website des Unternehmens. Alle Wirkungsangaben sind Branchen-Benchmarks als Arbeitshypothesen, keine Zusagen. Menschen behalten jede Entscheidung, Freigabe und Abnahme.",
+    "scope_generic": "Erstellt als Diskussionsgrundlage auf Basis von Mustern vergleichbarer Unternehmen. Alle Wirkungsangaben sind Branchen-Benchmarks als Arbeitshypothesen, keine Zusagen. Menschen behalten jede Entscheidung, Freigabe und Abnahme."
+  },
+  "thesis": {
+    "with_purpose": "Arbeitshypothese: Der Hebel für „{purpose}“ liegt weniger in der Kernarbeit als in den Übergaben, Dokumenten und Entscheidungen drumherum.",
+    "generic": "Arbeitshypothese: Zeit und Marge gehen weniger in der Kernarbeit verloren als in den Übergaben, Dokumenten und Entscheidungen drumherum."
+  },
+  "publisher": {
+    "unit": "AI & Automatisierung",
+    "company": "BOREK Solutions Group",
+    "address": "Altewiekring 20 A · 38102 Braunschweig",
+    "phone": "T +49 531 283 541 61",
+    "url": "boreksolutions.de",
+    "place": "Borek Solutions Group · Braunschweig"
+  },
+  "research": {
+    "web_research_note": "Es wurde keine Web- oder Unternehmensrecherche durchgeführt: Es ist kein freigegebener Recherche-Anbieter konfiguriert. Unternehmensspezifische Inhalte beschränken sich auf die Angaben des Nutzers.",
+    "always_unknown": ["Branche und Geschäftsmodell", "Unternehmensgröße, Standorte und Umsatz", "Systemlandschaft", "Prozessmengen und Durchlaufzeiten", "Entscheider und Organisation"],
+    "notes": [
+      "Opportunities, Schattenprozesse und Workflow-Ketten sind typische Muster aus der Borek-Opportunity-Bibliothek, keine Befunde über dieses Unternehmen.",
+      "Alle Wirkungsangaben sind Branchen-Benchmarks als Arbeitshypothesen; sie werden im Baseline-Workshop validiert."
+    ]
+  },
+  "layout": {
+    "as_of": "Stand {month}/{year}",
+    "contents": "Inhalt",
+    "technically": "Technisch:",
+    "payback_quick_win": "Quick Win · 3–6 Mon.",
+    "payback_strategic": "Strategisch · 12–24 Mon.",
+    "basis": {"industry_benchmark": "Branchen-Benchmark", "working_hypothesis": "Arbeitshypothese"},
+    "company_fallback": "das Unternehmen",
+    "date_fallback": "dem Datum der Analyse",
+    "months": ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
+    "closing_line": "Lassen Sie uns die erste Baseline gemeinsam erheben.",
+    "brand_claim": "Ihre AI-Abteilung. Geliefert, nicht aufgebaut.",
+    "nav": {
+      "cover": "Titel",
+      "contents": "Inhalt",
+      "opportunity_map": "Potenziallandkarte",
+      "business_case": "Business Case",
+      "shadow_processes": "Schattenprozesse",
+      "why_it_matters": "Warum es zählt",
+      "workflow_chains": "Workflow-Ketten",
+      "target_picture": "Zielbild",
+      "how_it_emerges": "Wie es entsteht",
+      "three_steps": "Drei Schritte"
+    }
+  }
+}

@@ -109,6 +109,7 @@ const FLAG_TEXT: Record<string, string> = {
   content_trimmed: "Some confirmed points did not fit the longest draft and were left out.",
   ai_written: "This text was written by the AI writer from your confirmed findings. Every sentence passed the automatic grounding check; read it against the findings yourself before you approve.",
   ai_fallback: "AI writing was not used for this draft, so the text comes from the rule-based writer. The reason is shown under the message.",
+  statements_not_in_email_language: "Some confirmed statements are in another language than this email. They are quoted as they were confirmed, not translated: translate them in the text before you confirm, keeping their meaning.",
 };
 export const emailFlagText = (flag: string) => FLAG_TEXT[flag] ?? `Check before sending: ${flag.replaceAll("_", " ")}.`;
 

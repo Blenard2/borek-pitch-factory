@@ -46,6 +46,8 @@ from fastapi import HTTPException
 
 from app.config import settings
 from app.services import deck_center
+from app.services.content_language import require_source_language
+from services.language import stored_language
 from app.services.api_errors import bad_request, conflict, not_found
 from llm.claude.client import ClaudeClientError, claude_credentials_problem, sonnet_model, structured_complete
 from services.followup import ai_writer
@@ -215,6 +217,8 @@ def resolve_finalized_source(store: Any, *, opportunity: dict[str, Any], opportu
         "confirmed_finding_count": manifest.get("confirmed_finding_count"),
         "excluded_finding_count": manifest.get("excluded_finding_count"),
         "renderer_version": RENDERER_VERSION,
+        # BAP-13: the language of the finalized package; the email is written in it.
+        "language": stored_language(frozen.get("language")),
     }
     return source, frozen
 
@@ -308,6 +312,7 @@ def write_variants(
     opportunity_id: UUID,
     writer: ai_writer.Complete | None = None,
     verifier: ai_writer.Complete | None = None,
+    language: str = "en",
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     """Both texts of the email - with and without the attachment sentence - and who wrote them.
 
@@ -321,6 +326,16 @@ def write_variants(
         rules[variant] = {"lengths": lengths, "review_flags": list(flags)}
     if not live:
         return rules, {"mode": WRITER_RULES, "model": None, "prompt_version": RENDERER_VERSION, "verified": False, "fallback_reason": None, "verification": None}
+    if language != "en":
+        # BAP-13: the AI writer's grounding checks (commitments, dates, names by capital letter) are
+        # English only - German capitalises every noun. A German email is written by the rules.
+        for variant in rules.values():
+            variant["review_flags"].append(FLAG_AI_FALLBACK)
+        return rules, {
+            "mode": WRITER_FALLBACK, "model": None, "prompt_version": RENDERER_VERSION, "verified": False,
+            "fallback_reason": {"code": "AI_WRITER_LANGUAGE_UNSUPPORTED", "message": "The AI writer checks English text only; this German email was written by the rule-based writer."},
+            "verification": None,
+        }
     model = sonnet_model()
     try:
         result = ai_writer.write_with_ai(
@@ -416,8 +431,12 @@ def master_generation(
     live: bool | None = None,
     writer: ai_writer.Complete | None = None,
     verifier: ai_writer.Complete | None = None,
+    language: str | None = None,
 ) -> dict[str, Any] | None:
     """Draft content from the finalized V2 package, or None for a standalone PPT #2 opportunity.
+
+    BAP-13: written in the package's language; another explicit ``language`` is refused, because
+    the confirmed statements are used in their own words.
 
     The text only says that the presentation is attached when a file is selected: ``attachment``,
     or the selection the stored draft holds for this presentation version.
@@ -426,14 +445,16 @@ def master_generation(
     if resolved is None:
         return None
     source, frozen = resolved
+    language = require_source_language(language, source["language"], artifact="The follow-up email", source="presentation package")
     statics = require_complete_statics(opportunity.get("followup_statics"))
     if attachment is None:
         existing = store.get_email_draft(opportunity_id=opportunity_id, user_id=user_id, journey_stage=journey_stage)
         attachment = presentation_attached(attachment_selection(existing, source))
     try:
-        content = content_from_snapshot(frozen)
+        content = content_from_snapshot(frozen, language)
         variants, written_by = write_variants(
-            content, statics, live=ai_writing_enabled() if live is None else live, opportunity_id=opportunity_id, writer=writer, verifier=verifier
+            content, statics, live=ai_writing_enabled() if live is None else live, opportunity_id=opportunity_id, writer=writer, verifier=verifier,
+            language=language,
         )
     except (NoConfirmedContent, ContentDoesNotFit) as exc:
         raise bad_request(exc.code, str(exc)) from exc

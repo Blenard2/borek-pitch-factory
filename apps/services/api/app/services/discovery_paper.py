@@ -28,6 +28,7 @@ from services.framework.discovery_analysis.pipeline import (
     generate_discovery_analysis,
 )
 from services.framework.discovery_paper import validate_discovery_paper
+from services.language import normalize_language, stored_language
 
 _SYSTEM_FIELDS = (
     "opportunity_id",
@@ -54,9 +55,18 @@ def generate_discovery_paper(
     user_id: UUID,
     provider: Any = None,
     optional_parts: dict[str, bool] | None = None,
+    language: str | None = None,
 ) -> dict[str, Any]:
-    """Generate a new AI Opportunity Analysis. An approved version is never touched."""
+    """Generate a new AI Opportunity Analysis. An approved version is never touched.
+
+    BAP-13: ``language`` (``en``/``de``) is the content language; without it, the opportunity's
+    language. An explicit choice becomes the opportunity's language, so Post Meeting follows it.
+    Every generation is a new version: a German analysis never replaces an English one.
+    """
     opportunity = store.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
+    language = normalize_language(language, default=stored_language(opportunity.get("language")))
+    if opportunity.get("language") != language:
+        opportunity = store.update_opportunity(opportunity_id=opportunity_id, user_id=user_id, updates={"language": language})
     approved = store.get_latest_approved_discovery_paper(
         opportunity_id=opportunity_id,
         user_id=user_id,
@@ -78,6 +88,7 @@ def generate_discovery_paper(
             research_provider=provider,
             optional_parts=optional_parts,
             latest_approved_version_id=preserved_approval,
+            language=language,
         )
     except DiscoveryAnalysisStageError as exc:
         raise bad_request("DISCOVERY_PAPER_GENERATION_FAILED", str(exc)) from exc

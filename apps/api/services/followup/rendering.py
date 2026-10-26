@@ -20,8 +20,24 @@ def primary_recipient(statics: dict[str, Any]) -> dict[str, Any]:
     return recipients[0] if recipients else {}
 
 
-def greeting(statics: dict[str, Any]) -> str:
+_MALE = frozenset({"herr", "mr", "mr.", "sir"})
+_FEMALE = frozenset({"frau", "ms", "ms.", "mrs", "mrs.", "miss", "madam"})
+
+
+def greeting(statics: dict[str, Any], language: str = "en") -> str:
     recipient = primary_recipient(statics)
+    if language == "de":
+        # BAP-13: German forms of address. The salutation is free text; a form we cannot read as
+        # Herr or Frau gets the neutral "Guten Tag", never a guessed gender.
+        if statics.get("salutation_style") == "formal":
+            salutation = str(recipient.get("salutation") or "").strip()
+            last = recipient.get("last_name")
+            if salutation.lower() in _MALE:
+                return f"Sehr geehrter Herr {last},"
+            if salutation.lower() in _FEMALE:
+                return f"Sehr geehrte Frau {last},"
+            return f"Guten Tag {salutation} {last},"
+        return f"Hallo {recipient.get('first_name')},"
     if statics.get("salutation_style") == "formal":
         return f"Dear {recipient.get('salutation')} {recipient.get('last_name')},"
     return f"Hi {recipient.get('first_name')},"
@@ -33,7 +49,7 @@ def action_due(due: str) -> str:
 
 def followup_content_word_count(body: str) -> int:
     without_greeting = re.sub(r"^\s*[^\n]+,\s*\n", "", body, count=1)
-    parts = re.split(r"\n\s*Best regards\s*\n", without_greeting, maxsplit=1, flags=re.IGNORECASE)
+    parts = re.split(r"\n\s*(?:Best regards|Viele Grüße|Mit freundlichen Grüßen)\s*\n", without_greeting, maxsplit=1, flags=re.IGNORECASE)
     content = parts[0].strip()
     return len(content.split()) if content else 0
 

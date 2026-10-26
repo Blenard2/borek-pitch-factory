@@ -30,6 +30,8 @@ from pathlib import Path
 from typing import Any
 
 import jsonschema
+
+from services.language import DEFAULT_LANGUAGE, normalize_language, stored_language
 from jsonschema import FormatChecker
 
 from services.meeting.extraction import _comparable, _evidence_source
@@ -52,6 +54,41 @@ SECTION_TITLES = {
     "open_questions": "Open questions",
 }
 SECTION_KEYS = tuple(SECTION_TITLES)
+# BAP-13: the fixed wording of Discovery 2 per language. Items keep the wording they were
+# approved or confirmed in - they are statements, never rewritten.
+SECTION_TITLES_BY_LANGUAGE = {
+    "en": SECTION_TITLES,
+    "de": {
+        "context": "Kontext",
+        "requirements": "Anforderungen",
+        "challenges": "Herausforderungen",
+        "priorities": "Prioritäten",
+        "opportunities": "Opportunities",
+        "discussed_solutions": "Besprochene Lösungen",
+        "decisions": "Entscheidungen",
+        "follow_ups": "Nächste Schritte",
+        "open_questions": "Offene Fragen",
+    },
+}
+_TEXT = {
+    "en": {
+        "purpose": "Meeting purpose: {purpose}",
+        "meeting": "From the first meeting: {counts}. Items from Discovery 1 are marked as carried forward.",
+        "nothing": "The first meeting added no new items. Items from Discovery 1 are marked as carried forward.",
+    },
+    "de": {
+        "purpose": "Gesprächsanlass: {purpose}",
+        "meeting": "Aus dem ersten Gespräch: {counts}. Inhalte aus Discovery 1 sind als übernommen gekennzeichnet.",
+        "nothing": "Das erste Gespräch hat keine neuen Punkte ergeben. Inhalte aus Discovery 1 sind als übernommen gekennzeichnet.",
+    },
+}
+_OUTPUT_LANGUAGE = {
+    "de": (
+        "OUTPUT LANGUAGE: German. Write every item's text in professional German for the client's management "
+        "(formal 'Sie'), whatever language the sources are in. Keep names, figures and technical terms as they are and "
+        "change no fact. 'evidence' stays an exact quote in the language of its source."
+    ),
+}
 MEETING_SOURCES = frozenset({"transcript", "personal_notes", "both"})
 # Long enough for any statement made in a meeting; content is never cut, an over-long edit is refused.
 MAX_ITEM_CHARACTERS = 4000
@@ -146,7 +183,7 @@ def meeting_items(document: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
 # ----------------------------------------------------------------------------- inputs
 
 
-def carried_forward_items(paper: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+def carried_forward_items(paper: dict[str, Any], language: str | None = None) -> dict[str, list[dict[str, Any]]]:
     """What Discovery 1 established, as Discovery 2 items in Discovery 1's own wording."""
     if paper.get("schema_version") != "2.0" or not isinstance(paper.get("analysis"), dict):
         raise Discovery2Error(
@@ -165,7 +202,8 @@ def carried_forward_items(paper: dict[str, Any]) -> dict[str, list[dict[str, Any
     carry("context", "analysis.research.core_thesis", analysis["research"]["core_thesis"]["text"])
     purpose = brief.get("meeting_purpose") or (paper.get("intake_context") or {}).get("meeting_purpose")
     if purpose:
-        carry("context", "intake_context.meeting_purpose", f"Meeting purpose: {purpose}")
+        text = _TEXT[stored_language(language or paper.get("language"))]["purpose"].format(purpose=purpose)
+        carry("context", "intake_context.meeting_purpose", text)
     target = (((analysis.get("framing") or {}).get("chapters") or {}).get("target") or {}).get("key_message")
     if target:
         carry("context", "analysis.framing.chapters.target.key_message", target)
@@ -249,8 +287,13 @@ def generate_discovery2(
     basis: str,
     live: bool,
     complete: Complete | None = None,
+    language: str | None = None,
 ) -> dict[str, Any]:
-    """A complete ready Discovery 2. ``complete`` is required in live mode (the model call)."""
+    """A complete ready Discovery 2. ``complete`` is required in live mode (the model call).
+
+    BAP-13: written in ``language``, which defaults to the approved Discovery 1's language. Items
+    carried from Discovery 1 keep its wording, so the two languages must match.
+    """
     paper = discovery1.get("paper_json")
     if str(discovery1.get("status")) != "approved" or not isinstance(paper, dict):
         raise Discovery2Error("Approve the Discovery document before generating Discovery 2.", "DISCOVERY_NOT_APPROVED")
@@ -264,7 +307,15 @@ def generate_discovery2(
     }
     if not any(confirmed.values()):
         raise Discovery2Error("Confirm at least one meeting finding before generating Discovery 2.", "MEETING_FINDINGS_NONE_CONFIRMED")
-    carried = carried_forward_items(paper)
+    discovery1_language = stored_language(paper.get("language"))
+    language = normalize_language(language, default=discovery1_language)
+    if language != discovery1_language:
+        raise Discovery2Error(
+            "Discovery 2 is written in the language of the approved Discovery document it builds on. "
+            "Generate and approve the Discovery document in this language first.",
+            "LANGUAGE_MISMATCH",
+        )
+    carried = carried_forward_items(paper, language)
     notes_text = personal_notes.get("text")
     meeting = _fixture_meeting_items(confirmed)
     if live:
@@ -277,11 +328,12 @@ def generate_discovery2(
             notes_text=notes_text,
             confirmed=confirmed,
             references=discovery1_reference_texts(paper),
+            language=language,
         )
     sections = []
     for key in SECTION_KEYS:
         items = list(carried.get(key, [])) + list(meeting.get(key, []))
-        sections.append({"key": key, "title": SECTION_TITLES[key], "items": items})
+        sections.append({"key": key, "title": SECTION_TITLES_BY_LANGUAGE[language][key], "items": items})
     client = str(opportunity.get("client_name") or (paper.get("presentation_brief") or {}).get("client_name") or "").strip()
     document = {
         "schema_version": SCHEMA_VERSION,
@@ -293,6 +345,7 @@ def generate_discovery2(
         "error": None,
         "generation": {"mode": "live" if live else "fixture", "generator_version": GENERATOR_VERSION},
         "title": f"Discovery 2 — {client}" if client else "Discovery 2",
+        "language": language,
         "client_name": client,
         "sources": {
             "discovery1": {
@@ -327,16 +380,16 @@ def generate_discovery2(
 
 def summarize(document: dict[str, Any], *, previous: str) -> dict[str, str]:
     """Deterministic in both modes: counted from the items, so the summary can never claim more."""
+    language = stored_language(document.get("language"))
     counts: list[str] = []
     for section in document["sections"]:
         fresh = [item for item in section["items"] if item["origin"] in {"meeting", "owner"}]
         if fresh and section["key"] in CATEGORIES:
-            counts.append(f"{len(fresh)} {section['title'].lower()}")
-    meeting = (
-        "From the first meeting: " + ", ".join(counts) + ". Items from Discovery 1 are marked as carried forward."
-        if counts
-        else "The first meeting added no new items. Items from Discovery 1 are marked as carried forward."
-    )
+            # German nouns keep their capital letter.
+            title = section["title"] if language == "de" else section["title"].lower()
+            counts.append(f"{len(fresh)} {title}")
+    text = _TEXT[language]
+    meeting = text["meeting"].format(counts=", ".join(counts)) if counts else text["nothing"]
     return {"previous": previous, "meeting": meeting}
 
 
@@ -433,8 +486,11 @@ def _live_meeting_items(
     notes_text: str | None,
     confirmed: dict[str, list[dict[str, Any]]],
     references: dict[str, str],
+    language: str = DEFAULT_LANGUAGE,
 ) -> dict[str, list[dict[str, Any]]]:
     system = _PROMPT_PATH.read_text(encoding="utf-8")
+    if language in _OUTPUT_LANGUAGE:
+        system = f"{system.rstrip()}\n\n{_OUTPUT_LANGUAGE[language]}\n"
     user = build_live_message(paper=paper, transcript_text=transcript_text, notes_text=notes_text, confirmed=confirmed, references=references)
     raw = complete(system, user, _live_tool_schema())
     if not isinstance(raw, dict):

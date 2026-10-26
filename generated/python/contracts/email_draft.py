@@ -59,6 +59,11 @@ class LengthBody(BaseModel):
     )
 
 
+class Language(Enum):
+    en = 'en'
+    de = 'de'
+
+
 class FinalizedSource(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -80,6 +85,10 @@ class FinalizedSource(BaseModel):
     extraction_execution_mode: str | None = None
     confirmed_finding_count: int | None = None
     excluded_finding_count: int | None = None
+    language: Language | None = Field(
+        None,
+        description='BAP-13: language of the finalized package the email is written from.',
+    )
     renderer_version: str | None = Field(None, min_length=1)
 
 

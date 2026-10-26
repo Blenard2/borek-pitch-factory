@@ -41,16 +41,17 @@ MIN_EVIDENCE_WORDS = 3
 _LINE_LEAD = (
     r"(?i)^\s*(?:[-*\u2022]\s+)?"  # list bullet
     r"(?:[\[(]?\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{1,3})?[\])]?\s*(?:[-\u2013\u2014]\s*)?)?"  # time stamp
-    r"(?:[A-Za-z][A-Za-z0-9 .'\-_()]{0,80}:\s*)??"  # speaker name
+    r"(?:[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9 .'\-_()]{0,80}:\s*)??"  # speaker name (BAP-13: also "Jörg", "Müller")
 )
+# BAP-13: German labels as well - the labelled statement is read verbatim either way.
 _LABELS: tuple[tuple[str, str], ...] = (
-    ("requirements", r"requirements?"),
-    ("challenges", r"challenges?"),
-    ("priorities", r"priorit(?:y|ies)"),
-    ("opportunities", r"opportunit(?:y|ies)"),
-    ("discussed_solutions", r"discussed solutions?"),
-    ("decisions", r"decisions?"),
-    ("follow_ups", r"follow[- ]?ups?"),
+    ("requirements", r"requirements?|anforderung(?:en)?"),
+    ("challenges", r"challenges?|herausforderung(?:en)?"),
+    ("priorities", r"priorit(?:y|ies)|priorität(?:en)?"),
+    ("opportunities", r"opportunit(?:y|ies)|chancen?|potenziale?"),
+    ("discussed_solutions", r"discussed solutions?|besprochene lösung(?:en)?|lösungsansatz|lösungsansätze"),
+    ("decisions", r"decisions?|entscheidung(?:en)?|beschlüsse|beschluss"),
+    ("follow_ups", r"follow[- ]?ups?|nächster? schritte?|nächste schritte|to-?dos?"),
 )
 _LINE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
     (category, re.compile(_LINE_LEAD + r"(?:" + label + r")\s*:\s*(.+)$")) for category, label in _LABELS

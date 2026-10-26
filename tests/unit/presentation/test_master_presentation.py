@@ -166,6 +166,9 @@ def test_only_an_approved_discovery_v2_version_is_accepted() -> None:
         "discovery_schema_version": "2.0",
         "appendix_source_hash": appendix.appendix_source_hash(row["paper_json"]),
         "deck_layout": "closing-last:v1",
+        # BAP-13: appendix language and the language of the canonical master slides.
+        "language": "en",
+        "master_language": "en",
     }
     with pytest.raises(appendix.AppendixPlanError, match="approved Discovery version"):
         generation_manifest(approved_row(status="draft"))

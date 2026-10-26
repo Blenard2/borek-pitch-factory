@@ -14,8 +14,11 @@ from pathlib import Path
 from typing import Any
 
 from services.framework.discovery_analysis.model import LIMITS
+from services.language import DEFAULT_LANGUAGE, stored_language
 
 LIBRARY_PATH = Path(__file__).with_name("library.json")
+# BAP-13: one library per content language, same structure and ids.
+LIBRARY_PATHS = {"en": LIBRARY_PATH, "de": Path(__file__).with_name("library_de.json")}
 
 _FACT_LABELS = (
     ("client_name", "Company name"),
@@ -24,19 +27,50 @@ _FACT_LABELS = (
     ("meeting_purpose", "Meeting purpose"),
     ("additional_information", "Additional information"),
 )
+# BAP-13: the same labels in German.
+_FACT_LABELS_DE = {
+    "client_name": "Unternehmensname",
+    "contact_name": "Ansprechpartner",
+    "website_url": "Website",
+    "meeting_purpose": "Gesprächsanlass",
+    "additional_information": "Weitere Informationen",
+}
+# Labels of facts quoted from the company website (services.research.website), in German.
+WEBSITE_FACT_LABELS_DE = {
+    "Company description (website)": "Unternehmensbeschreibung (Website)",
+    "About the company (website)": "Über das Unternehmen (Website)",
+    "Address (website)": "Adresse (Website)",
+    "Founded (website)": "Gegründet (Website)",
+    "Service (website)": "Leistung (Website)",
+    "Product (website)": "Produkt (Website)",
+    "Solution (website)": "Lösung (Website)",
+    "Industry served (website)": "Bediente Branche (Website)",
+}
 
 
-@lru_cache(maxsize=1)
-def _library_text() -> str:
-    return LIBRARY_PATH.read_text(encoding="utf-8")
+def fact_labels(language: str = DEFAULT_LANGUAGE) -> tuple[tuple[str, str], ...]:
+    """(context key, printed label) of the user's own facts in ``language``."""
+    if stored_language(language) == "de":
+        return tuple((key, _FACT_LABELS_DE[key]) for key, _label in _FACT_LABELS)
+    return _FACT_LABELS
 
 
-def load_library() -> dict[str, Any]:
-    return json.loads(_library_text())
+def website_fact_label(label: str, language: str = DEFAULT_LANGUAGE) -> str:
+    return WEBSITE_FACT_LABELS_DE.get(label, label) if stored_language(language) == "de" else label
 
 
-def build_fixture_analysis(context: dict[str, Any], optional_parts: dict[str, bool]) -> dict[str, Any]:
-    library = load_library()
+@lru_cache(maxsize=4)
+def _library_text(language: str = DEFAULT_LANGUAGE) -> str:
+    return LIBRARY_PATHS[stored_language(language)].read_text(encoding="utf-8")
+
+
+def load_library(language: str = DEFAULT_LANGUAGE) -> dict[str, Any]:
+    """The opportunity library and fixed texts in ``language`` (English unless German is asked for)."""
+    return json.loads(_library_text(stored_language(language)))
+
+
+def build_fixture_analysis(context: dict[str, Any], optional_parts: dict[str, bool], language: str = DEFAULT_LANGUAGE) -> dict[str, Any]:
+    library = load_library(language)
     client = context["client_name"]
     purpose = context["meeting_purpose"]
     additional = context["additional_information"] or ""
@@ -46,7 +80,8 @@ def build_fixture_analysis(context: dict[str, Any], optional_parts: dict[str, bo
     chapters = library["chapters"]
     cover = library["cover"]
     in_short = library["in_short"]
-    provided = [(label, context[key]) for key, label in _FACT_LABELS if context[key]]
+    labels = fact_labels(language)
+    provided = [(label, context[key]) for key, label in labels if context[key]]
 
     profile_text = _fit_sentences(additional, LIMITS["chapter_paragraph"] - len(chapters["overview"]["profile_provided"]))
     # Without a company description the paragraph says what the content is based on - patterns of
@@ -79,7 +114,7 @@ def build_fixture_analysis(context: dict[str, Any], optional_parts: dict[str, bo
                 {"label": label, "value": value, "origin": "USER_INPUT", "source_refs": []}
                 for label, value in provided
             ],
-            "unknown_facts": [label for key, label in _FACT_LABELS if not context[key]]
+            "unknown_facts": [label for key, label in labels if not context[key]]
             + library["research"]["always_unknown"],
             "web_research": {"performed": False, "note": library["research"]["web_research_note"]},
         },
@@ -190,7 +225,7 @@ def prioritize_by_website(areas: list[dict[str, Any]], signals: list[dict[str, A
     areas[:] = [area for area in areas if area["priority"]] + [area for area in areas if not area["priority"]]
 
 
-def website_profile_text(facts: list[dict[str, Any]]) -> str:
+def website_profile_text(facts: list[dict[str, Any]], language: str = DEFAULT_LANGUAGE) -> str:
     """The company profile from website facts: its own description, else what it lists.
 
     Only quoted values are used. Without a description the profile names the services,
@@ -202,26 +237,27 @@ def website_profile_text(facts: list[dict[str, Any]]) -> str:
     offerings = [fact["value"] for fact in facts if fact["kind"] == "offering"][:6]
     industries = [fact["value"] for fact in facts if fact["kind"] == "industry"][:6]
     parts = []
+    german = stored_language(language) == "de"
     if offerings:
-        parts.append("Services and products named on the website: " + "; ".join(offerings) + ".")
+        parts.append(("Auf der Website genannte Leistungen und Produkte: " if german else "Services and products named on the website: ") + "; ".join(offerings) + ".")
     if industries:
-        parts.append("Industries named on the website: " + "; ".join(industries) + ".")
+        parts.append(("Auf der Website genannte Branchen: " if german else "Industries named on the website: ") + "; ".join(industries) + ".")
     if not parts:
         parts.append("; ".join(f"{fact['label']}: {fact['value']}" for fact in facts[:4]) + ".")
     return " ".join(parts)
 
 
-def researched_scope() -> str:
+def researched_scope(language: str = DEFAULT_LANGUAGE) -> str:
     """The scope note of an analysis built from the context provided and the client's website."""
-    return load_library()["in_short"]["scope_researched"]
+    return load_library(language)["in_short"]["scope_researched"]
 
 
-def researched_profile_paragraph(text: str, client: str = "") -> str | None:
+def researched_profile_paragraph(text: str, client: str = "", language: str = DEFAULT_LANGUAGE) -> str | None:
     """The overview's profile paragraph from a description quoted from the company's website.
 
     Names the company ("From the Wahl & CO website ...") when the name is known.
     """
-    overview = load_library()["chapters"]["overview"]
+    overview = load_library(language)["chapters"]["overview"]
     named = client.replace("{", "{{").replace("}", "}}")  # a name is text, never a format field
     template = overview["profile_researched"].replace("{client}", named) if client else overview["profile_researched_unnamed"]
     fitted = _fit_sentences(text, LIMITS["chapter_paragraph"] - len(template))

@@ -31,6 +31,7 @@ import json
 import re
 from typing import Any
 
+from services.language import stored_language
 from services.presentation.borek_deck.engine import engine
 from services.presentation.master_deck.appendix import (
     BENCHMARK_NOTE,
@@ -87,6 +88,203 @@ _STOPWORDS = frozenset(
 )
 _MATRIX_TOP, _MATRIX_BOTTOM = 400.0, 940.0
 
+# BAP-13: German content words that say nothing about the subject of a statement.
+_STOPWORDS_DE = frozenset(
+    "dass diese dieser dieses diesem diesen eine einen einer eines einem haben hatte hatten werden wird wurde wurden "
+    "nicht noch auch mehr sehr nach über unter durch beim sowie oder aber wenn dann heute aktuell derzeit immer alle "
+    "jede jeder jedes jeden unser unsere unseren ihre ihren ihrer sein sind kann können müssen muss sollen soll sollte "
+    "wollen will möchten zuerst erste ersten nächste nächsten vorher danach andere anderen gleiche viele mehrere team "
+    "teams leute unternehmen firma kunde kunden heute system systeme daten prozess prozesse arbeit zeit sache sachen "
+    "machen macht nehmen nimmt erledigt bitte damit dafür dabei dort hier etwa weitere weiteren schon wieder".split()
+)
+
+# BAP-13: the appendix's own wording per language - the language of the approved Discovery. Codes
+# (R, C, P, O, S, D, F, N, B, A, Q) stay as they are: they are structure, not words.
+V2_TEXT: dict[str, dict[str, Any]] = {
+    "en": {
+        "category": CATEGORY_LABEL,
+        "named": "the client",
+        "divider_kicker": "Appendix · After our first meeting",
+        "divider_title": "After our first meeting",
+        "divider_text": "What we heard in our first conversation, what we suggest on that basis, and what is still open.",
+        "said_title": "Said in the meeting",
+        "said_text": "Each point is supported by the transcript of our first conversation and was confirmed for this presentation. It may summarise what was said rather than quote it.",
+        "correct_title": "Please correct us",
+        "correct_text": "If we misunderstood a point, tell us. This page is the basis for everything that follows.",
+        "discussed_title": "Discussed, not decided",
+        "discussed_text": "Solutions marked as discussed were mentioned in the conversation. Decisions are listed separately.",
+        "meeting_prefix": "From the meeting",
+        "kicker_client": "From the meeting · Client statements",
+        "heard_title": "What we heard in our first meeting",
+        "heard_lead": "The points {named} raised in our first meeting, as we understood them.",
+        "needs_title": "What you need and what comes first",
+        "needs_lead": "Requirements and priorities as {named} described them in our first meeting.",
+        "situation_title": "Where it is difficult today and where you see potential",
+        "situation_lead": "Challenges and opportunities as {named} described them in our first meeting.",
+        "kicker_discussed": "From the meeting · Solutions discussed",
+        "discussed_slide_title": "Solutions we talked about",
+        "discussed_lead": "Approaches that came up in our first meeting. They were discussed, not agreed.",
+        "our_observation": "Our observation",
+        "reviewed_by_us": "Reviewed by us",
+        "observations_title": "Our observations",
+        "observations_text": "From our own notes after the meeting, not from the transcript. We would like to verify each of them with you.",
+        "reviewed_text": "Written or reworded by our team when we reviewed Discovery 2: our reading of the meeting, not a quote from the transcript and not from our notes.",
+        "both_text": "'Our observation' is from our own notes; 'Reviewed by us' was written or reworded by our team in Discovery 2. Neither is a quote from the transcript.",
+        "references_title": "Borek references",
+        "references_text": "From Borek's approved reference library: examples of comparable work, not statements about your company.",
+        "not_client": "Not client statements",
+        "kicker_borek": "From Borek · Not client statements",
+        "add_start_title": "What we add and where we would start",
+        "add_start_lead": "Our own {kind} and opportunities from the approved Discovery analysis. Figures are industry benchmarks, not commitments.",
+        "kind_observation": "observation",
+        "kind_reference": "reference",
+        "why_start_title": "Why these starting points",
+        "add_title": "What we add from our side",
+        "add_lead": "Our own observations after the meeting and approved Borek references. None of this was said by {named}.",
+        "observations_prefix": "Our observations",
+        "kicker_observations": "Our observations · Not client statements",
+        "noted_title": "What we noted for ourselves",
+        "noted_lead": "Observations by the Borek team after the meeting. They are our reading, not statements by {named}.",
+        "not_transcript_title": "Not from the transcript",
+        "not_transcript_text": "None of these points was said in this form during the meeting.",
+        "kicker_references": "Borek references · Not client statements",
+        "ref_slide_title": "Borek references that fit what we heard",
+        "ref_lead": "Approved Borek reference use cases selected for this conversation.",
+        "use_title": "How we use them",
+        "use_text": "As examples of how comparable work was delivered, to be checked against your situation.",
+        "borek_reference": "Borek reference",
+        "recommendation": "Borek recommendation",
+        "rec_title": "Where we would start, given what we heard",
+        "rec_lead_d2": "Opportunities carried forward in the approved Discovery 2 that relate to points you raised in the meeting.",
+        "rec_lead": "Opportunities from the approved Discovery analysis that relate to points you raised in the meeting.",
+        "why_title": "Why these",
+        "benchmarks_title": "Benchmarks, not commitments",
+        "benchmark_note": BENCHMARK_NOTE,
+        "open_question": "Open question",
+        "source_d2": "the approved Discovery 2",
+        "source_d1": "the Discovery analysis",
+        "decisions_title": "Decisions and follow-ups",
+        "decisions_text": "Supported by the transcript of our first conversation and confirmed for this presentation.",
+        "open_title": "Open questions",
+        "open_text": "Questions that are still open in {source}. We would like to clarify them with you.",
+        "missing_text": "If a decision or follow-up is missing or wrong, tell us. We will update this page.",
+        "kicker_closing_open": "Decisions · Next steps · Open questions",
+        "kicker_closing": "From the meeting · Decisions and next steps",
+        "agreed_open_title": "What was agreed and what is still open",
+        "agreed_title": "What was agreed",
+        "closing_lead_both": "Decisions and follow-ups come from the meeting. Open questions come from {source}.",
+        "closing_lead_open": "Open questions from {source}.",
+        "closing_lead": "Decisions and follow-ups as they were stated in our first meeting.",
+        "decided": "Decided in the meeting",
+        "next_kicker": "Borek recommendation · Next phase",
+        "next_title": "How we suggest to continue",
+        "updated_opportunity": "Updated opportunity",
+        "evidence_names": {
+            "requirements": "requirements", "challenges": "challenges", "priorities": "priorities", "opportunities": "opportunities",
+            "discussed_solutions": "solutions we discussed", "decisions": "decisions", "follow_ups": "follow-ups",
+        },
+        "evidence": "They relate to the {listed} you described in our first meeting. Whether they fit is for you to confirm.",
+        "and": " and ",
+    },
+    "de": {
+        "category": {
+            "requirements": "Anforderung", "challenges": "Herausforderung", "priorities": "Priorität", "opportunities": "Opportunity",
+            "discussed_solutions": "Besprochene Lösung", "decisions": "Entscheidung", "follow_ups": "Nächster Schritt",
+        },
+        "named": "Ihr Unternehmen",
+        "divider_kicker": "Anhang · Nach unserem ersten Gespräch",
+        "divider_title": "Nach unserem ersten Gespräch",
+        "divider_text": "Was wir in unserem ersten Gespräch gehört haben, was wir darauf aufbauend vorschlagen und was noch offen ist.",
+        "said_title": "Im Gespräch gesagt",
+        "said_text": "Jeder Punkt ist durch das Transkript unseres ersten Gesprächs belegt und wurde für diese Präsentation bestätigt. Er kann das Gesagte zusammenfassen, statt es wörtlich zu zitieren.",
+        "correct_title": "Bitte korrigieren Sie uns",
+        "correct_text": "Wenn wir einen Punkt falsch verstanden haben, sagen Sie es uns. Diese Seite ist die Grundlage für alles Weitere.",
+        "discussed_title": "Besprochen, nicht entschieden",
+        "discussed_text": "Als besprochen markierte Lösungen wurden im Gespräch erwähnt. Entscheidungen stehen gesondert.",
+        "meeting_prefix": "Aus dem Gespräch",
+        "kicker_client": "Aus dem Gespräch · Aussagen des Kunden",
+        "heard_title": "Was wir in unserem ersten Gespräch gehört haben",
+        "heard_lead": "Die Punkte, die {named} in unserem ersten Gespräch angesprochen hat, so wie wir sie verstanden haben.",
+        "needs_title": "Was Sie brauchen und was zuerst kommt",
+        "needs_lead": "Anforderungen und Prioritäten, wie {named} sie in unserem ersten Gespräch beschrieben hat.",
+        "situation_title": "Wo es heute schwierig ist und wo Sie Potenzial sehen",
+        "situation_lead": "Herausforderungen und Opportunities, wie {named} sie in unserem ersten Gespräch beschrieben hat.",
+        "kicker_discussed": "Aus dem Gespräch · Besprochene Lösungen",
+        "discussed_slide_title": "Lösungen, über die wir gesprochen haben",
+        "discussed_lead": "Ansätze, die in unserem ersten Gespräch aufkamen. Sie wurden besprochen, nicht vereinbart.",
+        "our_observation": "Unsere Beobachtung",
+        "reviewed_by_us": "Von uns überarbeitet",
+        "observations_title": "Unsere Beobachtungen",
+        "observations_text": "Aus unseren eigenen Notizen nach dem Gespräch, nicht aus dem Transkript. Wir möchten jede davon mit Ihnen prüfen.",
+        "reviewed_text": "Von unserem Team bei der Durchsicht von Discovery 2 formuliert oder umformuliert: unsere Lesart des Gesprächs, kein Zitat aus dem Transkript und nicht aus unseren Notizen.",
+        "both_text": "„Unsere Beobachtung“ stammt aus unseren Notizen; „Von uns überarbeitet“ hat unser Team in Discovery 2 formuliert oder umformuliert. Beides ist kein Zitat aus dem Transkript.",
+        "references_title": "Borek-Referenzen",
+        "references_text": "Aus der freigegebenen Referenzbibliothek von Borek: Beispiele vergleichbarer Arbeit, keine Aussagen über Ihr Unternehmen.",
+        "not_client": "Keine Aussagen des Kunden",
+        "kicker_borek": "Von Borek · Keine Aussagen des Kunden",
+        "add_start_title": "Was wir ergänzen und wo wir beginnen würden",
+        "add_start_lead": "Unsere eigene {kind} und Opportunities aus der freigegebenen Discovery-Analyse. Zahlen sind Branchen-Benchmarks, keine Zusagen.",
+        "kind_observation": "Beobachtung",
+        "kind_reference": "Referenz",
+        "why_start_title": "Warum diese Ansatzpunkte",
+        "add_title": "Was wir von unserer Seite ergänzen",
+        "add_lead": "Unsere eigenen Beobachtungen nach dem Gespräch und freigegebene Borek-Referenzen. Nichts davon hat {named} gesagt.",
+        "observations_prefix": "Unsere Beobachtungen",
+        "kicker_observations": "Unsere Beobachtungen · Keine Aussagen des Kunden",
+        "noted_title": "Was wir für uns festgehalten haben",
+        "noted_lead": "Beobachtungen des Borek-Teams nach dem Gespräch – unsere Lesart, nicht das, was {named} gesagt hat.",
+        "not_transcript_title": "Nicht aus dem Transkript",
+        "not_transcript_text": "Keiner dieser Punkte wurde in dieser Form im Gespräch gesagt.",
+        "kicker_references": "Borek-Referenzen · Keine Aussagen des Kunden",
+        "ref_slide_title": "Borek-Referenzen, die zu dem passen, was wir gehört haben",
+        "ref_lead": "Freigegebene Borek-Referenzfälle, ausgewählt für dieses Gespräch.",
+        "use_title": "Wie wir sie nutzen",
+        "use_text": "Als Beispiele, wie vergleichbare Arbeit umgesetzt wurde – zu prüfen an Ihrer Situation.",
+        "borek_reference": "Borek-Referenz",
+        "recommendation": "Borek-Empfehlung",
+        "rec_title": "Wo wir beginnen würden – nach dem, was wir gehört haben",
+        "rec_lead_d2": "Opportunities aus der freigegebenen Discovery 2, die sich auf Punkte beziehen, die Sie im Gespräch angesprochen haben.",
+        "rec_lead": "Opportunities aus der freigegebenen Discovery-Analyse, die sich auf Punkte beziehen, die Sie im Gespräch angesprochen haben.",
+        "why_title": "Warum diese",
+        "benchmarks_title": "Benchmarks, keine Zusagen",
+        "benchmark_note": "Zahlen sind Branchen-Benchmarks und Arbeitshypothesen aus der freigegebenen Analyse, keine Zusagen.",
+        "open_question": "Offene Frage",
+        "source_d2": "der freigegebenen Discovery 2",
+        "source_d1": "der Discovery-Analyse",
+        "decisions_title": "Entscheidungen und nächste Schritte",
+        "decisions_text": "Durch das Transkript unseres ersten Gesprächs belegt und für diese Präsentation bestätigt.",
+        "open_title": "Offene Fragen",
+        "open_text": "Fragen, die in {source} noch offen sind. Wir möchten sie mit Ihnen klären.",
+        "missing_text": "Wenn eine Entscheidung oder ein nächster Schritt fehlt oder falsch ist, sagen Sie es uns. Wir aktualisieren diese Seite.",
+        "kicker_closing_open": "Entscheidungen · Nächste Schritte · Offene Fragen",
+        "kicker_closing": "Aus dem Gespräch · Entscheidungen und nächste Schritte",
+        "agreed_open_title": "Was vereinbart wurde und was noch offen ist",
+        "agreed_title": "Was vereinbart wurde",
+        "closing_lead_both": "Entscheidungen und nächste Schritte stammen aus dem Gespräch, offene Fragen aus {source}.",
+        "closing_lead_open": "Offene Fragen aus {source}.",
+        "closing_lead": "Entscheidungen und nächste Schritte, wie sie in unserem ersten Gespräch genannt wurden.",
+        "decided": "Im Gespräch entschieden",
+        "next_kicker": "Borek-Empfehlung · Nächste Phase",
+        "next_title": "Wie wir das weitere Vorgehen vorschlagen",
+        "updated_opportunity": "Aktualisierte Opportunity",
+        "evidence_names": {
+            "requirements": "Anforderungen", "challenges": "Herausforderungen", "priorities": "Prioritäten", "opportunities": "Opportunities",
+            "discussed_solutions": "besprochenen Lösungen", "decisions": "Entscheidungen", "follow_ups": "nächsten Schritte",
+        },
+        "evidence": "Sie beziehen sich auf die {listed}, die Sie in unserem ersten Gespräch beschrieben haben. Ob sie passen, bestätigen Sie.",
+        "and": " und ",
+    },
+}
+
+
+def snapshot_language(snapshot: dict[str, Any]) -> str:
+    """The language of a frozen snapshot: recorded since BAP-13, English before."""
+    return stored_language(snapshot.get("language"))
+
+
+def v2_text(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return V2_TEXT[snapshot_language(snapshot)]
+
 
 def confirmed_findings(snapshot: dict[str, Any]) -> list[dict[str, str]]:
     """Every confirmed finding of the snapshot as {category, text, source}, in category order."""
@@ -107,7 +305,9 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
     paper = snapshot["approved_discovery"]
     analysis = paper["analysis"]
     client = str(snapshot.get("client_name") or "").strip()
-    named = client or "the client"
+    t = v2_text(snapshot)
+    language = snapshot_language(snapshot)
+    named = client or t["named"]
     slides: list[tuple[str, str, dict[str, Any], list[str]]] = []
     omitted: list[str] = []
 
@@ -116,40 +316,34 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
             "L06",
             "Open the post-meeting appendix",
             {
-                "kicker": "Appendix · After our first meeting",
-                "title": client if client and _fits(client, 105, 300, 1690, 1, -2.5) else "After our first meeting",
-                "text": "What we heard in our first conversation, what we suggest on that basis, and what is still open.",
+                "kicker": t["divider_kicker"],
+                "title": client if client and _fits(client, 105, 300, 1690, 1, -2.5) else t["divider_title"],
+                "text": t["divider_text"],
             },
             ["meeting_review"],
         )
     )
 
     client_notes = [
-        {
-            "title": "Said in the meeting",
-            "text": "Each point is supported by the transcript of our first conversation and was confirmed for this presentation. It may summarise what was said rather than quote it.",
-        },
-        {
-            "title": "Please correct us",
-            "text": "If we misunderstood a point, tell us. This page is the basis for everything that follows.",
-        },
+        {"title": t["said_title"], "text": t["said_text"]},
+        {"title": t["correct_title"], "text": t["correct_text"]},
     ]
     discussed_notes = [
-        {"title": "Discussed, not decided", "text": "Solutions marked as discussed were mentioned in the conversation. Decisions are listed separately."},
+        {"title": t["discussed_title"], "text": t["discussed_text"]},
         client_notes[0],
     ]
-    needs = _finding_rows(findings, ("requirements", "priorities"), CLIENT_SOURCES, omitted)
-    situation = _finding_rows(findings, ("challenges", "opportunities"), CLIENT_SOURCES, omitted)
-    discussed = _finding_rows(findings, ("discussed_solutions",), CLIENT_SOURCES, omitted)
+    needs = _finding_rows(findings, ("requirements", "priorities"), CLIENT_SOURCES, omitted, labels=t["category"])
+    situation = _finding_rows(findings, ("challenges", "opportunities"), CLIENT_SOURCES, omitted, labels=t["category"])
+    discussed = _finding_rows(findings, ("discussed_solutions",), CLIENT_SOURCES, omitted, labels=t["category"])
     heard = needs + situation + discussed
     if heard and _fits_one_matrix(heard):
         # A short meeting record reads better on one page than on three nearly empty ones.
         _matrix_slides(
             slides,
             heard,
-            kicker="From the meeting · Client statements",
-            title="What we heard in our first meeting",
-            lead=f"The points {named} raised in our first meeting, as we understood them.",
+            kicker=t["kicker_client"],
+            title=t["heard_title"],
+            lead=t["heard_lead"].format(named=named),
             notes=discussed_notes if discussed else client_notes,
             purpose="Client statements confirmed from the first meeting",
         )
@@ -157,18 +351,18 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
         _matrix_slides(
             slides,
             needs,
-            kicker="From the meeting · Client statements",
-            title="What you need and what comes first",
-            lead=f"Requirements and priorities as {named} described them in our first meeting.",
+            kicker=t["kicker_client"],
+            title=t["needs_title"],
+            lead=t["needs_lead"].format(named=named),
             notes=client_notes,
             purpose="Requirements and priorities confirmed in the first meeting",
         )
         _matrix_slides(
             slides,
             situation,
-            kicker="From the meeting · Client statements",
-            title="Where it is difficult today and where you see potential",
-            lead=f"Challenges and opportunities as {named} described them in our first meeting.",
+            kicker=t["kicker_client"],
+            title=t["situation_title"],
+            lead=t["situation_lead"].format(named=named),
             notes=client_notes,
             purpose="Challenges and opportunities confirmed in the first meeting",
         )
@@ -176,9 +370,9 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
         _matrix_slides(
             slides,
             discussed,
-            kicker="From the meeting · Solutions discussed",
-            title="Solutions we talked about",
-            lead="Approaches that came up in our first meeting. They were discussed, not agreed.",
+            kicker=t["kicker_discussed"],
+            title=t["discussed_slide_title"],
+            lead=t["discussed_lead"],
             notes=discussed_notes,
             purpose="Solutions discussed in the first meeting",
         )
@@ -186,11 +380,11 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
     #   the owner's own observations, the approved references selected for this client, and
     #   Discovery opportunities with clear support in what the client said (the recommendation).
     # Fewer than MIN_SHARED_TERMS shared subject words means no recommendation rather than a weak one.
-    noted = _finding_rows(findings, CATEGORIES, frozenset({OWNER_SOURCE}), omitted, prefix="N", title="Our observation")
-    reviewed = _finding_rows(findings, CATEGORIES, frozenset({REVIEWED_SOURCE}), omitted, prefix="R", title="Reviewed by us")
+    noted = _finding_rows(findings, CATEGORIES, frozenset({OWNER_SOURCE}), omitted, prefix="N", title=t["our_observation"])
+    reviewed = _finding_rows(findings, CATEGORIES, frozenset({REVIEWED_SOURCE}), omitted, prefix="R", title=t["reviewed_by_us"])
     observations = noted + reviewed
-    references = _use_case_rows(snapshot, omitted)
-    matches = _matching_opportunities(analysis, findings, snapshot.get("approved_discovery2"))
+    references = _use_case_rows(snapshot, omitted, title=t["borek_reference"])
+    matches = _matching_opportunities(analysis, findings, snapshot.get("approved_discovery2"), language=language)
     recommended = _recommended(matches)
     recommendation_rows = [
         {"code": f"A{position}", "title": match["title"], "text": match["text"], "reference": match["reference"]}
@@ -199,13 +393,13 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
     recommendation_rows = [row for row in recommendation_rows if _row_height(row) <= _MATRIX_BOTTOM - _MATRIX_TOP]
     evidence = sorted({reference for match in recommended for reference in match["evidence"]})
     observation_note = (
-        {"title": "Our observations", "text": "From our own notes after the meeting, not from the transcript. We would like to verify each of them with you."}
+        {"title": t["observations_title"], "text": t["observations_text"]}
         if not reviewed
-        else {"title": "Reviewed by us", "text": "Written or reworded by our team when we reviewed Discovery 2: our reading of the meeting, not a quote from the transcript and not from our notes."}
+        else {"title": t["reviewed_by_us"], "text": t["reviewed_text"]}
         if not noted
-        else {"title": "Our observations", "text": "'Our observation' is from our own notes; 'Reviewed by us' was written or reworded by our team in Discovery 2. Neither is a quote from the transcript."}
+        else {"title": t["observations_title"], "text": t["both_text"]}
     )
-    reference_note = {"title": "Borek references", "text": "From Borek's approved reference library: examples of comparable work, not statements about your company."}
+    reference_note = {"title": t["references_title"], "text": t["references_text"]}
     own = observations + references
     before = len(slides)
     if len(own) == 1 and recommendation_rows and _fits_one_matrix(own + recommendation_rows):
@@ -213,13 +407,10 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
         _matrix_slides(
             slides,
             own + recommendation_rows,
-            kicker="From Borek · Not client statements",
-            title="What we add and where we would start",
-            lead=(
-                f"Our own {'observation' if observations else 'reference'} and opportunities from the approved Discovery analysis. "
-                "Figures are industry benchmarks, not commitments."
-            ),
-            notes=[observation_note if observations else reference_note, {"title": "Why these starting points", "text": _evidence_sentence(evidence)}],
+            kicker=t["kicker_borek"],
+            title=t["add_start_title"],
+            lead=t["add_start_lead"].format(kind=t["kind_observation"] if observations else t["kind_reference"]),
+            notes=[observation_note if observations else reference_note, {"title": t["why_start_title"], "text": _evidence_sentence(evidence, t)}],
             purpose="Borek's own observation or reference and the recommended starting points",
         )
     else:
@@ -227,9 +418,9 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
             _matrix_slides(
                 slides,
                 own,
-                kicker="From Borek · Not client statements",
-                title="What we add from our side",
-                lead=f"Our own observations after the meeting and approved Borek references. None of this was said by {named}.",
+                kicker=t["kicker_borek"],
+                title=t["add_title"],
+                lead=t["add_lead"].format(named=named),
                 notes=[observation_note, reference_note],
                 purpose="Owner observations and selected approved Borek use cases",
             )
@@ -237,33 +428,31 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
             _matrix_slides(
                 slides,
                 observations,
-                kicker="Our observations · Not client statements",
-                title="What we noted for ourselves",
-                lead=f"Observations by the Borek team after the meeting. They are our reading, not statements by {named}.",
-                notes=[observation_note, {"title": "Not from the transcript", "text": "None of these points was said in this form during the meeting."}],
+                kicker=t["kicker_observations"],
+                title=t["noted_title"],
+                lead=t["noted_lead"].format(named=named),
+                notes=[observation_note, {"title": t["not_transcript_title"], "text": t["not_transcript_text"]}],
                 purpose="Owner observations and points reviewed by the owner",
             )
             _matrix_slides(
                 slides,
                 references,
-                kicker="Borek references · Not client statements",
-                title="Borek references that fit what we heard",
-                lead="Approved Borek reference use cases selected for this conversation.",
-                notes=[reference_note, {"title": "How we use them", "text": "As examples of how comparable work was delivered, to be checked against your situation."}],
+                kicker=t["kicker_references"],
+                title=t["ref_slide_title"],
+                lead=t["ref_lead"],
+                notes=[reference_note, {"title": t["use_title"], "text": t["use_text"]}],
                 purpose="Selected approved Borek use cases",
             )
         before = len(slides)
         _matrix_slides(
             slides,
             recommendation_rows,
-            kicker="Borek recommendation",
-            title="Where we would start, given what we heard",
-            lead="Opportunities carried forward in the approved Discovery 2 that relate to points you raised in the meeting."
-            if snapshot.get("approved_discovery2")
-            else "Opportunities from the approved Discovery analysis that relate to points you raised in the meeting.",
+            kicker=t["recommendation"],
+            title=t["rec_title"],
+            lead=t["rec_lead_d2"] if snapshot.get("approved_discovery2") else t["rec_lead"],
             notes=[
-                {"title": "Why these", "text": _evidence_sentence(evidence) if evidence else ""},
-                {"title": "Benchmarks, not commitments", "text": BENCHMARK_NOTE},
+                {"title": t["why_title"], "text": _evidence_sentence(evidence, t) if evidence else ""},
+                {"title": t["benchmarks_title"], "text": t["benchmark_note"]},
             ],
             purpose="Recommended starting points in light of the meeting",
         )
@@ -276,32 +465,32 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
     # What was decided, what follows, and what is still open. Open questions are the Discovery
     # analysis' own questions for the opportunities that relate to the meeting - full questions,
     # never a bare topic label.
-    closing_rows = _finding_rows(findings, ("decisions", "follow_ups"), CLIENT_SOURCES, omitted)
+    closing_rows = _finding_rows(findings, ("decisions", "follow_ups"), CLIENT_SOURCES, omitted, labels=t["category"])
     questions: list[dict[str, str]] = []
     for text, reference in _open_question_candidates(snapshot, matches):
-        row = {"code": f"Q{len(questions) + 1}", "title": "Open question", "text": text, "reference": reference}
+        row = {"code": f"Q{len(questions) + 1}", "title": t["open_question"], "text": text, "reference": reference}
         if _is_question(text) and text not in [entry["text"] for entry in questions] and _row_height(row) <= _MATRIX_BOTTOM - _MATRIX_TOP:
             questions.append(row)
         if len(questions) == MAX_OPEN_QUESTIONS:
             break
-    questions_source = "the approved Discovery 2" if snapshot.get("approved_discovery2") else "the Discovery analysis"
-    closing_notes = [{"title": "Decisions and follow-ups", "text": "Supported by the transcript of our first conversation and confirmed for this presentation."}]
+    questions_source = t["source_d2"] if snapshot.get("approved_discovery2") else t["source_d1"]
+    closing_notes = [{"title": t["decisions_title"], "text": t["decisions_text"]}]
     closing_notes.append(
-        {"title": "Open questions", "text": f"Questions that are still open in {questions_source}. We would like to clarify them with you."}
+        {"title": t["open_title"], "text": t["open_text"].format(source=questions_source)}
         if questions
-        else {"title": "Please correct us", "text": "If a decision or follow-up is missing or wrong, tell us. We will update this page."}
+        else {"title": t["correct_title"], "text": t["missing_text"]}
     )
     _matrix_slides(
         slides,
         closing_rows + questions,
-        kicker="Decisions · Next steps · Open questions" if questions else "From the meeting · Decisions and next steps",
-        title="What was agreed and what is still open" if questions else "What was agreed",
+        kicker=t["kicker_closing_open"] if questions else t["kicker_closing"],
+        title=t["agreed_open_title"] if questions else t["agreed_title"],
         lead=(
-            f"Decisions and follow-ups come from the meeting. Open questions come from {questions_source}."
+            t["closing_lead_both"].format(source=questions_source)
             if closing_rows and questions
-            else f"Open questions from {questions_source}."
+            else t["closing_lead_open"].format(source=questions_source)
             if questions
-            else "Decisions and follow-ups as they were stated in our first meeting."
+            else t["closing_lead"]
         ),
         notes=closing_notes,
         purpose="Decisions, follow-ups and open questions",
@@ -310,18 +499,18 @@ def plan_v2_appendix(snapshot: dict[str, Any], *, first_order: int) -> list[dict
     # Proposed way forward: a Borek recommendation from the approved analysis.
     closing = analysis["closing"]
     decision = next((item for item in findings if item["category"] == "decisions" and item["source"] in CLIENT_SOURCES), None)
-    statement = {"kicker": "Borek recommendation", "text": closing["headline"]}
+    statement = {"kicker": t["recommendation"], "text": closing["headline"]}
     references_for_closing = ["discovery.closing"]
     if decision and _fits(decision["text"], 25, 500, 1776 - 72, 2):
-        statement = {"kicker": "Decided in the meeting", "text": decision["text"]}
+        statement = {"kicker": t["decided"], "text": decision["text"]}
         references_for_closing.append(_finding_reference(findings, decision))
     slides.append(
         (
             "L07",
             "Proposed approach for the next phase",
             {
-                "kicker": "Borek recommendation · Next phase",
-                "title": "How we suggest to continue",
+                "kicker": t["next_kicker"],
+                "title": t["next_title"],
                 "lead": analysis["framing"]["leads"]["closing_steps"],
                 "stages": [
                     {"number": f"{position:02d}", "title": step["title"], "text": _stage_text(step["text"])}
@@ -370,6 +559,7 @@ def _finding_rows(
     *,
     prefix: str | None = None,
     title: str | None = None,
+    labels: dict[str, str] | None = None,
 ) -> list[dict[str, str]]:
     """Matrix rows for the confirmed findings of the given categories and sources, in their approved wording.
 
@@ -384,7 +574,7 @@ def _finding_rows(
                 continue
             position += 1
             code = f"{prefix}{len(rows) + 1}" if prefix else f"{CATEGORY_CODE[category]}{position}"
-            row = {"code": code, "title": title or CATEGORY_LABEL[category], "text": item["text"], "reference": f"finding:{category}:{index}"}
+            row = {"code": code, "title": title or (labels or CATEGORY_LABEL)[category], "text": item["text"], "reference": f"finding:{category}:{index}"}
             if _row_height(row) > _MATRIX_BOTTOM - _MATRIX_TOP:
                 omitted.append(row["reference"])
                 continue
@@ -392,12 +582,12 @@ def _finding_rows(
     return rows
 
 
-def _use_case_rows(snapshot: dict[str, Any], omitted: list[str]) -> list[dict[str, str]]:
+def _use_case_rows(snapshot: dict[str, Any], omitted: list[str], *, title: str = "Borek reference") -> list[dict[str, str]]:
     rows = []
     for item in snapshot["use_cases"]:
         row = {
             "code": f"B{len(rows) + 1}",
-            "title": "Borek reference",
+            "title": title,
             "text": str(item["statement"]),
             "reference": f"use_case:{item['fact_id']}",
         }
@@ -452,8 +642,10 @@ def _fits_one_matrix(rows: list[dict[str, str]]) -> bool:
     return len(rows) <= 6 and _MATRIX_TOP + sum(_row_height(row) for row in rows) + len(rows) - 1 <= _MATRIX_BOTTOM
 
 
-def _keywords(text: str) -> set[str]:
+def _keywords(text: str, language: str = "en") -> set[str]:
     """Content words of a text, reduced to a simple stem so that "quotes" meets "quote"."""
+    if language == "de":
+        return _keywords_de(text)
     stems = set()
     for word in _WORD_RE.findall(text):
         word = word.lower()
@@ -471,7 +663,22 @@ def _keywords(text: str) -> set[str]:
     return stems - _STOPWORDS
 
 
-def _opportunity_candidates(analysis: dict[str, Any], discovery2: dict[str, Any] | None) -> list[dict[str, Any]]:
+def _keywords_de(text: str) -> set[str]:
+    """German content words with a simple stem, so that "Angebote" meets "Angebot"."""
+    stems = set()
+    for word in _WORD_RE.findall(text):
+        word = word.lower()
+        if word in _STOPWORDS_DE:
+            continue
+        for suffix in ("ungen", "en", "er", "es", "e", "n", "s"):
+            if word.endswith(suffix) and len(word) - len(suffix) >= 4:
+                word = word[: -len(suffix)]
+                break
+        stems.add(word)
+    return stems - _STOPWORDS_DE
+
+
+def _opportunity_candidates(analysis: dict[str, Any], discovery2: dict[str, Any] | None, language: str = "en") -> list[dict[str, Any]]:
     """The opportunities V2 may recommend, as {title, text, words, reference, questions}.
 
     With an approved Discovery 2 (BAP-7) only the opportunities it carries forward, in its
@@ -485,7 +692,7 @@ def _opportunity_candidates(analysis: dict[str, Any], discovery2: dict[str, Any]
             {
                 "title": item["title"],
                 "text": item["result"],
-                "words": _keywords(" ".join([item["title"], item["result"], item["opportunity_signal"]])),
+                "words": _keywords(" ".join([item["title"], item["result"], item["opportunity_signal"]]), language),
                 "reference": f"discovery.opportunity:{area['id']}/{item['id']}",
                 "questions": list(item.get("discovery_questions") or []),
             }
@@ -499,10 +706,10 @@ def _opportunity_candidates(analysis: dict[str, Any], discovery2: dict[str, Any]
         if entry is None:
             continue  # removed in Discovery 2: not offered
         if entry.get("edited"):
-            title, text, words = "Updated opportunity", str(entry["text"]), _keywords(str(entry["text"]))
+            title, text, words = V2_TEXT[language]["updated_opportunity"], str(entry["text"]), _keywords(str(entry["text"]), language)
         else:
             title, text = original["title"], original["result"]
-            words = _keywords(" ".join([original["title"], original["result"], original["opportunity_signal"]]))
+            words = _keywords(" ".join([original["title"], original["result"], original["opportunity_signal"]]), language)
         candidates.append({
             "title": title, "text": text, "words": words, "reference": f"discovery2.item:{entry['id']}", "questions": [],
             "discovery1_ref": str(entry.get("discovery1_ref") or ""),
@@ -530,7 +737,9 @@ def _is_question(text: str) -> bool:
     return text.endswith("?") and len(text.split()) >= 5
 
 
-def _matching_opportunities(analysis: dict[str, Any], findings: list[dict[str, str]], discovery2: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+def _matching_opportunities(
+    analysis: dict[str, Any], findings: list[dict[str, str]], discovery2: dict[str, Any] | None = None, *, language: str = "en"
+) -> list[dict[str, Any]]:
     """Opportunities clearly supported by what the client said, best supported first.
 
     Only client statements count: an owner observation never steers a recommendation. Every
@@ -540,12 +749,12 @@ def _matching_opportunities(analysis: dict[str, Any], findings: list[dict[str, s
     statements it rests on, so a recommendation can show its evidence.
     """
     heard = [
-        (reference, _keywords(item["text"]))
+        (reference, _keywords(item["text"], language))
         for reference, item in ((_finding_reference(findings, item), item) for item in findings)
         if item["source"] in CLIENT_SOURCES
     ]
     scored = []
-    for position, candidate in enumerate(_opportunity_candidates(analysis, discovery2)):
+    for position, candidate in enumerate(_opportunity_candidates(analysis, discovery2, language)):
         words = candidate["words"]
         shared = set().union(*(terms & words for _reference, terms in heard), set())
         if not shared:
@@ -560,20 +769,13 @@ def _recommended(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [match for match in matches if len(match["shared_terms"]) >= MIN_SHARED_TERMS][:MAX_RECOMMENDATIONS]
 
 
-def _evidence_sentence(references: list[str]) -> str:
+def _evidence_sentence(references: list[str], text: dict[str, Any] | None = None) -> str:
     """Which kinds of client statements a recommendation rests on, in plain words."""
-    names = {
-        "requirements": "requirements",
-        "challenges": "challenges",
-        "priorities": "priorities",
-        "opportunities": "opportunities",
-        "discussed_solutions": "solutions we discussed",
-        "decisions": "decisions",
-        "follow_ups": "follow-ups",
-    }
+    text = text or V2_TEXT["en"]
+    names = text["evidence_names"]
     kinds = [names[category] for category in CATEGORIES if any(reference.startswith(f"finding:{category}:") for reference in references)]
-    listed = kinds[0] if len(kinds) == 1 else ", ".join(kinds[:-1]) + " and " + kinds[-1]
-    return f"They relate to the {listed} you described in our first meeting. Whether they fit is for you to confirm."
+    listed = kinds[0] if len(kinds) == 1 else ", ".join(kinds[:-1]) + text["and"] + kinds[-1]
+    return text["evidence"].format(listed=listed)
 
 
 # ---------------------------------------------------------------------------------- validation
@@ -623,6 +825,7 @@ def validate_v2_appendix(
 ) -> None:
     """Planning contract, source integrity, provenance separation and layout rules."""
     problems: list[str] = []
+    t = v2_text(snapshot)
     findings = confirmed_findings(snapshot)
     client_texts = {item["text"] for item in findings if item["source"] in CLIENT_SOURCES}
     owner_texts = {item["text"] for item in findings if item["source"] in OWNER_SOURCES}
@@ -677,17 +880,17 @@ def validate_v2_appendix(
         # One kind of content per slide: an owner observation never sits on a client-statement page.
         kicker = str(slide["content"].get("kicker") or "")
         row_texts = {str(row.get("text")) for row in slide["content"].get("rows", [])}
-        if kicker.startswith("From the meeting") and row_texts & (owner_texts - client_texts):
+        if kicker.startswith(t["meeting_prefix"]) and row_texts & (owner_texts - client_texts):
             problems.append(f"{where} presents an owner observation as a client statement")
-        if kicker.startswith("Our observations") and row_texts - owner_texts:
+        if kicker.startswith(t["observations_prefix"]) and row_texts - owner_texts:
             problems.append(f"{where} mixes other content into the owner observations")
-        if "Not client statements" in kicker and row_texts & (client_texts - owner_texts - reference_texts):
+        if t["not_client"] in kicker and row_texts & (client_texts - owner_texts - reference_texts):
             problems.append(f"{where} presents a client statement as Borek's own content")
         recommends = any(str(row.get("code", "")).startswith("A") for row in slide["content"].get("rows", []))
-        if (kicker == "Borek recommendation" or recommends) and not any(str(reference).startswith("finding:") for reference in references):
+        if (kicker == t["recommendation"] or recommends) and not any(str(reference).startswith("finding:") for reference in references):
             problems.append(f"{where} recommends without naming the client statements it rests on")
         for row in slide["content"].get("rows", []):
-            if row.get("title") == "Open question" and (not str(row.get("text")).strip().endswith("?") or len(str(row.get("text")).split()) < 5):
+            if row.get("title") == t["open_question"] and (not str(row.get("text")).strip().endswith("?") or len(str(row.get("text")).split()) < 5):
                 problems.append(f"{where} lists a topic label as an open question: '{row.get('text')}'")
     # Every confirmed finding is either shown or reported as omitted - none disappears silently.
     # "Shown" means its text is on a slide: being cited as evidence for a recommendation is not enough.

@@ -10,6 +10,7 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 
 from services.framework.stage1_intake import meeting_purpose_source, resolve_meeting_purpose
+from services.language import DEFAULT_LANGUAGE, stored_language
 
 SCHEMA_VERSION = "2.0"
 SCHEMA_PATH = (
@@ -90,7 +91,7 @@ LIMITS: dict[str, int] = {
 
 _NUMBER_RE = re.compile(r"\d[\d.,]*")
 # Framing that marks a figure as a benchmark or working hypothesis rather than a fact.
-_FRAMING_WORDS = ("benchmark", "typical", "hypothes", "to be validated")
+_FRAMING_WORDS = ("benchmark", "typical", "hypothes", "to be validated", "typisch", "zu validieren")
 _SCALE = r"(?:\s?(?:k|m|bn|million|billion)\b)?"
 # Quantified claims: money, percentages, headcount and volumes or rates per period.
 _FIGURE_RE = re.compile(
@@ -102,7 +103,13 @@ _FIGURE_RE = re.compile(
     r"|\d[\d.,]*\s(?:[a-z]+\s){0,2}(?:per|a|each)\s(?:day|week|month|year|annum)\b)",
     re.IGNORECASE,
 )
-_COMMITMENT_RE = re.compile(r"\b(?:guarantee[ds]?|we commit|will save|will reduce|will cut|promised?)\b", re.IGNORECASE)
+_COMMITMENT_RE = re.compile(
+    r"\b(?:guarantee[ds]?|we commit|will save|will reduce|will cut|promised?)\b"
+    r"|\b(?:garantier\w*|wir sichern zu|zugesichert|versprech\w*|versproch\w*|wird (?:\w+ )?(?:sparen|senken|reduzieren|kürzen))\b",
+    re.IGNORECASE,
+)
+# BAP-13: the words that frame figures as benchmarks, per language (the footnote and the scope note).
+_NOT_COMMITMENTS = {"en": "not commitments", "de": "keine zusagen"}
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 
 
@@ -249,9 +256,11 @@ def content_problems(paper: dict[str, Any]) -> list[str]:
     framing = analysis["framing"]
     footnote = framing["leads"]["business_case_footnote"].lower()
     scope = framing["document"]["scope_note"].lower()
-    if "benchmark" not in footnote or "hypothes" not in footnote or "not commitments" not in footnote:
+    language = stored_language(paper.get("language"))
+    not_commitments = _NOT_COMMITMENTS[language]
+    if "benchmark" not in footnote or "hypothes" not in footnote or not_commitments not in footnote:
         problems.append("The business-case footnote must frame figures as benchmarks and working hypotheses, not commitments")
-    if "benchmark" not in scope or "not commitments" not in scope:
+    if "benchmark" not in scope or not_commitments not in scope:
         problems.append("The scope note must frame figures as benchmarks, not commitments")
     problems.extend(figure_problems(paper))
 
@@ -300,11 +309,11 @@ def content_problems(paper: dict[str, Any]) -> list[str]:
         if requested != (optional[key] is not None):
             problems.append(f"Optional part {key} does not match what was requested")
 
-    problems.extend(length_problems(analysis))
+    problems.extend(length_problems(analysis, language))
     return problems
 
 
-def length_problems(analysis: dict[str, Any]) -> list[str]:
+def length_problems(analysis: dict[str, Any], language: str = DEFAULT_LANGUAGE) -> list[str]:
     """Every text against the master's character budget for the slot it is printed in."""
     out: list[str] = []
 
@@ -345,11 +354,11 @@ def length_problems(analysis: dict[str, Any]) -> list[str]:
         check(f"area {area['id']} name", area["name"], "area_name")
         check(f"area {area['id']} lead", area["lead"], "area_lead")
         check(f"area {area['id']} opportunity list", " · ".join(item["title"] for item in area["opportunities"]), "map_cell")
-        check(f"area {area['id']} business case", business_case_text(area["business_case"]), "table_description")
+        check(f"area {area['id']} business case", business_case_text(area["business_case"], language), "table_description")
         for item in area["opportunities"]:
             where = f"opportunity {item['id']}"
             check(f"{where} title", item["title"], "item_title")
-            check(f"{where} solution", solution_text(item), "solution_block")
+            check(f"{where} solution", solution_text(item, language), "solution_block")
             check(f"{where} how it works", item["how_it_works"], "how_it_works")
             check(f"{where} result", item["result"], "result")
             check(f"{where} signal", item["opportunity_signal"], "signal")
@@ -408,20 +417,40 @@ def manifest_problems(paper: dict[str, Any]) -> list[str]:
     return problems
 
 
-def solution_text(opportunity: dict[str, Any]) -> str:
+# BAP-13: the words the layout prints around the content, per language. English is unchanged.
+_PRINTED = {
+    "en": {
+        "technically": "Technically:",
+        "quick_win": "Quick win · 3–6 mo.",
+        "strategic": "Strategic · 12–24 mo.",
+        "basis": {"industry_benchmark": "industry benchmark", "working_hypothesis": "working hypothesis"},
+    },
+    "de": {
+        "technically": "Technisch:",
+        "quick_win": "Quick Win · 3–6 Mon.",
+        "strategic": "Strategisch · 12–24 Mon.",
+        "basis": {"industry_benchmark": "Branchen-Benchmark", "working_hypothesis": "Arbeitshypothese"},
+    },
+}
+
+
+def solution_text(opportunity: dict[str, Any], language: str = DEFAULT_LANGUAGE) -> str:
     """Solution as printed: what is built, then the mechanism."""
-    return f"{opportunity['solution'].rstrip()} Technically: {opportunity['ai_technology'].rstrip()}"
+    label = _PRINTED[stored_language(language)]["technically"]
+    return f"{opportunity['solution'].rstrip()} {label} {opportunity['ai_technology'].rstrip()}"
 
 
-def payback_label(payback_type: str) -> str:
-    return "Quick win · 3–6 mo." if payback_type == "quick_win" else "Strategic · 12–24 mo."
+def payback_label(payback_type: str, language: str = DEFAULT_LANGUAGE) -> str:
+    printed = _PRINTED[stored_language(language)]
+    return printed["quick_win"] if payback_type == "quick_win" else printed["strategic"]
 
 
-def business_case_text(case: dict[str, Any]) -> str:
+def business_case_text(case: dict[str, Any], language: str = DEFAULT_LANGUAGE) -> str:
     """Value levers joined with middle dots, the outcome, then the benchmark ranges."""
+    basis = _PRINTED[stored_language(language)]["basis"]
     text = " · ".join(case["value_levers"]) + f" — {case['outcome']}"
     ranges = [
-        f"{item['metric']} {item['range']} ({item['basis'].replace('_', ' ')})"
+        f"{item['metric']} {item['range']} ({basis.get(item['basis'], item['basis'].replace('_', ' '))})"
         for item in case["impact_ranges"]
     ]
     return f"{text}. {'; '.join(ranges)}." if ranges else f"{text}."

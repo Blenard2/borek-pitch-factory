@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from services.language import stored_language
 from services.presentation.borek_deck.deck_plan import PLAN_ENGINE
 from services.presentation.master_deck.appendix import (
     DISCOVERY_SCHEMA_VERSION,
@@ -71,6 +72,10 @@ def generation_manifest(version_row: dict[str, Any], master: MasterDeck | None =
         "discovery_schema_version": DISCOVERY_SCHEMA_VERSION,
         "appendix_source_hash": appendix_source_hash(paper),
         "deck_layout": DECK_LAYOUT,
+        # BAP-13: the appendix is written in the approved Discovery's language; the canonical
+        # master slides stay in the master's own language (``master_language``).
+        "language": stored_language(paper.get("language")),
+        "master_language": master.language,
     }
 
 
@@ -143,6 +148,7 @@ def build_master_plan(version_row: dict[str, Any], master: MasterDeck | None = N
         "deck_kind": MASTER_V1,
         "prompt_version": PLAN_VERSION,
         "lang": master.language.upper(),
+        "content_language": stored_language(paper.get("language")),
         "title": f"Master Presentation — {client}" if client else "Master Presentation",
         "master": {**master.identity(), "slide_count": master.slide_count},
         "deck_layout": DECK_LAYOUT,

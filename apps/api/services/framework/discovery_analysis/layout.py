@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from services.framework.discovery_analysis.fixture import load_library
+from services.language import stored_language
 from services.framework.discovery_analysis.model import (
     BRAND_CLAIM,
     CLOSING_LINE,
@@ -52,7 +53,12 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
     document = framing["document"]
     chapters = framing["chapters"]
     leads = framing["leads"]
-    library = load_library()
+    # BAP-13: every printed label in the document's language. English pages are built exactly as
+    # before; a German page also carries "lang" so the print renderer uses its German labels.
+    language = stored_language(paper.get("language"))
+    library = load_library(language)
+    printed = library.get("layout") or {}
+    nav = {**_NAV, **(printed.get("nav") or {})}
     labels = library["chapters"]
     publisher = library["publisher"]
     month, year = _month_year(paper.get("generated_at"))
@@ -75,7 +81,7 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
                 "chapter": chapter,
                 "nav_label": nav_label,
                 "edit_targets": edit_targets,
-                "content": {**content, "running": {"left": running_left, "right": right, "footer": footer}},
+                "content": {**content, "running": {"left": running_left, "right": right, "footer": footer}, **({"lang": language} if language != "en" else {})},
             }
         )
 
@@ -115,20 +121,20 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
     add(
         "cover",
         "M1",
-        "Cover",
+        nav["cover"],
         ["framing"],
         {
             "eyebrow": document["eyebrow"],
             "title": document["title"],
             "subtitle": document["subtitle"],
             "document_type_line": f"{document['document_type']} {year}".strip(),
-            "as_of": f"As of {month}/{year[2:]}" if year else "",
+            "as_of": printed.get("as_of", "As of {month}/{year}").format(month=month, year=year[2:]) if year else "",
             "place": publisher["place"],
             "url": publisher["url"],
         },
         None,
     )
-    add("contents", "M2", "Contents", ["framing"], {}, None)  # filled once every page number is known
+    add("contents", "M2", nav["contents"], ["framing"], {}, None)  # filled once every page number is known
 
     # Part 1 - overview: company background (website research), opportunity map, business case.
     chapter = open_chapter("overview", chapters["overview"], "framing")
@@ -173,7 +179,7 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
         add(
             f"overview-map-{index}",
             "M4",
-            _numbered("Opportunity map", index, len(map_chunks)),
+            _numbered(nav["opportunity_map"], index, len(map_chunks)),
             ["thesis", "framing"],
             {
                 "lead": leads["map"],
@@ -189,15 +195,15 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
     ]
     add_tables(
         "overview-business-case",
-        "Business case",
+        nav["business_case"],
         leads["business_case"],
         list(labels["overview"]["business_case_columns"]),
         [
             {
                 "id": area["id"],
                 "subject": area["name"],
-                "description": business_case_text(area["business_case"]),
-                "verdict": payback_label(area["business_case"]["payback_type"]),
+                "description": business_case_text(area["business_case"], language),
+                "verdict": payback_label(area["business_case"]["payback_type"], language),
                 "grouped": area["business_case"]["payback_type"] != "quick_win",
             }
             for area in ordered
@@ -216,7 +222,7 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
                 "id": item["id"],
                 "number": f"{position:02d}",
                 "title": item["title"],
-                "solution": solution_text(item),
+                "solution": solution_text(item, language),
                 "how_it_works": item["how_it_works"],
                 "result": item["result"],
                 "questions": list(item["discovery_questions"]),
@@ -239,7 +245,7 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
     chapter = open_chapter("shadow", chapters["shadow"], "framing")
     add_tables(
         "shadow-table",
-        "Shadow processes",
+        nav["shadow_processes"],
         leads["shadow_table"],
         list(labels["shadow"]["table_columns"]),
         [
@@ -257,14 +263,14 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
         "shadow_process",
         chapter,
     )
-    add("shadow-findings", "M8", "Why it matters", ["shadow_findings", "framing"], {"lead": leads["shadow_findings"], **_findings(analysis["shadow_findings"])}, chapter)
+    add("shadow-findings", "M8", nav["why_it_matters"], ["shadow_findings", "framing"], {"lead": leads["shadow_findings"], **_findings(analysis["shadow_findings"])}, chapter)
 
     # Part 4 - target picture: the chains as a table, then as a diagram.
     chapter = open_chapter("target", chapters["target"], "framing")
     workflows = analysis["target_workflows"]
     add_tables(
         "target-chains",
-        "Workflow chains",
+        nav["workflow_chains"],
         leads["target_table"],
         list(labels["target"]["table_columns"]),
         [
@@ -287,7 +293,7 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
         add(
             f"target-diagram-{index}",
             "M7",
-            _numbered("Target picture", index, len(diagram_chunks)),
+            _numbered(nav["target_picture"], index, len(diagram_chunks)),
             ["target_picture", *[f"target_workflow:{workflow['id']}" for workflow in chunk]],
             {
                 "title": _numbered(picture["diagram_title"], index, len(diagram_chunks)),
@@ -299,7 +305,7 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
             },
             chapter,
         )
-    add("target-findings", "M8", "How it emerges", ["target_picture", "framing"], {"lead": leads["target_findings"], **_findings(target_findings(picture))}, chapter)
+    add("target-findings", "M8", nav["how_it_emerges"], ["target_picture", "framing"], {"lead": leads["target_findings"], **_findings(target_findings(picture))}, chapter)
 
     # Parts 5 and 6 - only when they were requested and exist.
     for key in OPTIONAL_PART_ORDER:
@@ -328,7 +334,7 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
     add(
         "closing-steps",
         "M4",
-        "Three steps",
+        nav["three_steps"],
         ["closing", "framing"],
         {
             "lead": leads["closing_steps"],
@@ -352,8 +358,8 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
             "chapter_name": closing["name"],
             "headline": closing["headline"],
             "paragraphs": list(closing["paragraphs"]),
-            "closing_line": CLOSING_LINE,
-            "brand_claim": BRAND_CLAIM,
+            "closing_line": printed.get("closing_line", CLOSING_LINE),
+            "brand_claim": printed.get("brand_claim", BRAND_CLAIM),
             "contact_line": f"{publisher['phone']} · {publisher['url']}",
             "address": publisher["address"],
         },
@@ -364,7 +370,7 @@ def build_page_manifest(paper: dict[str, Any]) -> list[dict[str, Any]]:
     number_of = {page["id"]: page["number"] for page in pages}
     pages[1]["content"].update(
         {
-            "title": "Contents",
+            "title": printed.get("contents", "Contents"),
             "entries": [
                 {"number": entry["number"], "label": entry["label"], "page": number_of[entry["page_id"]], "page_id": entry["page_id"]}
                 for entry in contents
@@ -463,6 +469,19 @@ def _paginate_items(items: list[dict[str, Any]], lead: str) -> list[list[dict[st
 
 
 _MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+# Page names in the editor navigation; a German library overrides them (layout.nav).
+_NAV = {
+    "cover": "Cover",
+    "contents": "Contents",
+    "opportunity_map": "Opportunity map",
+    "business_case": "Business case",
+    "shadow_processes": "Shadow processes",
+    "why_it_matters": "Why it matters",
+    "workflow_chains": "Workflow chains",
+    "target_picture": "Target picture",
+    "how_it_emerges": "How it emerges",
+    "three_steps": "Three steps",
+}
 
 
 # Research record versions that print the company background page (1.1: BAP-10, 1.2: BAP-9 wording).
@@ -476,10 +495,12 @@ def background_lead(paper: dict[str, Any]) -> str:
     exactly, so the wording is versioned with the research record: analyses recorded with 1.1
     keep the BAP-10 sentence; 1.2 (BAP-9) names the company and speaks to it.
     """
-    overview = load_library()["chapters"]["overview"]
+    library = load_library(stored_language(paper.get("language")))
+    overview = library["chapters"]["overview"]
     if ((paper.get("generation") or {}).get("website_research") or {}).get("schema_version") == "1.1":
         return overview["background_lead_1_1"]
-    company = str((paper.get("intake_context") or {}).get("client_name") or "").strip() or "the company"
+    fallback = (library.get("layout") or {}).get("company_fallback", "the company")
+    company = str((paper.get("intake_context") or {}).get("client_name") or "").strip() or fallback
     lead = overview["background_lead"].replace("{company}", company)
     return lead[0].upper() + lead[1:]
 
@@ -502,7 +523,7 @@ def company_background(paper: dict[str, Any]) -> tuple[list[dict[str, Any]], str
         rows.append(
             {
                 "id": f"website_fact_{index}",
-                "subject": fact["label"].removesuffix(" (website)"),
+                "subject": fact["label"].removesuffix(" (website)").removesuffix(" (Website)"),
                 "description": fact["value"],
                 "verdict": source_label(url),
                 "source_url": url,
@@ -511,8 +532,9 @@ def company_background(paper: dict[str, Any]) -> tuple[list[dict[str, Any]], str
         )
     if not rows:
         return [], None
-    template = load_library()["chapters"]["overview"]["background_footnote"]
-    return rows, template.format(site=research.get("site") or source_label(rows[0]["source_url"]), date=_long_date(research.get("researched_at")))
+    language = stored_language(paper.get("language"))
+    template = load_library(language)["chapters"]["overview"]["background_footnote"]
+    return rows, template.format(site=research.get("site") or source_label(rows[0]["source_url"]), date=_long_date(research.get("researched_at"), language))
 
 
 def source_label(url: str) -> str:
@@ -527,11 +549,14 @@ def source_label(url: str) -> str:
     return f"{host}/…/{last[:24]}" if last else label[:43] + "…"
 
 
-def _long_date(value: Any) -> str:
+def _long_date(value: Any, language: str = "en") -> str:
+    printed = (load_library(language).get("layout") or {}) if language != "en" else {}
+    months = printed.get("months") or _MONTHS
     text = str(value or "")
     if len(text) >= 10 and text[4] == "-" and text[7] == "-" and text[5:7].isdigit() and 1 <= int(text[5:7]) <= 12:
-        return f"{int(text[8:10])} {_MONTHS[int(text[5:7]) - 1]} {text[0:4]}"
-    return "the date of the analysis"
+        day = f"{int(text[8:10])}." if language == "de" else f"{int(text[8:10])}"
+        return f"{day} {months[int(text[5:7]) - 1]} {text[0:4]}"
+    return printed.get("date_fallback", "the date of the analysis")
 
 
 def _month_year(generated_at: Any) -> tuple[str, str]:

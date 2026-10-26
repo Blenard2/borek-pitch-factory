@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from jsonschema import Draft202012Validator
 
+from services.language import DEFAULT_LANGUAGE, stored_language
 from services.framework.discovery_analysis.model import (
     AREA_RANGE,
     LIMITS,
@@ -86,11 +87,29 @@ _RULES = (
 )
 SYSTEM_PROMPT = _INTRO + _NO_RESEARCH + _AUDIENCE + _CALIBRATION + _RULES
 SYSTEM_PROMPT_WEBSITE = _INTRO + _WEBSITE_RESEARCH + _AUDIENCE + _CALIBRATION + _RULES
+# BAP-13: German output. The rules stay the same; only the output language and its conventions change.
+_GERMAN = (
+    "OUTPUT LANGUAGE: German. Write every text field in professional, natural German for a German-speaking "
+    "management team, addressing the company formally ('Sie') - not a word-by-word translation. Use German business "
+    "terms; keep company, product and person names, and established technical terms (for example LLM, RAG, ERP, "
+    "KPI) as they are. CONTEXT and WEBSITE may be in English or German: write German regardless and change no fact. "
+    "Frame figures with 'typischerweise' or '(Branchen-Benchmark)'. In short labels (workflow names and blocks, "
+    "titles, card values) prefer two short words over one long compound, so that the label can wrap on the page. "
+)
+_RULES_DE = _RULES.replace("say 'typically' or '(industry benchmark)', ", "").replace("Write concise English. ", "Write concise German. ")
+SYSTEM_PROMPT_DE = _INTRO + _NO_RESEARCH + _AUDIENCE + _CALIBRATION + _GERMAN + _RULES_DE
+SYSTEM_PROMPT_WEBSITE_DE = _INTRO + _WEBSITE_RESEARCH + _AUDIENCE + _CALIBRATION + _GERMAN + _RULES_DE
+_SYSTEM_PROMPTS = {"en": SYSTEM_PROMPT, "de": SYSTEM_PROMPT_DE}
+_WEBSITE_PROMPTS = {SYSTEM_PROMPT: SYSTEM_PROMPT_WEBSITE, SYSTEM_PROMPT_DE: SYSTEM_PROMPT_WEBSITE_DE}
+# The label a thesis starts with and the label the page prints before a signal, per language.
+THESIS_LABEL = {"en": "Working hypothesis:", "de": "Arbeitshypothese:"}
+SIGNAL_LABEL = {"en": "Opportunity if", "de": "Opportunity, wenn"}
 # Website text shown to the model per stage call (facts, signals and excerpts together).
 WEBSITE_MATERIAL_CHARS = 9_000
 # The industry label printed before "Discussion basis" on the cover and every running head.
 SECTOR_LABEL_CHARS = 30
 DEFAULT_EYEBROW_SUFFIX = "Discussion basis"
+EYEBROW_SUFFIX = {"en": DEFAULT_EYEBROW_SUFFIX, "de": "Diskussionsgrundlage"}
 
 _ID = {"type": "string", "pattern": "^[a-z0-9_]{1,64}$"}
 
@@ -286,8 +305,7 @@ def with_website(complete: CompleteFn, material: dict[str, Any]) -> CompleteFn:
     )
 
     def call(system: str, user: str, schema: dict[str, Any]) -> dict[str, Any]:
-        if system == SYSTEM_PROMPT:
-            system = SYSTEM_PROMPT_WEBSITE
+        system = _WEBSITE_PROMPTS.get(system, system)
         marker = "\n\nTASK:\n"
         user = user.replace(marker, "\n\n" + block + marker, 1) if marker in user else user + "\n\n" + block
         return complete(system, user, schema)
@@ -314,6 +332,16 @@ _INTERNAL_LANGUAGE = (
         r"|\bcontext (?:is|was) (?:thin|missing|limited|not provided)\b"
         r"|\b(?:as an ai|language model|this prompt|the prompt|system prompt|my instructions|the instructions above)\b"
         r"|\b(?:placeholder|lorem ipsum|internal note|note to self|calibration note)\b|\[insert\b|\bTODO\b|\bTBD\b",
+        re.IGNORECASE,
+    ),
+    # BAP-13: the same leaks in German.
+    re.compile(
+        r"\b(?:keine|ohne) (?:web|website|online|unternehmens)?-?recherche\b"
+        r"|\brecherche (?:wurde|konnte) (?:nicht )?(?:durchgeführt|gemacht)\b"
+        r"|\b(?:keine|wenige|begrenzte|unzureichende|fehlende) (?:angaben|informationen|eingaben|details) (?:wurden|lagen|liegen|sind)\b"
+        r"|\bauf (?:basis|grundlage) der (?:begrenzten |vorliegenden |verfügbaren )?(?:angaben|informationen|eingaben)\b"
+        r"|\b(?:vom|des) (?:nutzer|benutzer)s?\b|\b(?:als ki|sprachmodell|dieser prompt|der prompt|systemprompt|meine anweisungen)\b"
+        r"|\b(?:platzhalter|interne notiz)\b|\[einfügen\b",
         re.IGNORECASE,
     ),
 )
@@ -352,7 +380,23 @@ _YES_NO = re.compile(
 )
 
 
-def measurable_question(question: str) -> bool:
+_QUANTITY_ASKED_DE = re.compile(
+    r"\bwie (?:viele?|lange|oft|häufig|früh|spät|schnell|hoch|groß)\b|\bwelche[rn]? (?:anteil|menge|zahl|quote)\b|\bwie viel\b"
+    r"|\b(?:können|könnten) sie (?:\w+ )*?(?:beziffern|schätzen|quantifizieren)\b",
+    re.IGNORECASE,
+)
+_QUANTITY_WORD_DE = re.compile(
+    r"\b(?:wann (?:erfahren|merken|sehen|wissen|erkennen))\b|\bkoste\w*\b|\b(?:tage?n?|stunden?|wochen?|minuten?|monate?n?)\b"
+    r"|\bpro (?:tag|woche|monat|jahr|auftrag|schicht|fall|charge)\b|\b\w*quote\b|\brate\b",
+    re.IGNORECASE,
+)
+# A German question is open when it starts with a question word; otherwise it is answered with yes or no.
+_OPEN_DE = re.compile(r"^\W*(?:wie|was|wann|wo|wer|wem|wen|welche\w*|warum|weshalb|wieso|wodurch|woran|womit|wofür|woher|wohin|worin|wieviel\w*)\b", re.IGNORECASE)
+
+
+def measurable_question(question: str, language: str = DEFAULT_LANGUAGE) -> bool:
+    if stored_language(language) == "de":
+        return bool(_QUANTITY_ASKED_DE.search(question) or (_QUANTITY_WORD_DE.search(question) and _OPEN_DE.match(question)))
     return bool(_QUANTITY_ASKED.search(question) or (_QUANTITY_WORD.search(question) and not _YES_NO.match(question)))
 
 
@@ -395,6 +439,49 @@ _CLAUSE = re.compile(r"[.;:—–()]|,\s|\bthen\b")
 _NAME = re.compile(r"[A-Za-zÀ-ÿ]+")
 
 
+# BAP-13: the same rule in German - a decision with a person, role, team or function as its subject.
+_DECISION_DE = re.compile(
+    r"\b(?:entscheid\w*|entschied\w*|freigab\w*|freigeb\w*|gibt|geben|prüf\w*|bestätig\w*|genehmig\w*|klassifizier\w*|verhandel\w*"
+    r"|wählt|wählen|steuer\w*|validier\w*|verfeiner\w*|sendet|senden|versendet|interpretier\w*|bewert\w*|unterschreib\w*|zeichnet"
+    r"|priorisier\w*|beschließ\w*|übernimm\w*|übernehmen|klär\w*|nimmt|abnehm\w*)\b",
+    re.IGNORECASE,
+)
+_ROLE_WORDS_DE = frozenset(
+    "person personen mensch menschen team teams mitarbeitende mitarbeiter mitarbeiterin fachleute fachkräfte fachabteilung "
+    "vertrieb einkauf einkäufer einkäuferin planer planerin planung prüfer prüferin controlling controller finanzabteilung "
+    "buchhaltung kreditorenbuchhaltung debitorenbuchhaltung qualitätssicherung qs hr personal personalabteilung schichtleitung "
+    "betriebsleitung leitung geschäftsführung management verantwortliche verantwortlichen verantwortlicher bearbeiter "
+    "bearbeiterin kalkulator kalkulatorin mentoren mentor service kundenservice kunde kunden disponent disponenten "
+    "projektleitung standortleitung abteilung fachbereich ärzte ärztin apotheker apothekerin".split()
+)
+_MACHINE_WORDS_DE = frozenset("ki system systeme modell modelle assistent assistenten werkzeug werkzeuge tool tools plattform algorithmus software regeln automatisch es".split())
+_ROLE_ENDING_DE = re.compile(r"(?:er|erin|innen|or|orin|ist|istin|leitung|verantwortliche[rn]?|abteilung|team)$")
+_HANDED_TO_DE = re.compile(r"\b(?:an|bei|zu)\s+(?:eine[nrm]?\s+|die\s+|den\s+|der\s+|dem\s+)?([A-Za-zÀ-ÿ]+)", re.IGNORECASE)
+
+
+def _is_person_de(word: str) -> bool:
+    word = word.lower()
+    if word in _MACHINE_WORDS_DE:
+        return False
+    if word in _ROLE_WORDS_DE:
+        return True
+    return len(word) >= 5 and word not in _NOT_ROLES and bool(_ROLE_ENDING_DE.search(word))
+
+
+def _names_human_step_de(text: str) -> bool:
+    if any(_is_person_de(match.group(1)) for match in _HANDED_TO_DE.finditer(text) if re.search(r"\b(?:geh\w*|land\w*|bleib\w*|leite\w*|eskalier\w*)\b", text, re.IGNORECASE)):
+        return True
+    for clause in _CLAUSE.split(text):
+        for verb in _DECISION_DE.finditer(clause):
+            passive = re.match(r"\s*\w+\s+(?:von|durch)\s+((?:[A-Za-zÀ-ÿ]+\s*){1,3})", clause[verb.start() :], re.IGNORECASE)
+            if passive and any(_is_person_de(word) for word in passive.group(1).split()):
+                return True
+            subject = _NAME.findall(clause[: verb.start()])
+            if subject and not any(word.lower() in _MACHINE_WORDS_DE for word in subject) and any(_is_person_de(word) for word in subject):
+                return True
+    return False
+
+
 def _is_person(word: str) -> bool:
     word = word.lower()
     if word in _MACHINE_WORDS:
@@ -404,8 +491,10 @@ def _is_person(word: str) -> bool:
     return len(word) >= 5 and word not in _NOT_ROLES and bool(_ROLE_ENDING.search(word))
 
 
-def names_human_step(text: str) -> bool:
+def names_human_step(text: str, language: str = DEFAULT_LANGUAGE) -> bool:
     """Whether the future process ends with a person deciding, approving, releasing or reviewing."""
+    if stored_language(language) == "de":
+        return _names_human_step_de(text)
     if any(_is_person(match.group(1)) for match in _HANDED_TO.finditer(text)):
         return True
     for clause in _CLAUSE.split(text):
@@ -424,7 +513,12 @@ _GENERIC_WORDS = frozenset(
     "efficiency improvement & and of for with".split()
 )
 _WORD = re.compile(r"[a-zà-ÿ]+", re.IGNORECASE)
-_LOOP = re.compile(r"\b(?:learning|loop|feedback)\b", re.IGNORECASE)
+_LOOP = re.compile(r"\b(?:learning|loop|feedback)\b|lernend|kreislauf|rückkopplung", re.IGNORECASE)
+_GENERIC_WORDS_DE = frozenset(
+    "ki automatisierung automatisiert automatisierte analytik analyse prozess prozesse digital digitale digitalisierung optimierung "
+    "intelligent intelligente smarte tool tools lösung lösungen plattform daten datenanalyse management system systeme effizienz "
+    "verbesserung & und der die das für mit von".split()
+)
 
 
 def _words(text: str) -> set[str]:
@@ -435,7 +529,7 @@ def _stems(text: str) -> set[str]:
     return {word[:5] for word in _words(text)}
 
 
-def quality_problems(stage: str, answer: dict[str, Any], material: dict[str, Any] | None = None) -> list[str]:
+def quality_problems(stage: str, answer: dict[str, Any], material: dict[str, Any] | None = None, language: str = DEFAULT_LANGUAGE) -> list[str]:
     """Reference-quality rules a model answer misses, in words the model can act on.
 
     Only rules code can check objectively: measurable questions, a named human step, a usable
@@ -443,29 +537,32 @@ def quality_problems(stage: str, answer: dict[str, Any], material: dict[str, Any
     the text fits the industry is for the prompt and the PM review, not for this check.
     """
     problems: list[str] = []
+    language = stored_language(language)
+    label = THESIS_LABEL[language]
+    generic_words = _GENERIC_WORDS_DE if language == "de" else _GENERIC_WORDS
     if stage == "research":
-        if not answer["core_thesis"].startswith("Working hypothesis:"):
-            problems.append("core_thesis must start with 'Working hypothesis:'")
-        if not answer["in_short_thesis"].startswith("Working hypothesis:"):
-            problems.append("in_short_thesis must start with 'Working hypothesis:'")
+        if not answer["core_thesis"].startswith(label):
+            problems.append(f"core_thesis must start with '{label}'")
+        if not answer["in_short_thesis"].startswith(label):
+            problems.append(f"in_short_thesis must start with '{label}'")
     if stage == "overview":
         titles = [title for area in answer["areas"] for title in area["opportunity_titles"]]
         repeated = sorted({title for title in titles if titles.count(title) > 1})
         if repeated:
             problems.append(f"opportunity titles repeat across areas: {', '.join(repeated[:3])}")
-        generic = [title for title in titles if _words(title) <= _GENERIC_WORDS]
+        generic = [title for title in titles if _words(title) <= generic_words]
         if generic:
             problems.append(f"titles name a capability, not a concrete step, document or decision: {', '.join(generic[:3])}")
     if stage == "deep_dives":
         items = answer["opportunities"]
         for item in items:
             where = f"opportunity '{item['title']}'"
-            if not any(measurable_question(question) for question in item["discovery_questions"]):
+            if not any(measurable_question(question, language) for question in item["discovery_questions"]):
                 problems.append(f"{where}: no discovery question asks for a number, duration, share, frequency or cost (yes/no questions do not count)")
-            if not names_human_step(item["how_it_works"]):
+            if not names_human_step(item["how_it_works"], language):
                 problems.append(f"{where}: how_it_works does not end with the person or role who reviews, decides, approves or releases - not the AI or the system")
-            if item["opportunity_signal"].lower().startswith("opportunity if"):
-                problems.append(f"{where}: the signal repeats the printed label 'Opportunity if'")
+            if item["opportunity_signal"].lower().startswith(SIGNAL_LABEL[language].lower()):
+                problems.append(f"{where}: the signal repeats the printed label '{SIGNAL_LABEL[language]}'")
         for key in ("result", "opportunity_signal", "how_it_works"):
             texts = [item[key].strip().lower() for item in items]
             if len(set(texts)) != len(texts):
@@ -492,6 +589,7 @@ def ask(
     task: str,
     material: dict[str, Any] | None = None,
     warnings: list[str] | None = None,
+    language: str = DEFAULT_LANGUAGE,
 ) -> dict[str, Any]:
     """One stage call; an answer that breaks the stage contract is retried once with the reason.
 
@@ -524,12 +622,12 @@ def ask(
     problem = ""
     usable: tuple[dict[str, Any], list[str]] | None = None
     for attempt in range(2):
-        answer = complete(SYSTEM_PROMPT, user + problem, schema)
+        answer = complete(_SYSTEM_PROMPTS[stored_language(language)], user + problem, schema)
         errors = sorted(Draft202012Validator(schema).iter_errors(answer), key=lambda error: list(error.absolute_path))
         if not errors:
             leaks = internal_language(answer)
             if not leaks:
-                weak = quality_problems(stage, answer, material)
+                weak = quality_problems(stage, answer, material, language)
                 if not weak or attempt == 1:
                     return accept(answer, weak)
                 usable = (answer, weak)
@@ -552,25 +650,29 @@ def ask(
     raise LiveStageError(f"Stage {stage} did not return usable content: {location}")
 
 
-def _ask(draft: dict[str, Any], *args: Any) -> dict[str, Any]:
-    """``ask`` for a stage of this analysis: quality warnings are collected on the draft."""
-    return ask(*args, warnings=draft.setdefault(QUALITY_WARNINGS_KEY, []))
+def _ask(draft: dict[str, Any], language: str, *args: Any) -> dict[str, Any]:
+    """``ask`` for a stage of this analysis in ``language``: quality warnings are collected on the draft."""
+    return ask(*args, warnings=draft.setdefault(QUALITY_WARNINGS_KEY, []), language=language)
 
 
-def research_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any], website: dict[str, Any] | None = None) -> None:
+def research_stage(
+    complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any], website: dict[str, Any] | None = None, *, language: str = DEFAULT_LANGUAGE
+) -> None:
+    label = THESIS_LABEL[stored_language(language)]
     answer = _ask(
         draft,
+        language,
         complete,
         "research",
         context,
-        "Write the core thesis as one working hypothesis about where this business decides its margin or speed and "
-        "where the work around the core work most likely costs it (start with 'Working hypothesis:'), in the "
+        f"Write the core thesis as one working hypothesis about where this business decides its margin or speed and "
+        f"where the work around the core work most likely costs it (start with '{label}'), in the "
         "industry's terms. Write overview_context: one paragraph on the economics of this business - what it sells, "
         "what constrains it, and which documents, hand-offs, schedules or checks bind days or margin - and why that "
         "is where AI drafts, checks, matches and orchestrates while people keep the decisions; specific where what "
         "is said about the company allows, otherwise what is typical for comparable organisations. Write "
         "overview_key_message: one sentence on the lever. Write in_short_thesis: the thesis for the contents page "
-        "in one plain sentence (start with 'Working hypothesis:'). Write sector_label: the company's industry in "
+        f"in one plain sentence (start with '{label}'). Write sector_label: the company's industry in "
         "one to four words as the company itself describes its business (for example the kind of products or "
         "services it names); an empty string when nothing says what the company does.",
     )
@@ -580,9 +682,9 @@ def research_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[st
     overview["key_message"] = answer["overview_key_message"]
     document = draft["framing"]["document"]
     document["in_short"][1] = answer["in_short_thesis"]
-    label = grounded_sector_label(answer["sector_label"], context, website)
-    if label:
-        document["eyebrow"] = f"{label} · {DEFAULT_EYEBROW_SUFFIX}"
+    sector = grounded_sector_label(answer["sector_label"], context, website)
+    if sector:
+        document["eyebrow"] = f"{sector} · {EYEBROW_SUFFIX[stored_language(language)]}"
 
 
 def grounded_sector_label(label: str, context: dict[str, Any], website: dict[str, Any] | None = None) -> str | None:
@@ -603,9 +705,10 @@ def grounded_sector_label(label: str, context: dict[str, Any], website: dict[str
     return label if all(word[:5] in known for word in significant) else None
 
 
-def overview_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any]) -> None:
+def overview_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any], *, language: str = DEFAULT_LANGUAGE) -> None:
     answer = _ask(
         draft,
+        language,
         complete,
         "overview",
         context,
@@ -637,11 +740,12 @@ def overview_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[st
     ]
 
 
-def deep_dives_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any]) -> None:
+def deep_dives_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any], *, language: str = DEFAULT_LANGUAGE) -> None:
     for area in draft["areas"]:
         titles = area.pop("_titles")
         answer = _ask(
             draft,
+            language,
             complete,
             "deep_dives",
             context,
@@ -656,16 +760,17 @@ def deep_dives_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[
             "questions this company's team can answer from its own operations, specific to this opportunity, at least "
             "one asking for a number, duration, share, frequency or cost, none answerable with a plain yes or no; "
             "opportunity_signal - the observable answer that makes this a pilot candidate, as a short condition "
-            "('X happens, and Y') - do not begin with 'Opportunity if', the page prints that label. Today's situation "
+            f"('X happens, and Y') - do not begin with '{SIGNAL_LABEL[stored_language(language)]}', the page prints that label. Today's situation "
             "at this company is what the questions find out: never state it as a fact.",
             {"area": {"name": area["name"], "lead": area["lead"]}, "core_thesis": draft["research"]["core_thesis"]["text"]},
         )
         area["opportunities"] = answer["opportunities"]
 
 
-def shadow_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any]) -> None:
+def shadow_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any], *, language: str = DEFAULT_LANGUAGE) -> None:
     answer = _ask(
         draft,
+        language,
         complete,
         "shadow_processes",
         context,
@@ -688,9 +793,10 @@ def shadow_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str,
     chapter["key_message"] = answer["chapter_key_message"]
 
 
-def target_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any]) -> None:
+def target_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any], *, language: str = DEFAULT_LANGUAGE) -> None:
     answer = _ask(
         draft,
+        language,
         complete,
         "target_picture",
         context,
@@ -710,17 +816,17 @@ def target_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str,
     chapter = draft["framing"]["chapters"]["target"]
     chapter["paragraphs"][0] = answer["chapter_paragraph"]
     chapter["key_message"] = answer["chapter_key_message"]
-    draft["framing"]["leads"]["target_table"] = (
-        f"{len(answer['workflows'])} workflow chains in which the blocks from parts 2 and 3 interlock — "
-        "autonomous flow on the left, human decision gates on the right:"
-    )
+    from services.framework.discovery_analysis.fixture import load_library
+
+    draft["framing"]["leads"]["target_table"] = load_library(language)["chapters"]["target"]["table_lead"].format(count=len(answer["workflows"]))
 
 
-def optional_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any], requested: dict[str, bool]) -> None:
+def optional_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any], requested: dict[str, bool], *, language: str = DEFAULT_LANGUAGE) -> None:
     for key, wanted in requested.items():
         if wanted:
             draft["optional_deep_dives"][key] = _ask(
                 draft,
+                language,
                 complete,
                 "optional_parts",
                 context,
@@ -729,9 +835,10 @@ def optional_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[st
             )
 
 
-def closing_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any]) -> None:
+def closing_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any], *, language: str = DEFAULT_LANGUAGE) -> None:
     answer = _ask(
         draft,
+        language,
         complete,
         "closing",
         context,

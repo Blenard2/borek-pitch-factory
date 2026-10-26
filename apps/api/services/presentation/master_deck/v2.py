@@ -26,6 +26,7 @@ import hashlib
 import json
 from typing import Any
 
+from services.language import in_other_language, stored_language
 from services.meeting.discovery2 import content_hash as discovery2_content_hash
 from services.meeting.discovery2 import meeting_items as discovery2_meeting_items
 from services.presentation.borek_deck.deck_plan import PLAN_ENGINE
@@ -179,6 +180,8 @@ def build_snapshot(
         # built in the earlier order is generated again instead of being reused.
         "master": {**master.identity(), "slide_count": master.slide_count, "deck_layout": DECK_LAYOUT},
         "presentation": {"presentation_id": str(presentation_id), "base_presentation_version_id": str(base_presentation_version_id)},
+        # BAP-13: the language of the appendix - the approved Discovery's (Discovery 2 matches it).
+        "language": stored_language(paper.get("language")),
         "approved_discovery": {
             "version_id": str(approved_discovery["id"]),
             "document_id": str(approved_discovery.get("document_id") or paper.get("document_id") or ""),
@@ -277,6 +280,12 @@ def generation_manifest(snapshot: dict[str, Any]) -> dict[str, Any]:
         "snapshot_hash": snapshot_hash(snapshot),
         "confirmed_finding_count": len(confirmed_findings(snapshot)),
         "excluded_finding_count": len(snapshot["excluded_findings"]),
+        # BAP-13: the appendix language; the canonical master slides stay in the master's language.
+        "language": stored_language(snapshot.get("language")),
+        "master_language": get_master(snapshot["master"]["master_id"]).language,
+        # PR #13 review: confirmed findings shown in their own words although they read as the other
+        # language - visible to the owner before review and finalization, never translated silently.
+        "other_language_findings": sum(1 for item in confirmed_findings(snapshot) if in_other_language(item["text"], snapshot.get("language"))),
     }
 
 
@@ -325,6 +334,7 @@ def build_plan(snapshot: dict[str, Any], master: MasterDeck | None = None) -> di
         "product_version": PRODUCT_VERSION,
         "prompt_version": snapshot["planner_version"],
         "lang": master.language.upper(),
+        "content_language": stored_language(snapshot.get("language")),
         "title": f"Master Presentation — {client}" if client else "Master Presentation",
         "master": {**master.identity(), "slide_count": master.slide_count},
         **({"deck_layout": DECK_LAYOUT} if closing_last else {}),

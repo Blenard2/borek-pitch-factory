@@ -104,6 +104,9 @@ def test_v1_is_the_canonical_deck_plus_an_appendix_from_the_approved_analysis(cl
         "discovery_schema_version": "2.0",
         "appendix_source_hash": version["generation_source_manifest"]["appendix_source_hash"],
         "deck_layout": "closing-last:v1",
+        # BAP-13: appendix language and the language of the canonical master slides.
+        "language": "en",
+        "master_language": "en",
     }
     specs = version["slides_json"]
     assert len(specs) > 26 and len(specs) > 8
