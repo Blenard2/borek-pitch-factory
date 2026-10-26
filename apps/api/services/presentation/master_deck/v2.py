@@ -26,7 +26,7 @@ import hashlib
 import json
 from typing import Any
 
-from services.language import stored_language
+from services.language import in_other_language, stored_language
 from services.meeting.discovery2 import content_hash as discovery2_content_hash
 from services.meeting.discovery2 import meeting_items as discovery2_meeting_items
 from services.presentation.borek_deck.deck_plan import PLAN_ENGINE
@@ -283,6 +283,9 @@ def generation_manifest(snapshot: dict[str, Any]) -> dict[str, Any]:
         # BAP-13: the appendix language; the canonical master slides stay in the master's language.
         "language": stored_language(snapshot.get("language")),
         "master_language": get_master(snapshot["master"]["master_id"]).language,
+        # PR #13 review: confirmed findings shown in their own words although they read as the other
+        # language - visible to the owner before review and finalization, never translated silently.
+        "other_language_findings": sum(1 for item in confirmed_findings(snapshot) if in_other_language(item["text"], snapshot.get("language"))),
     }
 
 

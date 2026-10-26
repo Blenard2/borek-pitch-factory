@@ -49,13 +49,28 @@ Suggested UI for BAP-12: one language selector on the client (PATCH `language`) 
 | Master Presentation V2 | **Appendix only** | Same canonical-slide blocker. Appendix, provenance labels and recommendation matching (German stop words) are German |
 | Follow-up email | **Complete for the Master journey (rule-based writer)** | The AI writer stays English-only: its grounding checks rely on English (commitments, dates, capitalised names); a German draft is written by the rules and records `AI_WRITER_LANGUAGE_UNSUPPORTED`. Earlier email flows are English-only and refuse `de` |
 
+## Source statements in another language (PR #13 review)
+
+Confirmed meeting findings and carried-forward Discovery items are evidence: they are used in the words they were confirmed in, in Discovery 2, in the V2 appendix and in the follow-up email. A German journey built from an English transcript therefore shows English statements inside German wording. Nothing is translated silently. Instead, a deterministic check (`services.language.detect_language`, function words only, silent when unsure) makes it visible:
+
+* Discovery 2: `language_check.other_language_item_ids` in `GET …/post-meeting-discovery` (computed on read, so it follows the owner's edits; rewording an item makes it the owner's wording).
+* Master Presentation V2: `generation_source_manifest.other_language_findings` (count).
+* Follow-up email: review flag `statements_not_in_email_language`, which must be acknowledged before the draft can be confirmed; the owner translates the statements in the editable text.
+
+**Limits of the check.** Language detection is a heuristic: it counts common English and German function words and stays silent for short or unclear texts (names, product terms, fragments). It can miss a statement, and it never proves that a text is correctly in one language. Acknowledging the review flag only records that the owner has seen it; it does not translate anything and does not make mixed-language content German. A document or email built from statements in another language remains mixed-language until the owner rewrites those statements.
+
+**Blocker for genuinely German wording of English statements:** an authorized translation step — a model call with a meaning check against the verbatim evidence (paid; not authorized in this ticket) or a product decision that the owner's translation becomes the approved wording (in Discovery 2 that already exists, but turns the item into owner wording, which the email leaves out by design). Until then, mixed-language sources are supported with this visible review step, not as fully German output.
+
+Native German meetings need none of this: the fixture extractor now reads German category labels (Anforderung, Herausforderung, Priorität, Chance/Potenzial, Besprochene Lösung, Entscheidung, Nächster Schritt) and speaker names with umlauts; live extraction already writes findings in the language of the source with verbatim evidence. A deadline or owner named in a statement is recognised in either language, whatever the email's language.
+
 ## Persistence
 
 No migration. The language lives in the stored JSON: `discovery_paper_versions.paper_json.language` (already in the schema), `discovery2_versions.document_json.language` (new optional property), presentation version `generation_source_manifest.language`/`master_language`, V2 snapshot `language`, email draft `source.language` (new optional property). Anything stored before BAP-13 reads as English.
 
 ## Remaining before full Jira acceptance
 
-1. A German canonical master deck (or a PM decision that the canonical slides stay English) — needed for a fully German Master Presentation V1/V2.
-2. German grounding checks for the AI email writer, if AI-written German emails are wanted.
-3. BAP-12: the language selector in the UI.
-4. A paid live-model run in German (prompts are covered by deterministic mocks only) and PM language review of real German output.
+1. Safe translation of confirmed statements in another language (see above): an authorized, meaning-checked translation step or a product decision on owner-approved translations. Until then, mixed-language journeys are flagged, not translated.
+2. A German canonical master deck (or a PM decision that the canonical slides stay English) — needed for a fully German Master Presentation V1/V2.
+3. German grounding checks for the AI email writer, if AI-written German emails are wanted.
+4. BAP-12: the language selector in the UI.
+5. A paid live-model run in German (prompts are covered by deterministic mocks only) and PM language review of real German output.

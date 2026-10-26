@@ -43,7 +43,8 @@ from services.meeting.discovery2 import (
 )
 from services.meeting.discovery_docx import render_discovery1_docx, render_discovery2_docx
 from services.meeting.extraction import transcript_text_from_sections
-from services.language import stored_language
+from app.services.content_language import require_source_language
+from services.language import in_other_language, stored_language
 
 DISCOVERY2_BLOCKERS = frozenset({"DISCOVERY2_MISSING", "DISCOVERY2_NOT_APPROVED", "DISCOVERY2_STALE"})
 _INPUT_STEPS = {
@@ -116,7 +117,19 @@ def get_post_meeting_discovery(store: Any, *, opportunity_id: UUID, user_id: UUI
         "input_blockers": input_blockers,
         "finalized": review["finalized"],
         "ready_for_v2": review["readiness"]["ready_for_v2"],
+        "language_check": language_check(document),
     }
+
+
+def language_check(document: dict[str, Any]) -> dict[str, Any]:
+    """PR #13 review: items that read as another language than the document.
+
+    Items keep the words they were confirmed or approved in; nothing is translated without a
+    check. The owner can reword such an item in Discovery 2 (it then counts as the owner's wording).
+    """
+    language = stored_language(document.get("language"))
+    items = [item for section in document.get("sections") or [] for item in section.get("items") or []]
+    return {"language": language, "other_language_item_ids": [str(item["id"]) for item in items if in_other_language(item.get("text"), language)]}
 
 
 def generate_post_meeting_discovery(
@@ -143,6 +156,11 @@ def generate_post_meeting_discovery(
     if state["status"] == "generating":
         raise conflict("DISCOVERY2_GENERATION_IN_PROGRESS", "Discovery 2 is being generated. Reload in a moment.")
     basis = state["basis_hash"]
+    # BAP-13: a language the approved Discovery 1 was not written in is refused before anything
+    # is written - a refused request leaves the working document, versions and readiness as they were.
+    discovery1 = store.get_discovery_paper_version(version_id=UUID(review["approved_discovery"]["version_id"]), user_id=user_id)
+    paper = discovery1.get("paper_json") if isinstance(discovery1.get("paper_json"), dict) else {}
+    language = require_source_language(language, paper.get("language"), artifact="Discovery 2", source="Discovery document")
     opportunity = store.get_opportunity(opportunity_id=opportunity_id, user_id=user_id)
     working = empty_discovery2(opportunity)
     working.update({"status": "generating", "generated_at": _now()})

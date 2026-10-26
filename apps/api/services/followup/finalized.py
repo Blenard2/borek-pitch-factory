@@ -39,6 +39,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from services.language import in_other_language
 from services.followup.rendering import (
     EXTENSIVE_CONTENT_WORD_CAP,
     MEDIUM_CONTENT_WORD_CAP,
@@ -66,6 +67,9 @@ FLAG_ACTION_DATE_UNCONFIRMED = "action_date_unconfirmed"
 FLAG_MEETING_DATE_UNCONFIRMED = "meeting_date_unconfirmed"
 FLAG_NO_NEXT_STEPS = "no_next_steps_confirmed"
 FLAG_CONTENT_TRIMMED = "content_trimmed"
+# PR #13 review: a confirmed statement in another language than the email is quoted as confirmed -
+# never translated without a check. The owner sees this flag and translates it in the text.
+FLAG_OTHER_LANGUAGE = "statements_not_in_email_language"
 
 _DATE = re.compile(r"\b\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4})\b|\b\d{4}-\d{2}-\d{2}\b")
 _DEADLINE = re.compile(
@@ -114,11 +118,16 @@ def _sentence(text: str) -> str:
 
 
 def has_deadline(text: str, language: str = "en") -> bool:
-    return bool(_DATE.search(text) or (_DEADLINE_DE if language == "de" else _DEADLINE).search(text))
+    """A date or deadline the statement itself names - in either language, whatever the email's.
+
+    ``language`` is kept for callers; a statement keeps the language it was confirmed in.
+    """
+    return bool(_DATE.search(text) or _DEADLINE.search(text) or _DEADLINE_DE.search(text))
 
 
 def states_owner(text: str, language: str = "en") -> bool:
-    return bool((_OWNER_DE if language == "de" else _OWNER).search(text))
+    """An owner the statement itself names, in either language."""
+    return bool(_OWNER.search(text) or _OWNER_DE.search(text))
 
 
 def content_from_snapshot(snapshot: dict[str, Any], language: str = "en") -> dict[str, Any]:
@@ -147,6 +156,9 @@ def content_from_snapshot(snapshot: dict[str, Any], language: str = "en") -> dic
         flags.append(FLAG_ACTION_OWNER_UNCONFIRMED)
     if any(not has_deadline(text, language) for text in actions):
         flags.append(FLAG_ACTION_DATE_UNCONFIRMED)
+    other_language = [text for text in (*heard, *decisions, *discussed, *actions) if in_other_language(text, language)]
+    if other_language:
+        flags.append(FLAG_OTHER_LANGUAGE)
     return {
         "heard": heard,
         "decisions": decisions,
@@ -156,6 +168,7 @@ def content_from_snapshot(snapshot: dict[str, Any], language: str = "en") -> dic
         "owner_only_count": len(owner_only),
         "review_flags": flags,
         "language": language,
+        "other_language_count": len(other_language),
     }
 
 

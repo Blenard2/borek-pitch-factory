@@ -337,3 +337,59 @@ def test_german_forms_of_address_never_guess_a_gender(salutation: str, expected:
     statics = {**STATICS, "standard_recipients": [{**STATICS["standard_recipients"][0], "salutation": salutation}]}
     assert greeting(statics, "de") == expected
     assert greeting({**statics, "salutation_style": "informal"}, "de") == "Hallo Dana,"
+
+
+# --------------------------------------------------------------- PR #13 review: native German meetings
+
+
+GERMAN_TRANSCRIPT = (
+    "[00:02] Jörg Müller: Anforderung: Angebote müssen innerhalb eines Tages beim Kunden sein.\n"
+    "[00:05] Dana Weber: Herausforderung: Die Preisdaten liegen in drei Systemen.\n"
+    "- Priorität: Zuerst soll das Vertriebsteam entlastet werden.\n"
+    "Tom: Besprochene Lösung: Ein Assistent, der das Angebot aus der Anfrage vorbereitet.\n"
+    "Tom: Entscheidung: Ein Pilot mit zehn Angeboten wird gestartet.\n"
+    "Dana: Nächster Schritt: Dana Weber schickt den Preisexport bis Freitag.\n"
+    "Tom: Wir haben auch kurz über die Messe gesprochen.\n"
+)
+GERMAN_NOTES_TEXT = "Chance: Das Serviceteam könnte den Angebotsassistenten mitnutzen.\nPriorität: Zuerst soll das Vertriebsteam entlastet werden."
+
+
+def test_finding_3_the_fixture_extractor_reads_german_labels_and_names_verbatim() -> None:
+    from services.meeting.extraction import extract_meeting_findings
+
+    categories, sources = extract_meeting_findings(sections=[{"content": GERMAN_TRANSCRIPT}], personal_notes=GERMAN_NOTES_TEXT, live=False)
+    assert categories["requirements"] == ["Angebote müssen innerhalb eines Tages beim Kunden sein."], "speaker 'Jörg Müller' no longer blocks the line"
+    assert categories["challenges"] == ["Die Preisdaten liegen in drei Systemen."]
+    assert categories["priorities"] == ["Zuerst soll das Vertriebsteam entlastet werden."] and sources["priorities"] == ["both"]
+    assert categories["discussed_solutions"] == ["Ein Assistent, der das Angebot aus der Anfrage vorbereitet."]
+    assert categories["decisions"] == ["Ein Pilot mit zehn Angeboten wird gestartet."]
+    assert categories["follow_ups"] == ["Dana Weber schickt den Preisexport bis Freitag."]
+    assert categories["opportunities"] == ["Das Serviceteam könnte den Angebotsassistenten mitnutzen."] and sources["opportunities"] == ["personal_notes"]
+    every = [item for items in categories.values() for item in items]
+    assert all(item in GERMAN_TRANSCRIPT or item in GERMAN_NOTES_TEXT for item in every), "every finding is a verbatim source line"
+    assert not any("Messe" in item for item in every), "fixture mode reads labelled lines only - no interpretation"
+
+
+def test_finding_3_english_labels_still_work_and_unlabelled_talk_is_not_invented() -> None:
+    from services.meeting.extraction import extract_meeting_findings
+
+    categories, _ = extract_meeting_findings(sections=[{"content": "Jörg: Requirement: Quotes go out in one day.\nWe talked about the fair."}], personal_notes=None, live=False)
+    assert categories["requirements"] == ["Quotes go out in one day."] and sum(len(items) for items in categories.values()) == 1
+
+
+def test_finding_3_live_extraction_keeps_german_findings_only_with_verbatim_german_evidence() -> None:
+    from services.meeting.extraction import extract_meeting_findings
+
+    def model(_system: str, _user: str, _schema: dict[str, Any]) -> dict[str, Any]:
+        empty = {key: [] for key in ("requirements", "challenges", "priorities", "opportunities", "discussed_solutions", "decisions", "follow_ups")}
+        return {
+            **empty,
+            "requirements": [{"text": "Angebote innerhalb eines Tages", "evidence": "Angebote müssen innerhalb eines Tages beim Kunden sein"}],
+            "challenges": [{"text": "Preisdaten liegen verteilt", "evidence": "Die Preisdaten liegen in fünf Systemen"}],  # not said: dropped
+            "opportunities": [{"text": "Serviceteam als zweiter Nutzer", "evidence": "Das Serviceteam könnte den Angebotsassistenten mitnutzen"}],
+        }
+
+    categories, sources = extract_meeting_findings(sections=[{"content": GERMAN_TRANSCRIPT}], personal_notes=GERMAN_NOTES_TEXT, live=True, complete=model)
+    assert categories["requirements"] == ["Angebote innerhalb eines Tages"] and sources["requirements"] == ["transcript"]
+    assert categories["challenges"] == [], "evidence that is not in a source drops the finding, in German as in English"
+    assert sources["opportunities"] == ["personal_notes"]

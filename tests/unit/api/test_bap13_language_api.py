@@ -197,10 +197,123 @@ def test_a_german_journey_from_discovery_to_the_follow_up_email(client: TestClie
         assert length["body"].startswith("Sehr geehrte Frau Weber,") and "Mit freundlichen Grüßen" in length["body"]
         assert length["subject"] == "Angebotsbeschleunigung – Nachbereitung unseres Gesprächs"
     assert draft["send_status"] == "not_sent", "a reviewed draft, never sent automatically"
+    saved = ok(get(client, f"/opportunities/{opportunity_id}/email-drafts?journey_stage=deepening"))
     english = generate_email(client, opportunity_id, language="en", overwrite_edits=True)
     assert english.status_code == 409 and english.json()["error"]["code"] == "LANGUAGE_MISMATCH", english.text
+    assert ok(get(client, f"/opportunities/{opportunity_id}/email-drafts?journey_stage=deepening")) == saved, "a refused email changes nothing"
+    jobs = len(get_memory_store().generation_jobs)
+    v2_refused = client.post(f"/opportunities/{opportunity_id}/master-presentation/v2/generate", headers=headers(), json={"language": "en"})
+    assert v2_refused.status_code == 409 and len(get_memory_store().generation_jobs) == jobs, "no V2 job for a refused language"
 
     # The approved Discovery 1 and 2 versions are unchanged by everything after them.
     package = ok(get(client, f"/opportunities/{opportunity_id}/workflow-status"))
     assert package["current_status"] == "finalized"
     assert json.dumps(document, ensure_ascii=False).count("Kunden") >= 1
+
+
+# --------------------------------------------------------------- PR #13 review findings
+
+
+def _ready_german_review(client: TestClient) -> str:
+    """A German journey after the confirmed meeting review, with an approved Discovery 2, not finalized."""
+    from tests.unit.api.discovery2_helpers import ensure_discovery2_approved
+    from tests.unit.api.test_master_presentation_v2_api import prepared
+
+    base = prepared(client, body=GERMAN_CLIENT, meeting=GERMAN_MEETING, notes=GERMAN_NOTES)
+    opportunity_id = base["opportunity"]
+    view = ok(get(client, f"/opportunities/{opportunity_id}/post-meeting-review"))
+    ok(post(client, f"/opportunities/{opportunity_id}/post-meeting-review/confirm", {
+        "transcript_id": view["extraction"]["transcript_id"], "extraction_generated_at": view["extraction"]["generated_at"],
+        "review_fingerprint": view["review_fingerprint"], "excluded": {},
+    }))
+    ensure_discovery2_approved(client, opportunity_id, headers())
+    return opportunity_id
+
+
+def _discovery2_state(client: TestClient, opportunity_id: str) -> dict:
+    store = get_memory_store()
+    opportunity = store.opportunities[UUID(opportunity_id)]
+    return {
+        "view": ok(get(client, f"/opportunities/{opportunity_id}/post-meeting-discovery")),
+        "working": json.loads(json.dumps(opportunity.get("post_meeting_discovery"), default=str)),
+        "versions": [json.loads(json.dumps(row, default=str)) for row in store.post_meeting_discovery_versions.values() if str(row["opportunity_id"]) == opportunity_id],
+        "readiness": ok(get(client, f"/opportunities/{opportunity_id}/post-meeting-review"))["readiness"],
+    }
+
+
+def test_finding_1_a_refused_language_leaves_discovery2_exactly_as_it_was(client: TestClient) -> None:
+    opportunity_id = _ready_german_review(client)
+    before = _discovery2_state(client, opportunity_id)
+    assert before["view"]["current_version"]["status"] == "approved" and before["readiness"]["ready_for_v2"] is True
+    refused = client.post(f"/opportunities/{opportunity_id}/post-meeting-discovery/generate", headers=headers(), json={"language": "en"})
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "LANGUAGE_MISMATCH", refused.text
+    after = _discovery2_state(client, opportunity_id)
+    assert after == before, "no working state, version, hash or readiness changed"
+
+
+def test_finding_2_english_findings_in_a_german_journey_are_shown_as_confirmed_and_flagged(client: TestClient) -> None:
+    from tests.unit.api.test_master_presentation_v2_api import MEETING, NOTES
+
+    base = finalized(client, body=GERMAN_CLIENT, meeting=MEETING, notes=NOTES, excluded={"follow_ups": []})
+    opportunity_id = base["opportunity"]
+    set_statics(client, opportunity_id, GERMAN_STATICS)
+
+    # Discovery 2: German wording, the English statements in their confirmed words, listed for review.
+    discovery2 = ok(get(client, f"/opportunities/{opportunity_id}/post-meeting-discovery"))
+    check = discovery2["language_check"]
+    english_items = {item["id"]: item["text"] for section in discovery2["document"]["sections"] for item in section["items"] if item["origin"] != "discovery1"}
+    assert check["language"] == "de" and set(check["other_language_item_ids"]) >= {key for key, text in english_items.items() if text.startswith("Quotes must go out")}
+    assert "Quotes must go out within one day." in english_items.values(), "evidence is never rewritten"
+
+    # V2 records how many shown findings read as the other language.
+    manifest = get_memory_store().presentation_versions[UUID(base["v2"])]["generation_source_manifest"]
+    assert manifest["other_language_findings"] >= 5
+
+    # The email quotes them as confirmed - and says so, so the owner translates before confirming.
+    draft = ok(generate_email(client, opportunity_id))["draft"]
+    body = draft["lengths"]["medium"]["body"]
+    assert body.startswith("Sehr geehrte Frau Weber,") and "Quotes must go out within one day" in body
+    assert "statements_not_in_email_language" in draft["review_flags"]
+    assert "Send the pricing export by Friday." in body and "Termin noch abzustimmen" not in body, "the English deadline is recognised"
+    from tests.unit.api.test_followup_email import CHECKS
+
+    unacknowledged = [flag for flag in draft["review_flags"] if flag != "statements_not_in_email_language"]
+    refused = post(client, f"/opportunities/{opportunity_id}/email-drafts/{draft['id']}/confirm", {
+        "selected_length": "medium", "expected_revision": draft["revision"], "review_checks": CHECKS, "acknowledged_flags": unacknowledged,
+    })
+    assert refused.status_code in (400, 409, 422), "the language flag must be acknowledged"
+
+
+def test_finding_2_german_findings_in_a_german_journey_raise_nothing(client: TestClient) -> None:
+    base = finalized(client, body=GERMAN_CLIENT, meeting=GERMAN_MEETING, notes=GERMAN_NOTES, excluded={"follow_ups": []})
+    opportunity_id = base["opportunity"]
+    set_statics(client, opportunity_id, GERMAN_STATICS)
+    discovery2 = ok(get(client, f"/opportunities/{opportunity_id}/post-meeting-discovery"))
+    assert discovery2["language_check"] == {"language": "de", "other_language_item_ids": []}
+    assert get_memory_store().presentation_versions[UUID(base["v2"])]["generation_source_manifest"]["other_language_findings"] == 0
+    assert "statements_not_in_email_language" not in ok(generate_email(client, opportunity_id))["draft"]["review_flags"]
+
+
+NATIVE_GERMAN_MEETING = (
+    "[00:02] Jörg Müller: Anforderung: Angebote müssen innerhalb eines Tages beim Kunden sein.\n"
+    "[00:05] Dana Weber: Herausforderung: Die Preisdaten liegen in drei Systemen.\n"
+    "Dana Weber: Priorität: Zuerst soll das Vertriebsteam entlastet werden.\n"
+    "Tom: Besprochene Lösung: Ein Assistent, der das Angebot aus der Anfrage vorbereitet.\n"
+    "Tom: Entscheidung: Ein Pilot mit zehn Angeboten wird gestartet.\n"
+    "Dana Weber: Nächster Schritt: Dana Weber schickt den Preisexport bis Freitag.\n"
+)
+NATIVE_GERMAN_NOTES = "Priorität: Zuerst soll das Vertriebsteam entlastet werden.\nChance: Das Serviceteam könnte den Angebotsassistenten mitnutzen."
+
+
+def test_finding_3_a_german_only_meeting_gives_a_german_journey_without_language_flags(client: TestClient) -> None:
+    base = finalized(client, body=GERMAN_CLIENT, meeting=NATIVE_GERMAN_MEETING, notes=NATIVE_GERMAN_NOTES, excluded={"follow_ups": []})
+    opportunity_id = base["opportunity"]
+    set_statics(client, opportunity_id, GERMAN_STATICS)
+    discovery2 = ok(get(client, f"/opportunities/{opportunity_id}/post-meeting-discovery"))
+    meeting_items = [item["text"] for section in discovery2["document"]["sections"] for item in section["items"] if item["origin"] == "meeting"]
+    assert "Angebote müssen innerhalb eines Tages beim Kunden sein." in meeting_items and "Ein Pilot mit zehn Angeboten wird gestartet." in meeting_items
+    assert discovery2["language_check"]["other_language_item_ids"] == []
+    draft = ok(generate_email(client, opportunity_id))["draft"]
+    body = draft["lengths"]["medium"]["body"]
+    assert "Die zentrale Anforderung, wie wir sie verstanden haben: Angebote müssen innerhalb eines Tages beim Kunden sein." in body
+    assert "statements_not_in_email_language" not in draft["review_flags"] and "Termin noch abzustimmen" not in body
