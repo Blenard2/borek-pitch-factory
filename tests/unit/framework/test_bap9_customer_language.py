@@ -186,5 +186,5 @@ def test_the_live_rules_ask_for_customer_ready_prose() -> None:
         assert "The reader is the company's management" in prompt
         assert "Do not call the company 'the client'" in prompt
         assert "never write notes, placeholders or planning comments" in prompt
-    assert live.PROMPT_VERSION == "discovery-analysis:v3"
+    assert live.PROMPT_VERSION == "discovery-analysis:v4"
     assert not re.search(r"keep the wording generic", live.SYSTEM_PROMPT)

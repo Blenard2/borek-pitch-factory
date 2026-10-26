@@ -118,6 +118,10 @@ class OptionalParts(BaseModel):
     system_interfaces: bool
 
 
+class QualityWarning(RootModel[str]):
+    root: str = Field(..., max_length=300, min_length=1)
+
+
 class SchemaVersion(Enum):
     field_1_0 = '1.0'
     field_1_1 = '1.1'
@@ -627,6 +631,11 @@ class Generation(BaseModel):
     optional_parts: OptionalParts
     stages: list[Stage]
     website_research: WebsiteResearch | None = None
+    quality_warnings: list[QualityWarning] | None = Field(
+        None,
+        description='BAP-9 Phase 2: reference-quality rules a live stage answer still missed after its one retry. For review; never printed.',
+        max_length=40,
+    )
 
 
 class DiscoveryAnalysis(BaseModel):

@@ -578,6 +578,8 @@ class FakeModel:
                 "core_thesis": "Working hypothesis: quoting and invoicing lose days in hand-offs.",
                 "overview_context": "The lever is the work around the core work.",
                 "overview_key_message": "Every removed hand-off is margin.",
+                "in_short_thesis": "Working hypothesis: quoting and invoicing lose days in hand-offs.",
+                "sector_label": "",
             }
         if stage == "overview":
             return {
@@ -602,9 +604,21 @@ class FakeModel:
             self.area_index += 1
             return {"opportunities": copy.deepcopy(area["opportunities"])}
         if stage == "shadow_processes":
-            return {"rows": copy.deepcopy(library["shadow_processes"]), "findings": copy.deepcopy(library["shadow_findings"])}
+            shadow = library["chapters"]["shadow"]
+            return {
+                "rows": copy.deepcopy(library["shadow_processes"]),
+                "findings": copy.deepcopy(library["shadow_findings"]),
+                "chapter_paragraph": shadow["paragraphs"][0],
+                "chapter_key_message": shadow["key_message"],
+            }
         if stage == "target_picture":
-            return {"workflows": copy.deepcopy(library["target_workflows"][:5]), "points": copy.deepcopy(library["target_picture"]["points"])}
+            target = library["chapters"]["target"]
+            return {
+                "workflows": copy.deepcopy(library["target_workflows"][:5]),
+                "points": copy.deepcopy(library["target_picture"]["points"]),
+                "chapter_paragraph": target["paragraphs"][0],
+                "chapter_key_message": target["key_message"],
+            }
         if stage == "optional_parts":
             return optional_table("Roles & employees")
         return {"headline": "The baseline decides", "paragraphs": ["Three steps follow.", "Quick wins carry the programme."]}

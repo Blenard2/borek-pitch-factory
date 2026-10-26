@@ -48,6 +48,8 @@ M7_ROWS_PER_PAGE = 5
 # Character budgets from the master ("up to ~n characters"). Pages hide overflow, so content
 # beyond these budgets is rejected instead of being clipped silently.
 LIMITS: dict[str, int] = {
+    # BAP-9 Phase 2: the eyebrow can carry the company's industry; it is also every running head.
+    "eyebrow": 52,
     "cover_title": 70,
     "cover_subtitle": 220,
     "short_title": 44,
@@ -313,6 +315,7 @@ def length_problems(analysis: dict[str, Any]) -> list[str]:
 
     framing = analysis["framing"]
     document = framing["document"]
+    check("cover eyebrow", document["eyebrow"], "eyebrow")
     check("cover title", document["title"], "cover_title")
     check("cover subtitle", document["subtitle"], "cover_subtitle")
     check("short title", document["short_title"], "short_title")
