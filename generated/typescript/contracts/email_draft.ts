@@ -81,6 +81,10 @@ export interface FinalizedSource {
   extraction_execution_mode?: string | null;
   confirmed_finding_count?: number | null;
   excluded_finding_count?: number | null;
+  /**
+   * BAP-13: language of the finalized package the email is written from.
+   */
+  language?: "en" | "de";
   renderer_version?: string;
 }
 export interface Review {

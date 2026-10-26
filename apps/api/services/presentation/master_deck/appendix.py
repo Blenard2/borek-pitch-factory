@@ -23,6 +23,7 @@ import json
 import re
 from typing import Any
 
+from services.language import stored_language
 from services.presentation.borek_deck.engine import engine
 from services.presentation.master_deck.layouts import (
     FILLED_CARD_LAYOUTS,
@@ -43,6 +44,97 @@ _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 _COUNTER_RE = re.compile(r"\(\d+/\d+\)")
 _STRUCTURAL_KEYS = frozenset({"code", "number", "layout"})
 BENCHMARK_NOTE = "Figures are industry benchmarks and working hypotheses from the approved analysis, not commitments."
+
+# BAP-13: the appendix's own wording per language - the language of the approved analysis. The
+# analysis content itself is already in that language; slide purposes stay English (metadata).
+APPENDIX_TEXT: dict[str, dict[str, str]] = {
+    "en": {
+        "divider_title": "Your AI opportunities",
+        "divider_kicker": "Appendix · Client view",
+        "divider_text": "A discussion basis from the approved Discovery analysis — working hypotheses to validate together.",
+        "context_kicker": "Client context",
+        "context_title": "What we know — and what we want to validate",
+        "context_lead_researched": "Based on the information provided for this conversation and cited research.",
+        "context_lead": "Based on the information provided for this conversation. No company research was performed, so open points stay open.",
+        "known_label": "Known",
+        "known_title": "Provided information",
+        "known_none": "No client information was provided for this analysis.",
+        "open_label": "Open",
+        "open_title": "To validate together",
+        "thesis": "Working hypothesis",
+        "benchmark_note": BENCHMARK_NOTE,
+        "priority_kicker": "Priority opportunities",
+        "priority_title": "Where we would start",
+        "priority_lead_focus": "Opportunities in the areas your context points at — to be confirmed in the conversation.",
+        "priority_lead": "The opportunities the approved analysis ranks first — one per area, to be confirmed in the conversation.",
+        "signal_kicker": "Signal to listen for",
+        "areas_kicker": "Priority areas",
+        "areas_title": "Areas in scope and their typical impact",
+        "note_benchmarks_title": "Benchmarks, not commitments",
+        "note_benchmarks": "All ranges are industry benchmarks used as working hypotheses. They are validated against real metrics in the baseline workshop.",
+        "note_people_title": "People keep every decision",
+        "note_people": "AI drafts, checks and orchestrates. Approvals, releases and sign-offs stay with your teams.",
+        "quick_win": "Quick win",
+        "strategic": "Strategic",
+        "industry_benchmark": "industry benchmark",
+        "working_hypothesis": "working hypothesis",
+        "questions_kicker": "Questions for the conversation",
+        "questions_title": "What we would like to understand",
+        "questions_lead": "Each question belongs to one priority opportunity. The answer shows whether a deep dive is worth it.",
+        "target_kicker": "Target picture",
+        "target_title": "How the building blocks chain into workflows",
+        "target_lead": "Each chain runs through automated blocks to a human decision gate.",
+        "gates_title": "Decisions that stay human",
+        "loop_title": "Learning loop",
+        "next_kicker": "Next steps",
+        "next_title": "From this discussion to a measured result",
+    },
+    "de": {
+        "divider_title": "Ihre KI-Potenziale",
+        "divider_kicker": "Anhang · Kundensicht",
+        "divider_text": "Eine Diskussionsgrundlage aus der freigegebenen Discovery-Analyse – Arbeitshypothesen, die wir gemeinsam validieren.",
+        "context_kicker": "Kundenkontext",
+        "context_title": "Was wir wissen – und was wir validieren wollen",
+        "context_lead_researched": "Auf Basis der Angaben für dieses Gespräch und zitierter Recherche.",
+        "context_lead": "Auf Basis der Angaben für dieses Gespräch. Es wurde keine Unternehmensrecherche durchgeführt; offene Punkte bleiben offen.",
+        "known_label": "Bekannt",
+        "known_title": "Vorliegende Angaben",
+        "known_none": "Für diese Analyse lagen keine Kundenangaben vor.",
+        "open_label": "Offen",
+        "open_title": "Gemeinsam zu validieren",
+        "thesis": "Arbeitshypothese",
+        "benchmark_note": "Zahlen sind Branchen-Benchmarks und Arbeitshypothesen aus der freigegebenen Analyse, keine Zusagen.",
+        "priority_kicker": "Priorisierte Opportunities",
+        "priority_title": "Wo wir beginnen würden",
+        "priority_lead_focus": "Opportunities in den Bereichen, auf die Ihr Kontext verweist – im Gespräch zu bestätigen.",
+        "priority_lead": "Die Opportunities, die die freigegebene Analyse vorn sieht – eine je Bereich, im Gespräch zu bestätigen.",
+        "signal_kicker": "Signal, auf das wir achten",
+        "areas_kicker": "Priorisierte Bereiche",
+        "areas_title": "Bereiche im Fokus und ihre typische Wirkung",
+        "note_benchmarks_title": "Benchmarks, keine Zusagen",
+        "note_benchmarks": "Alle Korridore sind Branchen-Benchmarks als Arbeitshypothesen. Sie werden im Baseline-Workshop gegen reale Kennzahlen validiert.",
+        "note_people_title": "Menschen behalten jede Entscheidung",
+        "note_people": "KI entwirft, prüft und orchestriert. Freigaben und Abnahmen bleiben bei Ihren Teams.",
+        "quick_win": "Quick Win",
+        "strategic": "Strategisch",
+        "industry_benchmark": "Branchen-Benchmark",
+        "working_hypothesis": "Arbeitshypothese",
+        "questions_kicker": "Fragen für das Gespräch",
+        "questions_title": "Was wir verstehen möchten",
+        "questions_lead": "Jede Frage gehört zu einer priorisierten Opportunity. Die Antwort zeigt, ob sich eine Vertiefung lohnt.",
+        "target_kicker": "Zielbild",
+        "target_title": "Wie sich die Bausteine zu Workflows verketten",
+        "target_lead": "Jede Kette läuft über automatisierte Bausteine zu einem menschlichen Entscheidungstor.",
+        "gates_title": "Entscheidungen, die beim Menschen bleiben",
+        "loop_title": "Lernender Kreislauf",
+        "next_kicker": "Nächste Schritte",
+        "next_title": "Von dieser Diskussion zu einem gemessenen Ergebnis",
+    },
+}
+
+
+def appendix_text(paper: dict[str, Any]) -> dict[str, str]:
+    return APPENDIX_TEXT[stored_language(paper.get("language"))]
 
 
 class AppendixPlanError(ValueError):
@@ -114,6 +206,7 @@ def plan_appendix(paper: dict[str, Any], *, first_order: int) -> list[dict[str, 
     chapters = analysis["framing"]["chapters"]
     leads = analysis["framing"]["leads"]
     client = str(brief.get("client_name") or "").strip()
+    text = appendix_text(paper)
     if not set(PLANNER_LAYOUTS) <= implemented_layouts():
         raise AppendixPlanError("The appendix planner refers to a layout that is not implemented")
     pool = _opportunity_pool(analysis)
@@ -127,15 +220,15 @@ def plan_appendix(paper: dict[str, Any], *, first_order: int) -> list[dict[str, 
     slides: list[tuple[str, str, dict[str, Any], list[str]]] = []
 
     # Divider: where the client-specific part begins.
-    title = client if client and _fits(client, 105, 300, 1690, 1, -2.5) else "Your AI opportunities"
+    title = client if client and _fits(client, 105, 300, 1690, 1, -2.5) else text["divider_title"]
     slides.append(
         (
             "L06",
             "Open the client-specific appendix",
             {
-                "kicker": "Appendix · Client view",
+                "kicker": text["divider_kicker"],
                 "title": title,
-                "text": "A discussion basis from the approved Discovery analysis — working hypotheses to validate together.",
+                "text": text["divider_text"],
             },
             ["brief.document_title"],
         )
@@ -149,25 +242,21 @@ def plan_appendix(paper: dict[str, Any], *, first_order: int) -> list[dict[str, 
             "L01",
             "Client context and business thesis",
             {
-                "kicker": "Client context",
-                "title": "What we know — and what we want to validate",
-                "lead": (
-                    "Based on the information provided for this conversation and cited research."
-                    if researched
-                    else "Based on the information provided for this conversation. No company research was performed, so open points stay open."
-                ),
+                "kicker": text["context_kicker"],
+                "title": text["context_title"],
+                "lead": text["context_lead_researched"] if researched else text["context_lead"],
                 "left": {
-                    "label": "Known",
-                    "title": "Provided information",
-                    "bullets": known or ["No client information was provided for this analysis."],
+                    "label": text["known_label"],
+                    "title": text["known_title"],
+                    "bullets": known or [text["known_none"]],
                 },
                 "right": {
-                    "label": "Open",
-                    "title": "To validate together",
+                    "label": text["open_label"],
+                    "title": text["open_title"],
                     "bullets": _bullets(research["unknown_facts"]),
                 },
-                "statement": {"kicker": "Working hypothesis", "text": _without_label(brief["core_thesis"], "Working hypothesis")},
-                "footnote": BENCHMARK_NOTE,
+                "statement": {"kicker": text["thesis"], "text": _without_label(brief["core_thesis"], text["thesis"])},
+                "footnote": text["benchmark_note"],
             },
             ["research.known_facts", "research.unknown_facts", "brief.core_thesis"],
         )
@@ -183,16 +272,12 @@ def plan_appendix(paper: dict[str, Any], *, first_order: int) -> list[dict[str, 
                 "L25",
                 "Most important opportunities",
                 {
-                    "kicker": "Priority opportunities",
-                    "title": _numbered("Where we would start", index, opportunity_slides),
-                    "lead": (
-                        "Opportunities in the areas your context points at — to be confirmed in the conversation."
-                        if focus
-                        else "The opportunities the approved analysis ranks first — one per area, to be confirmed in the conversation."
-                    ),
+                    "kicker": text["priority_kicker"],
+                    "title": _numbered(text["priority_title"], index, opportunity_slides),
+                    "lead": text["priority_lead_focus"] if focus else text["priority_lead"],
                     "cards": [{"title": item["title"], "text": item["result"]} for _area, item in group],
-                    "statement": {"kicker": "Signal to listen for", "text": group[0][1]["opportunity_signal"]},
-                    "footnote": BENCHMARK_NOTE,
+                    "statement": {"kicker": text["signal_kicker"], "text": group[0][1]["opportunity_signal"]},
+                    "footnote": text["benchmark_note"],
                 },
                 [f"opportunity:{area['id']}/{item['id']}" for area, item in group],
             )
@@ -209,22 +294,16 @@ def plan_appendix(paper: dict[str, Any], *, first_order: int) -> list[dict[str, 
                 "L08",
                 "Priority business areas",
                 {
-                    "kicker": "Priority areas",
-                    "title": _numbered("Areas in scope and their typical impact", index, len(area_groups)),
+                    "kicker": text["areas_kicker"],
+                    "title": _numbered(text["areas_title"], index, len(area_groups)),
                     "lead": leads["business_case"],
                     "rows": [
-                        {"code": f"{offset + position:02d}", "title": area["name"], "text": _impact_line(area["business_case"])}
+                        {"code": f"{offset + position:02d}", "title": area["name"], "text": _impact_line(area["business_case"], text)}
                         for position, area in enumerate(group, start=1)
                     ],
                     "notes": [
-                        {
-                            "title": "Benchmarks, not commitments",
-                            "text": "All ranges are industry benchmarks used as working hypotheses. They are validated against real metrics in the baseline workshop.",
-                        },
-                        {
-                            "title": "People keep every decision",
-                            "text": "AI drafts, checks and orchestrates. Approvals, releases and sign-offs stay with your teams.",
-                        },
+                        {"title": text["note_benchmarks_title"], "text": text["note_benchmarks"]},
+                        {"title": text["note_people_title"], "text": text["note_people"]},
                     ],
                 },
                 ["framing.lead:business_case", *[f"area:{area['id']}" for area in group]],
@@ -243,9 +322,9 @@ def plan_appendix(paper: dict[str, Any], *, first_order: int) -> list[dict[str, 
                     "L14",
                     "Open questions and decisions to validate",
                     {
-                        "kicker": "Questions for the conversation",
-                        "title": _numbered("What we would like to understand", index, question_slides),
-                        "lead": "Each question belongs to one priority opportunity. The answer shows whether a deep dive is worth it.",
+                        "kicker": text["questions_kicker"],
+                        "title": _numbered(text["questions_title"], index, question_slides),
+                        "lead": text["questions_lead"],
                         "items": [{"question": question, "answer": item["opportunity_signal"]} for _area, item, question in group],
                         "support": chapters["deep_dive"]["key_message"],
                     },
@@ -259,16 +338,16 @@ def plan_appendix(paper: dict[str, Any], *, first_order: int) -> list[dict[str, 
                 "L08",
                 "Selected target workflows",
                 {
-                    "kicker": "Target picture",
-                    "title": "How the building blocks chain into workflows",
-                    "lead": "Each chain runs through automated blocks to a human decision gate.",
+                    "kicker": text["target_kicker"],
+                    "title": text["target_title"],
+                    "lead": text["target_lead"],
                     "rows": [
                         {"code": f"{position:02d}", "title": item["name"], "text": " → ".join(item["stages"])}
                         for position, item in enumerate(workflows, start=1)
                     ],
                     "notes": [
-                        {"title": "Decisions that stay human", "text": gates},
-                        {"title": "Learning loop", "text": analysis["target_picture"]["learning_loop"]},
+                        {"title": text["gates_title"], "text": gates},
+                        {"title": text["loop_title"], "text": analysis["target_picture"]["learning_loop"]},
                     ],
                 },
                 ["target_picture", *[f"workflow:{item['id']}" for item in workflows]],
@@ -282,8 +361,8 @@ def plan_appendix(paper: dict[str, Any], *, first_order: int) -> list[dict[str, 
             "L07",
             "First pilot and validation approach",
             {
-                "kicker": "Next steps",
-                "title": "From this discussion to a measured result",
+                "kicker": text["next_kicker"],
+                "title": text["next_title"],
                 "lead": leads["closing_steps"],
                 "stages": [
                     {"number": f"{position:02d}", "title": step["title"], "text": _stage_text(step["text"])}
@@ -337,10 +416,11 @@ def _numbered(title: str, index: int, total: int) -> str:
     return f"{title} ({index + 1}/{total})" if total > 1 else title
 
 
-def _impact_line(case: dict[str, Any]) -> str:
-    payback = "Quick win" if case["payback_type"] == "quick_win" else "Strategic"
+def _impact_line(case: dict[str, Any], text: dict[str, str] | None = None) -> str:
+    text = text or APPENDIX_TEXT["en"]
+    payback = text["quick_win"] if case["payback_type"] == "quick_win" else text["strategic"]
     for item in case["impact_ranges"]:
-        return f"{item['metric']} {item['range']} ({item['basis'].replace('_', ' ')}) · {payback}"
+        return f"{item['metric']} {item['range']} ({text.get(item['basis'], item['basis'].replace('_', ' '))}) · {payback}"
     return f"{case['outcome'][:1].upper()}{case['outcome'][1:]} · {payback}"
 
 

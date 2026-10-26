@@ -25,6 +25,12 @@ from app.services.discovery_paper import (
 )
 from app.services.stage1 import get_company_research_provider
 from services.framework.stage1_research import CompanyResearchProvider
+from services.language import ContentLanguage
+from app.services.content_language import (
+    approved_discovery1_language,
+    approved_discovery2_language,
+    require_source_language,
+)
 from app.services.journey_generation import (
     JOURNEY_STAGES,
     client_preparation_envelope,
@@ -115,6 +121,20 @@ class EmailGenerateRequest(BaseModel):
     journey_stage: Literal["first_contact", "deepening", "concretisation"]
     # Regenerating replaces all three lengths; saved edits or a confirmation need this consent.
     overwrite_edits: bool = False
+    # BAP-13: the email's language; without it, the language of the package it is written from.
+    language: ContentLanguage | None = None
+
+
+class GenerationLanguageRequest(BaseModel):
+    """BAP-13: optional body of a generate call - the content language (``en`` or ``de``).
+
+    Without it, the language of the approved source the artifact is built from applies (and the
+    opportunity's language for Discovery 1), so a journey stays in one language.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    language: ContentLanguage | None = None
 
 
 class EmailLengthEdit(BaseModel):
@@ -214,6 +234,8 @@ class DiscoveryPaperGenerateRequest(BaseModel):
     roles_employees: bool = False
     decision_map: bool = False
     system_interfaces: bool = False
+    # BAP-13: the content language; without it, the opportunity's language (English by default).
+    language: ContentLanguage | None = None
 
 
 class Discovery2ItemEdit(BaseModel):
@@ -285,7 +307,9 @@ def post_stage1_outputs(
     opportunity_id: UUID,
     user: AuthUserDep,
     store: DataStoreDep,
+    body: GenerationLanguageRequest | None = None,
 ) -> dict:
+    _require_v1_language(store, opportunity_id=opportunity_id, user_id=user.id, body=body)
     record_audit_event(
         store,
         actor_id=user.id,
@@ -301,7 +325,9 @@ def post_regenerate_stage1_presentation(
     opportunity_id: UUID,
     user: AuthUserDep,
     store: DataStoreDep,
+    body: GenerationLanguageRequest | None = None,
 ) -> dict:
+    _require_v1_language(store, opportunity_id=opportunity_id, user_id=user.id, body=body)
     record_audit_event(
         store,
         actor_id=user.id,
@@ -314,6 +340,15 @@ def post_regenerate_stage1_presentation(
         opportunity_id=opportunity_id,
         user_id=user.id,
     )
+
+
+def _require_v1_language(store, *, opportunity_id: UUID, user_id: UUID, body: GenerationLanguageRequest | None) -> None:
+    """BAP-13: Master Presentation V1 is built in the language of the approved Discovery 1."""
+    if body is None or body.language is None:
+        return
+    source = approved_discovery1_language(store, opportunity_id=opportunity_id, user_id=user_id)
+    if source is not None:
+        require_source_language(body.language, source, artifact="Master Presentation V1", source="Discovery document")
 
 
 @router.get("/{opportunity_id}/discovery-paper")
@@ -345,7 +380,8 @@ def post_opportunity_discovery_paper(
         opportunity_id=opportunity_id,
         user_id=user.id,
         provider=provider,
-        optional_parts=body.model_dump() if body else None,
+        optional_parts=body.model_dump(exclude={"language"}) if body else None,
+        language=body.language if body else None,
     )
 
 
@@ -475,8 +511,10 @@ def get_opportunity_post_meeting_discovery(opportunity_id: UUID, user: AuthUserD
 
 
 @router.post("/{opportunity_id}/post-meeting-discovery/generate")
-def post_opportunity_post_meeting_discovery_generate(opportunity_id: UUID, user: AuthUserDep, store: DataStoreDep) -> dict:
-    result = generate_post_meeting_discovery(store, opportunity_id=opportunity_id, user_id=user.id)
+def post_opportunity_post_meeting_discovery_generate(
+    opportunity_id: UUID, user: AuthUserDep, store: DataStoreDep, body: GenerationLanguageRequest | None = None
+) -> dict:
+    result = generate_post_meeting_discovery(store, opportunity_id=opportunity_id, user_id=user.id, language=body.language if body else None)
     record_audit_event(
         store,
         actor_id=user.id,
@@ -753,11 +791,17 @@ def post_master_presentation_v2_generate(
     opportunity_id: UUID,
     user: AuthUserDep,
     store: DataStoreDep,
+    body: GenerationLanguageRequest | None = None,
 ) -> dict:
     """Master Presentation V2: a new version of the opportunity's Master Presentation.
 
     Readiness is decided here from the stored Post Meeting review, never by the caller.
+    BAP-13: V2 is built in the language of the approved Discovery 2.
     """
+    if body is not None and body.language is not None:
+        source = approved_discovery2_language(store, opportunity_id=opportunity_id, user_id=user.id)
+        if source is not None:
+            require_source_language(body.language, source, artifact="Master Presentation V2", source="Post-Meeting Discovery Document")
     started = enqueue_master_presentation_v2(
         store,
         opportunity_id=opportunity_id,
@@ -1003,6 +1047,7 @@ def post_email_drafts(
         user_id=user.id,
         journey_stage=body.journey_stage,
         overwrite_edits=body.overwrite_edits,
+        language=body.language,
     )
     # Recorded once the draft exists: a refused request generated nothing.
     record_audit_event(

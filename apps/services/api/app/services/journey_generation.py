@@ -12,7 +12,7 @@ from uuid import UUID
 import jsonschema
 
 from app.config import settings
-from app.services.api_errors import bad_request
+from app.services.api_errors import bad_request, conflict
 from app.services.first_contact_inputs import require_first_contact_client_documents
 from app.services.knowledge_access import resolve_active_corpus
 from app.services import presentation_generation
@@ -489,6 +489,7 @@ def generate_email_draft(
     user_id: UUID,
     journey_stage: str,
     overwrite_edits: bool = False,
+    language: str | None = None,
 ) -> dict[str, Any]:
     from app.services import followup_email
 
@@ -507,10 +508,17 @@ def generate_email_draft(
         store, opportunity_id=opportunity_id, user_id=user_id, journey_stage=journey_stage, overwrite_edits=overwrite_edits
     )
     master = (
-        followup_email.master_generation(store, opportunity=opportunity, opportunity_id=opportunity_id, user_id=user_id, journey_stage=journey_stage)
+        followup_email.master_generation(store, opportunity=opportunity, opportunity_id=opportunity_id, user_id=user_id, journey_stage=journey_stage, language=language)
         if journey_stage == "deepening"
         else None
     )
+    if master is None and language not in (None, "en"):
+        # BAP-13: German is written from the finalized Master Presentation package. The earlier
+        # email flows (first contact, standalone PPT #2, concretisation) are English only.
+        raise conflict(
+            "LANGUAGE_UNSUPPORTED",
+            "German follow-up emails are written from a finalized Master Presentation package. This email flow is available in English only.",
+        )
     statics = _require_followup_statics(opportunity)
     meeting_date = datetime.now(UTC).strftime("%d.%m.%Y")
 

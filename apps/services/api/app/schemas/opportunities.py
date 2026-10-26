@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.stage1 import Stage1Intake
+from services.language import ContentLanguage
 
 _EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
@@ -121,7 +122,7 @@ class OpportunityCreateRequest(BaseModel):
     client_name: str = Field(default="", max_length=500)
     opportunity_name: str = Field(default="", max_length=500)
     department: str = Field(..., min_length=1)
-    language: str = Field(default="en", min_length=2, max_length=10)
+    language: ContentLanguage = "en"
     pii_redaction_enabled: bool = True
     pitch_description: str | None = Field(default=None, max_length=20_000)
     team_members_text: str | None = Field(default=None, max_length=2_000)
@@ -134,7 +135,7 @@ class OpportunityUpdateRequest(BaseModel):
     client_name: str | None = Field(default=None, max_length=500)
     opportunity_name: str | None = Field(default=None, max_length=500)
     department: str | None = Field(default=None, min_length=1)
-    language: str | None = Field(default=None, min_length=2, max_length=10)
+    language: ContentLanguage | None = None
     status: str | None = Field(default=None, min_length=1)
     pii_redaction_enabled: bool | None = None
     additional_client_information: AdditionalClientInformation | None = None

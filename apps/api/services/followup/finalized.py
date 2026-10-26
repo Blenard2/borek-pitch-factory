@@ -75,6 +75,16 @@ _DEADLINE = re.compile(
 )
 # "Dana Weber will send ..." or "Borek: send ..." - an owner the finding itself states.
 _OWNER = re.compile(r"^(?:[A-Z][\w.'-]*(?:\s+[A-Z][\w.'-]*){0,3})\s+(?:will|sends?|shares?|provides?|prepares?|schedules?)\b|^[A-Z][\w .'()/-]{1,60}:\s+\S")
+# BAP-13: the same signals in German statements.
+_DEADLINE_DE = re.compile(
+    r"\b(?:bis|vor|am|ab|nächste[nrm]?|diese[nrm]?|kommende[nrm]?)\s+(?:zum\s+|zur\s+|ende\s+)?(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|"
+    r"woche|monat|ende|januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember|\d)|\b(?:morgen|heute|übermorgen)\b",
+    re.IGNORECASE,
+)
+_OWNER_DE = re.compile(
+    r"^(?:[A-ZÄÖÜ][\w.'-]*(?:\s+[A-ZÄÖÜ][\w.'-]*){0,3})\s+(?:wird|werden|sendet|schickt|teilt|stellt|liefert|bereitet|plant|übernimmt|organisiert)\b"
+    r"|^[A-ZÄÖÜ][\w .'()/-]{1,60}:\s+\S"
+)
 
 
 class NoConfirmedContent(ValueError):
@@ -103,15 +113,15 @@ def _sentence(text: str) -> str:
     return text if text.endswith((".", "!", "?")) else f"{text}."
 
 
-def has_deadline(text: str) -> bool:
-    return bool(_DATE.search(text) or _DEADLINE.search(text))
+def has_deadline(text: str, language: str = "en") -> bool:
+    return bool(_DATE.search(text) or (_DEADLINE_DE if language == "de" else _DEADLINE).search(text))
 
 
-def states_owner(text: str) -> bool:
-    return bool(_OWNER.search(text))
+def states_owner(text: str, language: str = "en") -> bool:
+    return bool((_OWNER_DE if language == "de" else _OWNER).search(text))
 
 
-def content_from_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+def content_from_snapshot(snapshot: dict[str, Any], language: str = "en") -> dict[str, Any]:
     """What the email may say, taken from the frozen V2 sources, and what the owner must check."""
     findings = snapshot.get("findings") or {}
     heard = _texts(findings, HEARD_CATEGORIES, MEETING_SOURCES)
@@ -133,9 +143,9 @@ def content_from_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         flags.append(FLAG_OWNER_NOTES_OMITTED)
     if not actions:
         flags.append(FLAG_NO_NEXT_STEPS)
-    if any(not states_owner(text) for text in actions):
+    if any(not states_owner(text, language) for text in actions):
         flags.append(FLAG_ACTION_OWNER_UNCONFIRMED)
-    if any(not has_deadline(text) for text in actions):
+    if any(not has_deadline(text, language) for text in actions):
         flags.append(FLAG_ACTION_DATE_UNCONFIRMED)
     return {
         "heard": heard,
@@ -145,12 +155,15 @@ def content_from_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         "actions": actions,
         "owner_only_count": len(owner_only),
         "review_flags": flags,
+        "language": language,
     }
 
 
-def _action_line(text: str) -> str:
+def _action_line(text: str, language: str = "en") -> str:
     line = _sentence(text)
-    return line if has_deadline(text) else f"{line[:-1]} (date to be confirmed)."
+    if has_deadline(text, language):
+        return line
+    return f"{line[:-1]} (Termin noch abzustimmen)." if language == "de" else f"{line[:-1]} (date to be confirmed)."
 
 
 # Words a statement may start with that are safe to write in lower case inside a sentence. A
@@ -200,9 +213,14 @@ def _starts_with_name(text: str, names: frozenset[str]) -> bool:
     return first in names or not first.isalpha() or (len(first) > 1 and not first[1:].islower())
 
 
-def inline_form(text: str, vocabulary: frozenset[str] = frozenset()) -> str:
-    """A confirmed statement as part of a sentence: no final full stop, an ordinary first word in lower case."""
+def inline_form(text: str, vocabulary: frozenset[str] = frozenset(), language: str = "en") -> str:
+    """A confirmed statement as part of a sentence: no final full stop, an ordinary first word in lower case.
+
+    German keeps the first word as it is: nouns are written with a capital letter anywhere.
+    """
     text = " ".join(text.split()).rstrip(".")
+    if language == "de":
+        return text
     return text[0].lower() + text[1:] if _starts_ordinary(text, vocabulary) else text
 
 
@@ -223,46 +241,56 @@ def _block(lead: tuple[str, str], items: list[str], limit: int | None = None, *,
     return {"lead": lead, "items": list(items), "limit": limit, "glue": glue, "steps": steps}
 
 
-def _paragraph(block: Block, vocabulary: frozenset[str] = frozenset(), names: frozenset[str] = frozenset()) -> str:
+def _paragraph(block: Block, vocabulary: frozenset[str] = frozenset(), names: frozenset[str] = frozenset(), language: str = "en") -> str:
     items = block["items"]
     lead = block["lead"][0 if len(items) == 1 else 1]
     if block["steps"]:
         return f"{lead} {items[0]}" if len(items) == 1 else "\n".join([lead, *[f"- {item}" for item in items]])
     # Woven into one sentence only when every statement is one clause and it is clear how its
     # first word is written there. Otherwise the statements follow the lead-in as they were confirmed.
-    if all(_fits_a_sentence(item) and (_starts_ordinary(item, vocabulary) or _starts_with_name(item, names)) for item in items):
-        return f"{lead} {'; '.join(inline_form(item, vocabulary) for item in items)}."
+    woven = all(_fits_a_sentence(item) for item in items) and (
+        language == "de" or all(_starts_ordinary(item, vocabulary) or _starts_with_name(item, names) for item in items)
+    )
+    if woven:
+        return f"{lead} {'; '.join(inline_form(item, vocabulary, language) for item in items)}."
     return " ".join([lead, *[_sentence(item) for item in items]])
 
 
 def _body(statics: dict[str, Any], blocks: list[Block], *, frame: dict[str, Any], attachment: bool) -> str:
     paragraphs = [frame["opening"]]
+    language = frame.get("language", "en")
     vocabulary, names = frozenset(frame.get("vocabulary") or ()), frozenset(frame.get("names") or ())
     glued = False
     for block in [item for item in blocks if not item["steps"]]:
         if not block["items"]:
             continue
         if block["glue"] and glued:
-            paragraphs[-1] = f"{paragraphs[-1]} {_paragraph(block, vocabulary, names)}"
+            paragraphs[-1] = f"{paragraphs[-1]} {_paragraph(block, vocabulary, names, language)}"
         else:
-            paragraphs.append(_paragraph(block, vocabulary, names))
+            paragraphs.append(_paragraph(block, vocabulary, names, language))
         glued = True
     # What was understood, then the attached presentation, then what happens next.
     if attachment:
         paragraphs.append(frame["attachment"])
-    paragraphs.extend(_paragraph(block) for block in blocks if block["steps"] and block["items"])
+    paragraphs.extend(_paragraph(block, language=language) for block in blocks if block["steps"] and block["items"])
     paragraphs.append(frame["closing"])
-    return "\n\n".join([greeting(statics), *paragraphs, signature(statics)])
+    return "\n\n".join([greeting(statics, language), *paragraphs, signature(statics, language)])
 
 
-def signature(statics: dict[str, Any]) -> str:
+def signature(statics: dict[str, Any], language: str = "en") -> str:
     """Closing formula and the sender the owner entered."""
     sender = statics.get("sender_profile") or {}
-    return "\n".join(["Best regards", str(sender.get("name") or "").strip(), f"{sender.get('role') or ''} - BOREK".strip()])
+    formula = "Best regards"
+    if language == "de":
+        formula = "Mit freundlichen Grüßen" if statics.get("salutation_style") == "formal" else "Viele Grüße"
+    return "\n".join([formula, str(sender.get("name") or "").strip(), f"{sender.get('role') or ''} - BOREK".strip()])
 
 
-_NO_ATTACHMENT = re.compile(r"\b(?:no|not|without|nothing|none|never)\b[^.!?\n]{0,30}?\battach\w*", re.IGNORECASE)
-_ATTACHMENT_CLAIM = re.compile(r"\b(?:attach\w*|enclos\w*)\b", re.IGNORECASE)
+_NO_ATTACHMENT = re.compile(
+    r"\b(?:no|not|without|nothing|none|never)\b[^.!?\n]{0,30}?\battach\w*|\b(?:kein\w*|ohne|nicht)\b[^.!?\n]{0,30}?\b(?:anhang|anlage|angehängt|beigefügt)\w*",
+    re.IGNORECASE,
+)
+_ATTACHMENT_CLAIM = re.compile(r"\b(?:attach\w*|enclos\w*|anbei|anhang\w*|anlage\w*|angehängt\w*|beigefügt\w*)\b", re.IGNORECASE)
 
 
 def announces_attachment(body: str) -> bool:
@@ -332,11 +360,51 @@ CLOSING = (
     "Should anything here differ from your understanding, just let me know and I will correct it. "
     "Many thanks again for your time; I look forward to continuing the conversation."
 )
+# BAP-13: the same fixed wording in German. Like the English text it states no fact about the
+# meeting, names no person or date and says nothing about who said or decided what.
+LEADS_DE = {
+    "brief": ("Kurz zusammengefasst, der wichtigste Punkt, wie wir ihn verstanden haben:", "Kurz zusammengefasst, die wichtigsten Punkte, wie wir sie verstanden haben:"),
+    "requirements": ("Die zentrale Anforderung, wie wir sie verstanden haben:", "Die zentralen Anforderungen, wie wir sie verstanden haben:"),
+    "challenges": ("Was es heute schwierig macht:", "Was es heute schwierig macht:"),
+    "priorities": ("Zu den Prioritäten:", "Zu den Prioritäten:"),
+    "decisions": ("Für das weitere Vorgehen wurde diese Richtung besprochen:", "Für das weitere Vorgehen wurde diese Richtung besprochen:"),
+    "role": (
+        "Hier sehen wir unsere Rolle. Eine Idee, die wir besprochen haben, die aber noch nicht entschieden ist:",
+        "Hier sehen wir unsere Rolle. Ideen, die wir besprochen haben, von denen noch keine entschieden ist:",
+    ),
+    "ahead": ("Mit Blick nach vorn kam außerdem zur Sprache:", "Mit Blick nach vorn kamen außerdem diese Punkte zur Sprache:"),
+    "steps": ("Als nächster Schritt:", "Als nächste Schritte:"),
+}
+ATTACHMENT_SENTENCE_DE = "Anbei finden Sie die Präsentation, die wir nach unserem Gespräch um diese Punkte ergänzt haben."
+SHORT_ATTACHMENT_SENTENCE_DE = "Die aktualisierte Präsentation finden Sie im Anhang."
+CLOSING_DE = (
+    "Sollte etwas davon von Ihrem Verständnis abweichen, geben Sie mir bitte kurz Bescheid, dann korrigiere ich es. "
+    "Nochmals vielen Dank für Ihre Zeit; ich freue mich auf die Fortsetzung unseres Gesprächs."
+)
 
 
-def _frames(statics: dict[str, Any]) -> dict[str, dict[str, str]]:
+def _frames(statics: dict[str, Any], language: str = "en") -> dict[str, dict[str, str]]:
     """Opening, attachment sentence and closing per length. The client is named as the owner entered it."""
     client = " ".join(str(statics.get("client_short") or "").split())
+    if language == "de":
+        picture = f"ein klares Bild der Situation bei {client}" if client else "ein klares Bild der aktuellen Situation"
+        return {
+            "short": {
+                "opening": f"Vielen Dank für Ihre Zeit in unserem Gespräch. Es hat uns {picture} gegeben.",
+                "attachment": SHORT_ATTACHMENT_SENTENCE_DE,
+                "closing": "Sollte etwas von Ihrem Verständnis abweichen, geben Sie mir bitte kurz Bescheid.",
+            },
+            "medium": {
+                "opening": f"Vielen Dank, dass Sie sich die Zeit für unser Gespräch genommen haben. Es hat uns {picture} gegeben, das ich kurz zusammenfassen möchte.",
+                "attachment": ATTACHMENT_SENTENCE_DE,
+                "closing": CLOSING_DE,
+            },
+            "extensive": {
+                "opening": f"Vielen Dank, dass Sie sich die Zeit für unser Gespräch genommen haben. Es hat uns {picture} gegeben, das ich etwas ausführlicher zusammenfassen möchte, damit wir alle vom selben Bild ausgehen.",
+                "attachment": ATTACHMENT_SENTENCE_DE,
+                "closing": CLOSING_DE,
+            },
+        }
     picture = f"a clear picture of the situation at {client}" if client else "a clear picture of the current situation"
     return {
         "short": {
@@ -376,40 +444,51 @@ def render_finalized_lengths(content: dict[str, Any], statics: dict[str, Any], *
     medium draft shows. With little material the two stay close; nothing is added to fill space.
     """
     heard, decisions, discussed = content["heard"], content["decisions"], content["discussed"]
-    actions = [_action_line(text) for text in content["actions"]]
+    language = content.get("language", "en")
+    actions = [_action_line(text, language) for text in content["actions"]]
     grouped = {name: list(items) for name, items in content["by_category"].items()}
     seen: set[str] = set()
     for name in (*HEARD_CATEGORIES, *DISCUSSED_CATEGORIES):  # a statement confirmed twice is written once
         grouped[name] = [item for item in grouped[name] if not (item in seen or seen.add(item))]
     project = str(statics.get("project_name") or "").strip()
-    subject = f"{project} — Follow-up to our meeting" if project else "Follow-up to our meeting"
+    if language == "de":
+        subject = f"{project} – Nachbereitung unseres Gesprächs" if project else "Nachbereitung unseres Gesprächs"
+        lead = LEADS_DE
+    else:
+        subject = f"{project} — Follow-up to our meeting" if project else "Follow-up to our meeting"
+        lead = {
+            "brief": LEAD_BRIEF, "requirements": LEAD_REQUIREMENTS, "challenges": LEAD_CHALLENGES, "priorities": LEAD_PRIORITIES,
+            "decisions": LEAD_DECISIONS, "role": LEAD_ROLE, "ahead": LEAD_AHEAD, "steps": LEAD_STEPS,
+        }
     plans = {
-        "short": [_block(LEAD_BRIEF, [*heard, *decisions], 3), _block(LEAD_STEPS, actions, 5, steps=True)],
+        "short": [_block(lead["brief"], [*heard, *decisions], 3), _block(lead["steps"], actions, 5, steps=True)],
         "medium": [
-            _block(LEAD_REQUIREMENTS, grouped["requirements"], 2),
-            _block(LEAD_CHALLENGES, grouped["challenges"], 2, glue=True),
-            _block(LEAD_PRIORITIES, grouped["priorities"], 2, glue=True),
-            _block(LEAD_DECISIONS, decisions),
-            _block(LEAD_ROLE, discussed, 3),
-            _block(LEAD_STEPS, actions, steps=True),
+            _block(lead["requirements"], grouped["requirements"], 2),
+            _block(lead["challenges"], grouped["challenges"], 2, glue=True),
+            _block(lead["priorities"], grouped["priorities"], 2, glue=True),
+            _block(lead["decisions"], decisions),
+            _block(lead["role"], discussed, 3),
+            _block(lead["steps"], actions, steps=True),
         ],
         "extensive": [
-            _block(LEAD_REQUIREMENTS, grouped["requirements"]),
-            _block(LEAD_CHALLENGES, grouped["challenges"]),
-            _block(LEAD_PRIORITIES, grouped["priorities"], glue=True),
-            _block(LEAD_DECISIONS, decisions),
-            _block(LEAD_ROLE, grouped["discussed_solutions"]),
-            _block(LEAD_AHEAD, grouped["opportunities"], glue=True),
-            _block(LEAD_STEPS, actions, steps=True),
+            _block(lead["requirements"], grouped["requirements"]),
+            _block(lead["challenges"], grouped["challenges"]),
+            _block(lead["priorities"], grouped["priorities"], glue=True),
+            _block(lead["decisions"], decisions),
+            _block(lead["role"], grouped["discussed_solutions"]),
+            _block(lead["ahead"], grouped["opportunities"], glue=True),
+            _block(lead["steps"], actions, steps=True),
         ],
     }
-    frames = _frames(statics)
+    frames = _frames(statics, language)
     confirmed = [*heard, *decisions, *discussed, *content["actions"]]
     vocabulary, names = ordinary_words(confirmed), known_names(confirmed, statics)
     lengths: dict[str, dict[str, Any]] = {}
     flags = list(content["review_flags"])
     for name in LENGTHS:
-        body, trimmed = _fit(statics, plans[name], frame={**frames[name], "vocabulary": vocabulary, "names": names}, attachment=attachment, cap=WORD_CAPS[name], name=name)
+        body, trimmed = _fit(
+            statics, plans[name], frame={**frames[name], "vocabulary": vocabulary, "names": names, "language": language}, attachment=attachment, cap=WORD_CAPS[name], name=name
+        )
         if trimmed and name == "extensive" and FLAG_CONTENT_TRIMMED not in flags:
             flags.append(FLAG_CONTENT_TRIMMED)
         lengths[name] = {"subject": subject, "body": body, "word_count": max(1, followup_content_word_count(body)), "edited": False}

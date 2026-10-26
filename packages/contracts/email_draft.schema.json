@@ -164,6 +164,7 @@
         "extraction_execution_mode": { "type": ["string", "null"] },
         "confirmed_finding_count": { "type": ["integer", "null"] },
         "excluded_finding_count": { "type": ["integer", "null"] },
+        "language": {"type": "string", "enum": ["en", "de"], "description": "BAP-13: language of the finalized package the email is written from."},
         "renderer_version": { "type": "string", "minLength": 1 }
       }
     },

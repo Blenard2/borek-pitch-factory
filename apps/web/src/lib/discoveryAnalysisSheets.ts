@@ -27,6 +27,31 @@ const arr = (v: unknown): Obj[] => (Array.isArray(v) ? v.map(obj) : []);
 const texts = (v: unknown): string[] => (Array.isArray(v) ? v.map(s) : []);
 const two = (n: number): string => String(n).padStart(2, "0");
 
+// BAP-13: the labels the master prints around the content, in the page's language. A page built
+// for a German document carries content.lang = "de"; every other page keeps the English labels.
+const SHEET_LABELS = {
+  en: {
+    inShort: "In short", publisher: "Publisher", unit: "Unit", contact: "Contact", keyMessage: "Key message",
+    solution: "Solution", howItWorks: "How it works", result: "Result", opportunityIf: "Opportunity if:",
+    learningLoop: "Learning loop", humanDecides: "Human decides", chain: "Chain", automatedBlocks: "Automated blocks",
+    humanGate: "Human gate", loop: "Loop",
+  },
+  de: {
+    inShort: "Kurz gesagt", publisher: "Herausgeber", unit: "Bereich", contact: "Kontakt", keyMessage: "Kernaussage",
+    solution: "Lösung", howItWorks: "Zukünftiger Prozess", result: "Ergebnis", opportunityIf: "Opportunity, wenn:",
+    learningLoop: "Lernender Kreislauf", humanDecides: "Mensch entscheidet", chain: "Kette", automatedBlocks: "Automatisierte Bausteine",
+    humanGate: "Menschliches Tor", loop: "Zyklus",
+  },
+} as const;
+
+export function sheetLanguage(page: Pick<AnalysisPage, "content">): "en" | "de" {
+  return page.content.lang === "de" ? "de" : "en";
+}
+
+function labelsOf(page: AnalysisPage) {
+  return SHEET_LABELS[sheetLanguage(page)];
+}
+
 function shell(page: AnalysisPage, style: string, inner: string): string {
   return `<section class="page" data-page-id="${esc(page.id)}" data-page-type="${page.type}" style="position:relative;${style};font-family:${SANS};box-sizing:border-box;overflow:hidden;width:${SHEET_W}px;height:${SHEET_H}px">${inner}</section>`;
 }
@@ -83,15 +108,15 @@ function m2(page: AnalysisPage): string {
     <div style="margin-top:36px;display:grid;grid-template-columns:1fr 1fr;gap:0 56px">
       <div>${rows}</div>
       <div style="border-left:1px solid ${RULE};padding-left:32px">
-        <div style="font-size:12px;font-weight:600;letter-spacing:.09em;text-transform:uppercase">In short</div>
+        <div style="font-size:12px;font-weight:600;letter-spacing:.09em;text-transform:uppercase">${labelsOf(page).inShort}</div>
         ${statements}
         <p style="margin:36px 0 0;font-size:13px;line-height:1.6;color:${SLATE};text-wrap:pretty">${esc(c.scope_note)}</p>
       </div>
     </div>
     <div style="margin-top:64px;border-top:2px solid ${INK};padding-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px">
-      <div><div style="${label}">Publisher</div><div style="margin-top:8px;font-size:13px;line-height:1.6">${esc(publisher.company)}<br>${esc(publisher.address)}</div></div>
-      <div><div style="${label}">Unit</div><div style="margin-top:8px;font-size:13px;line-height:1.6">${esc(publisher.unit)}<br>${esc(publisher.group)}</div></div>
-      <div><div style="${label}">Contact</div><div style="margin-top:8px;font-size:13px;line-height:1.6">${esc(publisher.phone)}<br>${esc(publisher.url)}</div></div>
+      <div><div style="${label}">${labelsOf(page).publisher}</div><div style="margin-top:8px;font-size:13px;line-height:1.6">${esc(publisher.company)}<br>${esc(publisher.address)}</div></div>
+      <div><div style="${label}">${labelsOf(page).unit}</div><div style="margin-top:8px;font-size:13px;line-height:1.6">${esc(publisher.unit)}<br>${esc(publisher.group)}</div></div>
+      <div><div style="${label}">${labelsOf(page).contact}</div><div style="margin-top:8px;font-size:13px;line-height:1.6">${esc(publisher.phone)}<br>${esc(publisher.url)}</div></div>
     </div>
     ${footer(page)}`);
 }
@@ -116,7 +141,7 @@ function m3(page: AnalysisPage): string {
       <p style="margin:0;font-size:14px;line-height:1.65;color:rgba(255,255,255,.7);text-wrap:pretty">${esc(second)}</p>
     </div>
     <div data-fit="anchor" style="position:absolute;left:76px;right:76px;bottom:110px;border-top:1px solid rgba(255,255,255,.35);padding-top:24px">
-      <div style="font-family:${MONO};font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.7)">Key message</div>
+      <div style="font-family:${MONO};font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.7)">${labelsOf(page).keyMessage}</div>
       <p style="margin:14px 0 0;font-size:30px;font-weight:300;letter-spacing:-.02em;line-height:1.2;max-width:620px;text-wrap:balance">${esc(c.key_message)}</p>
     </div>
     ${footer(page)}`);
@@ -189,7 +214,7 @@ function m4(page: AnalysisPage): string {
     ${footer(page)}`);
 }
 
-function deepDiveItem(item: Obj): string {
+function deepDiveItem(item: Obj, page: AnalysisPage): string {
   const label = `font-family:${MONO};font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:${SLATE};padding-top:4px`;
   const questions = texts(item.questions).map((question, index) => `<span style="font-family:${MONO};font-size:10px;color:${BLUE};padding-top:2px">Q${index + 1}</span><span>${esc(question)}</span>`).join("");
   return `<div style="margin-top:26px;border-top:2px solid ${INK};padding-top:14px;display:grid;grid-template-columns:44px 1fr;gap:0 20px;align-items:baseline">
@@ -200,15 +225,15 @@ function deepDiveItem(item: Obj): string {
       <span></span>
       <div>
         <div style="display:grid;grid-template-columns:92px 1fr;gap:10px 16px;padding:12px 0;border-top:1px solid ${RULE};border-bottom:1px solid ${RULE};font-size:12.5px;line-height:1.55">
-          <span style="${label}">Solution</span><p style="margin:0;color:${SLATE};text-wrap:pretty">${esc(item.solution)}</p>
-          <span style="${label}">How it works</span><p style="margin:0;color:${SLATE};text-wrap:pretty">${esc(item.how_it_works)}</p>
-          <span style="${label}">Result</span><p style="margin:0;font-weight:500;text-wrap:pretty">${esc(item.result)}</p>
+          <span style="${label}">${labelsOf(page).solution}</span><p style="margin:0;color:${SLATE};text-wrap:pretty">${esc(item.solution)}</p>
+          <span style="${label}">${labelsOf(page).howItWorks}</span><p style="margin:0;color:${SLATE};text-wrap:pretty">${esc(item.how_it_works)}</p>
+          <span style="${label}">${labelsOf(page).result}</span><p style="margin:0;font-weight:500;text-wrap:pretty">${esc(item.result)}</p>
         </div>
         <div style="display:grid;grid-template-columns:92px 1fr;gap:6px 16px;padding:10px 0;font-size:12.5px;line-height:1.5">
           ${questions}
         </div>
         <div style="display:grid;grid-template-columns:92px 1fr;gap:16px;padding:10px 0;border-bottom:1px solid ${RULE};font-size:12.5px;line-height:1.5">
-          <span style="color:${BLUE}">▸</span><span><b style="font-weight:500">Opportunity if:</b> ${esc(item.signal)}</span>
+          <span style="color:${BLUE}">▸</span><span><b style="font-weight:500">${labelsOf(page).opportunityIf}</b> ${esc(item.signal)}</span>
         </div>
       </div>
     </div>`;
@@ -221,7 +246,7 @@ function m5(page: AnalysisPage): string {
     ${header(page)}
     <h2 style="margin:36px 0 0;font-size:26px;font-weight:300;letter-spacing:-.02em;line-height:1.15">${esc(c.title)}</h2>
     <p style="margin:10px 0 0;font-size:13px;line-height:1.55;color:${SLATE};text-wrap:pretty">${esc(c.lead)}</p>
-    ${arr(c.items).map(deepDiveItem).join("")}
+    ${arr(c.items).map((item) => deepDiveItem(item, page)).join("")}
     ${footer(page)}`);
 }
 
@@ -277,23 +302,25 @@ function m7(page: AnalysisPage): string {
   const c = page.content;
   const rows = arr(c.rows);
   const head = `font-family:${MONO};font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;color:${SLATE};padding-bottom:6px;border-bottom:2px solid ${INK}`;
-  const block = `position:relative;background:${TINT};border:1px solid ${RULE};border-left:3px solid ${INK};padding:14px 12px;font-size:11.5px;font-weight:500;line-height:1.35;display:flex;align-items:center`;
+  // German compounds ("Anforderungssteuerung") are hyphenated instead of widening the grid.
+  const wrap = sheetLanguage(page) === "de" ? ";min-width:0;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:anywhere" : "";
+  const block = `position:relative;background:${TINT};border:1px solid ${RULE};border-left:3px solid ${INK};padding:14px 12px;font-size:11.5px;font-weight:500;line-height:1.35;display:flex;align-items:center${wrap}`;
   const arrow = `<span style="position:absolute;right:-9px;top:50%;transform:translateY(-50%);width:0;height:0;border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:8px solid ${INK}"></span>`;
-  const band = `<div style="grid-row:span ${rows.length};position:relative;background:${INK};display:flex;align-items:center;justify-content:center"><span style="writing-mode:vertical-rl;transform:rotate(180deg);font-family:${MONO};font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:#FFFFFF;font-weight:500">Learning loop</span><span style="position:absolute;left:50%;top:-8px;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid ${INK}"></span></div>`;
+  const band = `<div style="grid-row:span ${rows.length};position:relative;background:${INK};display:flex;align-items:center;justify-content:center"><span style="writing-mode:vertical-rl;transform:rotate(180deg);font-family:${MONO};font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:#FFFFFF;font-weight:500">${labelsOf(page).learningLoop}</span><span style="position:absolute;left:50%;top:-8px;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid ${INK}"></span></div>`;
   const chains = rows.map((row, index) => `
-      <div style="display:flex;align-items:center;font-size:13px;font-weight:500;line-height:1.25;letter-spacing:-.01em;padding-right:8px">${esc(row.name)}</div>
+      <div style="display:flex;align-items:center;font-size:13px;font-weight:500;line-height:1.25;letter-spacing:-.01em;padding-right:8px${wrap}">${esc(row.name)}</div>
       ${texts(row.stages).map((stage) => `<div style="${block}">${esc(stage)}${arrow}</div>`).join("")}
-      <div style="background:${INK};color:#FFFFFF;padding:12px 12px;display:flex;flex-direction:column;justify-content:center;gap:5px"><span style="font-family:${MONO};font-size:7.5px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.7)">Human decides</span><span style="font-size:11.5px;font-weight:500;line-height:1.3">${esc(row.gate)}</span></div>
+      <div style="background:${INK};color:#FFFFFF;padding:12px 12px;display:flex;flex-direction:column;justify-content:center;gap:5px${wrap}"><span style="font-family:${MONO};font-size:7.5px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.7)">${labelsOf(page).humanDecides}</span><span style="font-size:11.5px;font-weight:500;line-height:1.3">${esc(row.gate)}</span></div>
       ${index === 0 ? band : ""}`).join("");
   return shell(page, LIGHT, `
     ${header(page)}
     <h2 style="margin:36px 0 0;font-size:26px;font-weight:300;letter-spacing:-.02em;line-height:1.15">${esc(c.title)}</h2>
     <p style="margin:10px 0 0;font-size:13px;line-height:1.55;color:${SLATE};max-width:620px;text-wrap:pretty">${esc(c.lead)}</p>
     <div style="margin-top:28px;display:grid;grid-template-columns:96px 1fr 1fr 1fr 128px 44px;gap:10px 8px;align-items:stretch">
-      <div style="${head}">Chain</div>
-      <div style="grid-column:span 3;${head}">Automated blocks</div>
-      <div style="${head}">Human gate</div>
-      <div style="${head}">Loop</div>
+      <div style="${head}">${labelsOf(page).chain}</div>
+      <div style="grid-column:span 3;${head}">${labelsOf(page).automatedBlocks}</div>
+      <div style="${head}">${labelsOf(page).humanGate}</div>
+      <div style="${head}">${labelsOf(page).loop}</div>
       ${chains}
     </div>
     <div style="margin-top:18px;display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:center">
@@ -362,7 +389,8 @@ export function analysisPrintCss(base: string): string {
 
 /** The whole document, every page of the manifest in order. Used for the PDF. */
 export function renderAnalysisDocument(pages: readonly AnalysisPage[], title: string, base: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${analysisPrintCss(base)}</style></head><body>${pages.map((page) => renderAnalysisSheet(page, base)).join("")}</body></html>`;
+  const lang = pages.length ? sheetLanguage(pages[0]) : "en";
+  return `<!DOCTYPE html><html lang="${lang}"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${analysisPrintCss(base)}</style></head><body>${pages.map((page) => renderAnalysisSheet(page, base)).join("")}</body></html>`;
 }
 
 /**

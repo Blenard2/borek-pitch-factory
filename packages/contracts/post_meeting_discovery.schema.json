@@ -38,6 +38,7 @@
         }
       ]
     },
+    "language": {"type": "string", "enum": ["en", "de"], "description": "BAP-13: content language. Documents saved before BAP-13 have none and are English."},
     "title": { "type": "string" },
     "client_name": { "type": "string" },
     "sources": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/Sources" }] },
