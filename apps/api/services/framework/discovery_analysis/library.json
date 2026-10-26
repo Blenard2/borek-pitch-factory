@@ -1,5 +1,5 @@
 {
-  "library_version": "1.0",
+  "library_version": "1.1",
   "language": "en",
   "note": "Hand-written, industry-neutral opportunity library for deterministic (fixture) generation. It contains typical patterns and industry benchmarks only - never facts about a specific customer.",
   "areas": [
@@ -71,7 +71,7 @@
           "title": "Win/loss & pipeline signals",
           "solution": "Ongoing analysis of quotes, wins, losses and customer behaviour.",
           "ai_technology": "Analytics over pipeline and win/loss history with prioritised signals.",
-          "how_it_works": "Links outcomes to request type, price and response time, surfaces patterns and flags at-risk opportunities with context.",
+          "how_it_works": "Links outcomes to request type, price and response time, surfaces patterns and flags at-risk opportunities; sales decides where to follow up and what to change.",
           "result": "Sales learns from every bid — systematically, not anecdotally.",
           "discovery_questions": [
             "What do you systematically learn from lost bids today?",
@@ -175,7 +175,7 @@
           "title": "Delivery status communication",
           "solution": "Proactive status updates generated from order and delivery data.",
           "ai_technology": "Rule-based exception detection plus LLM message drafting.",
-          "how_it_works": "Watches orders against plan, detects delays early and drafts the customer update with the reason and the new date.",
+          "how_it_works": "Watches orders against plan, detects delays early and drafts the customer update with the reason and the new date; the order owner confirms it before it is sent.",
           "result": "Customers hear about delays from you first — status calls drop noticeably.",
           "discovery_questions": [
             "How do customers learn about a delay today?",
@@ -234,7 +234,7 @@
           "title": "Supplier document checks",
           "solution": "Certificates, confirmations and delivery documents are read and checked automatically.",
           "ai_technology": "LLM extraction with validation against order and specification.",
-          "how_it_works": "Reads each document, compares it with the order and the specification and flags deviations; buyers handle the flagged cases only.",
+          "how_it_works": "Reads each document, compares it with the order and the specification and flags deviations; buyers decide on the flagged cases only.",
           "result": "Document checks by exception — deviations are found before goods arrive.",
           "discovery_questions": [
             "Who checks order confirmations against the order today?",
@@ -247,7 +247,7 @@
           "title": "Supplier performance signals",
           "solution": "An early-warning view on delivery reliability, quality and price drift per supplier.",
           "ai_technology": "Analytics over delivery, quality and price history with ML risk signals.",
-          "how_it_works": "Learns normal behaviour per supplier, flags drifting reliability or prices and prepares the facts for the next supplier conversation.",
+          "how_it_works": "Learns normal behaviour per supplier, flags drifting reliability or prices and prepares the facts for the next supplier conversation; the buyer decides on the measures.",
           "result": "Supplier risk is managed, not discovered — conversations happen early, with data.",
           "discovery_questions": [
             "When do you learn that a supplier is becoming unreliable?",
@@ -310,7 +310,7 @@
           "title": "Schedule early warning",
           "solution": "Early detection of slippage per order or project — weeks before the review finds it.",
           "ai_technology": "ML early warning on progress, resource and dependency signals.",
-          "how_it_works": "Learns from task progress and dependency chains and flags items at risk with causes and options.",
+          "how_it_works": "Learns from task progress and dependency chains and flags items at risk with causes and options; planners decide which option to take.",
           "result": "Slippage is managed, not discovered — customer conversations happen early, with options.",
           "discovery_questions": [
             "When do you learn that an order will slip — before or at the review?",
@@ -373,7 +373,7 @@
           "title": "Invoice processing (three-way match)",
           "solution": "Automated matching of invoice, purchase order and goods receipt with automatic release.",
           "ai_technology": "LLM extraction plus deterministic matching rules.",
-          "how_it_works": "Extracts, codes and matches; clean invoices flow through dark, exceptions reach a person with context and a suggested resolution.",
+          "how_it_works": "Extracts, codes and matches; clean invoices flow through dark, accounts payable decides each exception with context and a suggested resolution.",
           "result": "60–90 % dark processing (industry benchmark) — fast to measure, fast to pay back.",
           "discovery_questions": [
             "How many inbound invoices per month, across how many hands?",
@@ -399,7 +399,7 @@
           "title": "Month-end variance commentary",
           "solution": "First drafts of variance explanations generated from the ledger and operational data.",
           "ai_technology": "Analytics over actual versus plan with LLM narrative drafting.",
-          "how_it_works": "Finds the drivers behind each variance, drafts the explanation with numbers and marks what needs a human view.",
+          "how_it_works": "Finds the drivers behind each variance, drafts the explanation with numbers; controllers review and interpret it before it is reported.",
           "result": "Controllers interpret instead of assembling — commentary ready on day one.",
           "discovery_questions": [
             "How many days of the close go into explaining variances?",
@@ -412,7 +412,7 @@
           "title": "Contract & deduction audit",
           "solution": "Every deduction or credit claim is matched against agreed conditions and proof of delivery.",
           "ai_technology": "LLM extraction plus rule-based matching.",
-          "how_it_works": "Checks each claim systematically, flags unjustified ones and drafts the reclaim with evidence attached.",
+          "how_it_works": "Checks each claim systematically, flags unjustified ones and drafts the reclaim with evidence; finance decides which reclaims to send.",
           "result": "Unjustified deductions get reclaimed — what dies as single cases today becomes routine.",
           "discovery_questions": [
             "How many deductions arrive per month, and what share is audited?",
@@ -488,7 +488,7 @@
           "title": "Audit evidence assembly",
           "solution": "Evidence packs for audits and customer questionnaires assembled from existing documents.",
           "ai_technology": "Retrieval over the document landscape with gap lists.",
-          "how_it_works": "Maps requirements to available documents, assembles the pack and lists what is missing; experts close gaps instead of hunting files.",
+          "how_it_works": "Maps requirements to available documents, assembles the pack and lists what is missing; experts close gaps and release the pack instead of hunting files.",
           "result": "Audit packs in days — with a live view of what is still missing.",
           "discovery_questions": [
             "How long does preparing an audit or customer questionnaire take?",
@@ -537,7 +537,7 @@
           "title": "Company knowledge assistant",
           "solution": "An internal assistant over documents, mails, wikis and drives that answers with sources.",
           "ai_technology": "RAG with rights-aware retrieval and source citations.",
-          "how_it_works": "Employees ask in natural language and get answers with source links — knowledge stops depending on who is in the office.",
+          "how_it_works": "Employees ask in natural language and get answers with source links; process owners decide which documents it answers from.",
           "result": "Answers in seconds instead of asking around — and onboarding time drops by weeks.",
           "discovery_questions": [
             "How long does finding internal information take today?",
@@ -550,7 +550,7 @@
           "title": "Onboarding assistant",
           "solution": "A guided onboarding companion that explains procedures, systems and contacts per role.",
           "ai_technology": "RAG over procedures and role descriptions with guided learning paths.",
-          "how_it_works": "Answers role-specific questions, points to the applicable procedure and tracks what has been covered; mentors focus on judgement, not basics.",
+          "how_it_works": "Answers role-specific questions, points to the applicable procedure and tracks what has been covered; mentors review progress and focus on judgement.",
           "result": "New colleagues reach productivity weeks earlier — mentors are relieved.",
           "discovery_questions": [
             "How long until a new colleague is fully productive?",
@@ -563,7 +563,7 @@
           "title": "Meeting & decision summaries",
           "solution": "Meetings are summarised into decisions, tasks and open points — and filed where the work happens.",
           "ai_technology": "LLM summarisation of transcripts and notes with task extraction.",
-          "how_it_works": "Captures the meeting, extracts decisions and owners, drafts the follow-up and feeds the knowledge base.",
+          "how_it_works": "Captures the meeting, extracts decisions and owners, drafts the follow-up; the meeting owner confirms it before it is shared and filed.",
           "result": "Decisions are documented without extra work — nothing agreed gets lost.",
           "discovery_questions": [
             "Where are decisions from meetings documented today?",

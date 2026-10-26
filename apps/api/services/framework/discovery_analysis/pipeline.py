@@ -98,11 +98,12 @@ def generate_discovery_analysis(
     def research() -> None:
         website = _apply_research(paper, draft, context, research_provider)
         if complete is not None:
+            material = None
             if website is not None:
                 material = live.website_material(website)
                 calls["complete"] = live.with_website(complete, material)
                 _cite_material(draft, material)
-            live.research_stage(calls["complete"], context, draft)
+            live.research_stage(calls["complete"], context, draft, website=material)
 
     def validation() -> None:
         if complete is not None:
