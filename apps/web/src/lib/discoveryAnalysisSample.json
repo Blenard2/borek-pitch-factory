@@ -486,7 +486,7 @@
       "number": "02",
       "title": "Pricing & feasibility check",
       "solution": "Consistent price and feasibility estimates built from historical orders. Technically: Estimation model over past orders with scope, effort and margin corridors.",
-      "how_it_works": "Matches the request against delivered orders, proposes effort and price corridors and flags risk factors; the pricing decision gets a data floor.",
+      "how_it_works": "Matches the request against delivered orders, proposes effort and price corridors and flags risk factors; the estimator decides the price with that data floor.",
       "result": "Estimates consistent across the team — margin erosion from optimistic one-off estimates stops.",
       "questions": [
        "How consistent are estimates across people for comparable requests?",
@@ -830,7 +830,7 @@
       "number": "03",
       "title": "Shift & hand-off summaries",
       "solution": "Automatic hand-off summaries per team, shift or site. Technically: LLM summarisation of system events, notes and open items.",
-      "how_it_works": "Collects what happened, what is open and what needs a decision, and hands it over in one structured summary.",
+      "how_it_works": "Collects what happened, what is open and what needs a decision in one structured summary; the incoming shift lead confirms the open items.",
       "result": "Hand-offs without lost context — the next shift starts informed.",
       "questions": [
        "How is information handed over between shifts or sites today?",

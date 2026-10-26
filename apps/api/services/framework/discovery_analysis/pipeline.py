@@ -106,6 +106,11 @@ def generate_discovery_analysis(
             live.research_stage(calls["complete"], context, draft, website=material)
 
     def validation() -> None:
+        # BAP-9 Phase 2: what live answers still missed after their retry is kept for review,
+        # with the generation record - never in the printed analysis.
+        warnings = draft.pop(live.QUALITY_WARNINGS_KEY, [])
+        if warnings:
+            paper["generation"]["quality_warnings"] = warnings[: live.MAX_QUALITY_WARNINGS]
         if complete is not None:
             _settle_live(draft)
         problems = content_problems({**paper, "analysis": draft, "status": "ready"})

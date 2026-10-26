@@ -8,6 +8,7 @@ turn an assumption into a customer fact or claim research that did not happen.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any, Callable
 
@@ -22,6 +23,12 @@ from services.framework.discovery_analysis.model import (
 )
 
 CompleteFn = Callable[[str, str, dict[str, Any]], dict[str, Any]]
+logger = logging.getLogger(__name__)
+# A quality warning kept with the analysis (generation.quality_warnings); never printed.
+QUALITY_WARNING_CHARS = 300
+MAX_QUALITY_WARNINGS = 40
+# Where the stages collect them on the draft until the pipeline moves them to ``generation``.
+QUALITY_WARNINGS_KEY = "_quality_warnings"
 
 PROMPT_VERSION = "discovery-analysis:v4"
 _INTRO = (
@@ -326,18 +333,90 @@ def internal_language(answer: Any, path: str = "") -> list[str]:
 
 # BAP-9 Phase 2: what the reference analyses do for every item, checked where code can check it.
 # A question the team can answer with a number, a duration, a share, a frequency or a cost.
-_MEASURABLE = re.compile(
+# Asking for the quantity itself always counts; a word like "cost" or "days" counts only in an
+# open question - "Does this cost you days?" is answered with yes or no.
+_QUANTITY_ASKED = re.compile(
     r"\bhow (?:many|much|long|often|early|late|quickly|fast|soon)\b|\bwhat (?:share|proportion|percentage|fraction|volume|number)\b"
-    r"|\bwhen do (?:you|your|teams?) (?:learn|see|know|notice|find)\b|\bcost\b|\bcosts?\b|\b(?:days?|hours?|weeks?|minutes?|months?)\b"
+    r"|\b(?:can|could) you (?:name|estimate|quantify|put a number on)\b",
+    re.IGNORECASE,
+)
+_QUANTITY_WORD = re.compile(
+    r"\bwhen do (?:you|your|teams?) (?:learn|see|know|notice|find)\b|\bcosts?\b|\b(?:days?|hours?|weeks?|minutes?|months?)\b"
     r"|\bper (?:day|week|month|year|order|shift|case|batch)\b|\brate\b",
     re.IGNORECASE,
 )
-# The future process ends with a person who decides, approves, releases or reviews.
-_HUMAN_STEP = re.compile(
-    r"\b(?:decid(?:e|es|ing)|decision|approv(?:e|es|al)|releas(?:e|es)|signs? off|sign-off|confirm(?:s)?|validat(?:e|es)|refin(?:e|es)"
-    r"|sends?|choos(?:e|es)|classif(?:y|ies)|interpret(?:s)?|negotiat(?:e|es)|steer(?:s)?|adjust(?:s)?|review(?:s|ers?)?)\b",
+_YES_NO = re.compile(
+    r"^\W*(?:is|are|was|were|do|does|did|can|could|have|has|had|will|would|should|shall|may|might|must"
+    r"|isn't|aren't|don't|doesn't|didn't|can't|won't)\b",
     re.IGNORECASE,
 )
+
+
+def measurable_question(question: str) -> bool:
+    return bool(_QUANTITY_ASKED.search(question) or (_QUANTITY_WORD.search(question) and not _YES_NO.match(question)))
+
+
+# The future process ends with a person who decides, approves, releases or reviews. The verb
+# alone is not enough - "the system approves clean cases" names no person - so the decision
+# must have a human subject: a role, a team or function, or a person a case is handed to.
+_DECISION = re.compile(
+    r"\b(?:decid\w*|decisions?|approv\w*|releas\w*|signs?|sign-off|confirm\w*|validat\w*|refin\w*|sends?|choos\w*|chose"
+    r"|classif\w*|interpret\w*|negotiat\w*|steer\w*|adjust\w*|review\w*|checks?|verif\w*|accepts?|rejects?|authori[sz]\w*"
+    r"|handles?|keeps?|resolv\w*|prioriti[sz]\w*|judg\w*|weigh\w*|calls?|owns?)\b",
+    re.IGNORECASE,
+)
+_ROLE_WORDS = frozenset(
+    "people person persons human humans team teams staff colleague colleagues employee employees expert experts "
+    "specialist specialists lead leads leadership management manager managers owner owners sales finance accounting "
+    "accounts payable receivable treasury controlling procurement purchasing hr qa qc legal compliance quality "
+    "operations planning dispatch service support engineering board partner partners accountant accountants "
+    "consultant consultants patient patients client clients department departments clinician clinicians physician "
+    "physicians nurse nurses pharmacist pharmacists scientist scientists".split()
+)
+# Words with a role-like ending that are things, not people.
+_NOT_ROLES = frozenset(
+    "order orders number numbers folder folders paper papers letter letters chapter parameter parameters container "
+    "containers other others after under over never either whether rather together further later earlier master "
+    "register server computer scanner router parser optimiser optimizer scheduler classifier analyser analyzer tracker "
+    "filter counter buffer layer header footer marker trigger sensor error errors factor floor door vector color colour "
+    "cluster clusters calendar driver drivers indicator indicators generator converter connector extractor".split()
+)
+_MACHINE_WORDS = frozenset(
+    "ai model models system systems assistant assistants tool tools engine engines algorithm algorithms it automation "
+    "agent agents bot bots chatbot pipeline software platform llm rules layer solution workflow automatically".split()
+)
+_ROLE_ENDING = re.compile(r"(?:er|ers|or|ors|ist|ists|ian|ians)$")
+_HANDED_TO = re.compile(
+    r"\b(?:reach(?:es)?|go(?:es)? to|routed to|escalated to|passed to|handed to|lands? with|stays? with|remains? with)\s+"
+    r"(?:a |an |the |one )?([A-Za-zÀ-ÿ]+)",
+    re.IGNORECASE,
+)
+_CLAUSE = re.compile(r"[.;:—–()]|,\s|\bthen\b")
+_NAME = re.compile(r"[A-Za-zÀ-ÿ]+")
+
+
+def _is_person(word: str) -> bool:
+    word = word.lower()
+    if word in _MACHINE_WORDS:
+        return False
+    if word in _ROLE_WORDS:
+        return True
+    return len(word) >= 5 and word not in _NOT_ROLES and bool(_ROLE_ENDING.search(word))
+
+
+def names_human_step(text: str) -> bool:
+    """Whether the future process ends with a person deciding, approving, releasing or reviewing."""
+    if any(_is_person(match.group(1)) for match in _HANDED_TO.finditer(text)):
+        return True
+    for clause in _CLAUSE.split(text):
+        for verb in _DECISION.finditer(clause):
+            passive = re.match(r"\s*\w+\s+by\s+((?:[A-Za-zÀ-ÿ]+\s*){1,3})", clause[verb.start() :], re.IGNORECASE)
+            if passive and any(_is_person(word) for word in passive.group(1).split()):
+                return True
+            subject = _NAME.findall(clause[: verb.start()])
+            if subject and not any(word.lower() in _MACHINE_WORDS for word in subject) and any(_is_person(word) for word in subject):
+                return True
+    return False
 # Titles that name a capability instead of a step, document or decision.
 _GENERIC_WORDS = frozenset(
     "ai automation automated analytics analysis process processes digital digitalisation digitalization optimisation "
@@ -381,10 +460,10 @@ def quality_problems(stage: str, answer: dict[str, Any], material: dict[str, Any
         items = answer["opportunities"]
         for item in items:
             where = f"opportunity '{item['title']}'"
-            if not any(_MEASURABLE.search(question) for question in item["discovery_questions"]):
-                problems.append(f"{where}: no discovery question asks for a number, duration, share, frequency or cost")
-            if not _HUMAN_STEP.search(item["how_it_works"]):
-                problems.append(f"{where}: how_it_works does not end with the role who reviews, decides, approves or releases")
+            if not any(measurable_question(question) for question in item["discovery_questions"]):
+                problems.append(f"{where}: no discovery question asks for a number, duration, share, frequency or cost (yes/no questions do not count)")
+            if not names_human_step(item["how_it_works"]):
+                problems.append(f"{where}: how_it_works does not end with the person or role who reviews, decides, approves or releases - not the AI or the system")
             if item["opportunity_signal"].lower().startswith("opportunity if"):
                 problems.append(f"{where}: the signal repeats the printed label 'Opportunity if'")
         for key in ("result", "opportunity_signal", "how_it_works"):
@@ -406,7 +485,14 @@ def quality_problems(stage: str, answer: dict[str, Any], material: dict[str, Any
     return problems
 
 
-def ask(complete: CompleteFn, stage: str, context: dict[str, Any], task: str, material: dict[str, Any] | None = None) -> dict[str, Any]:
+def ask(
+    complete: CompleteFn,
+    stage: str,
+    context: dict[str, Any],
+    task: str,
+    material: dict[str, Any] | None = None,
+    warnings: list[str] | None = None,
+) -> dict[str, Any]:
     """One stage call; an answer that breaks the stage contract is retried once with the reason.
 
     BAP-9: an answer that talks about its inputs or how it was produced (``internal_language``)
@@ -414,8 +500,18 @@ def ask(complete: CompleteFn, stage: str, context: dict[str, Any], task: str, ma
 
     BAP-9 Phase 2: an answer that misses a reference-quality rule (``quality_problems``) is also
     retried once. That rule is a quality bar, not a contract: if the retry fails for any reason,
-    the first, otherwise valid answer is used rather than failing the analysis.
+    the first, otherwise valid answer is used rather than failing the analysis. What the used
+    answer still misses is added to ``warnings`` (kept with the analysis for review) and logged.
     """
+
+    def accept(answer: dict[str, Any], weak: list[str]) -> dict[str, Any]:
+        if weak:
+            found = [f"{stage}: {problem}"[:QUALITY_WARNING_CHARS] for problem in weak]
+            logger.warning("Discovery analysis stage %s is below the quality bar after one retry: %s", stage, "; ".join(found))
+            if warnings is not None:
+                warnings.extend(found)
+        return answer
+
     schema = STAGE_SCHEMAS[stage]
     user = "\n\n".join(
         [
@@ -426,7 +522,7 @@ def ask(complete: CompleteFn, stage: str, context: dict[str, Any], task: str, ma
         ]
     )
     problem = ""
-    usable: dict[str, Any] | None = None
+    usable: tuple[dict[str, Any], list[str]] | None = None
     for attempt in range(2):
         answer = complete(SYSTEM_PROMPT, user + problem, schema)
         errors = sorted(Draft202012Validator(schema).iter_errors(answer), key=lambda error: list(error.absolute_path))
@@ -435,8 +531,8 @@ def ask(complete: CompleteFn, stage: str, context: dict[str, Any], task: str, ma
             if not leaks:
                 weak = quality_problems(stage, answer, material)
                 if not weak or attempt == 1:
-                    return answer
-                usable = answer
+                    return accept(answer, weak)
+                usable = (answer, weak)
                 problem = (
                     "\n\nYOUR PREVIOUS ANSWER MISSED THE QUALITY BAR: " + "; ".join(weak[:4])[:600]
                     + ". Answer again with the same structure and fix these points."
@@ -452,12 +548,18 @@ def ask(complete: CompleteFn, stage: str, context: dict[str, Any], task: str, ma
         location = "/".join(str(part) for part in first.absolute_path) or "<root>"
         problem = f"\n\nYOUR PREVIOUS ANSWER WAS REJECTED: {location}: {first.message[:300]}. Answer again and fix it."
     if usable is not None:
-        return usable
+        return accept(*usable)
     raise LiveStageError(f"Stage {stage} did not return usable content: {location}")
 
 
+def _ask(draft: dict[str, Any], *args: Any) -> dict[str, Any]:
+    """``ask`` for a stage of this analysis: quality warnings are collected on the draft."""
+    return ask(*args, warnings=draft.setdefault(QUALITY_WARNINGS_KEY, []))
+
+
 def research_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any], website: dict[str, Any] | None = None) -> None:
-    answer = ask(
+    answer = _ask(
+        draft,
         complete,
         "research",
         context,
@@ -502,7 +604,8 @@ def grounded_sector_label(label: str, context: dict[str, Any], website: dict[str
 
 
 def overview_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any]) -> None:
-    answer = ask(
+    answer = _ask(
+        draft,
         complete,
         "overview",
         context,
@@ -537,7 +640,8 @@ def overview_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[st
 def deep_dives_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any]) -> None:
     for area in draft["areas"]:
         titles = area.pop("_titles")
-        answer = ask(
+        answer = _ask(
+            draft,
             complete,
             "deep_dives",
             context,
@@ -560,7 +664,8 @@ def deep_dives_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[
 
 
 def shadow_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any]) -> None:
-    answer = ask(
+    answer = _ask(
+        draft,
         complete,
         "shadow_processes",
         context,
@@ -584,7 +689,8 @@ def shadow_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str,
 
 
 def target_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any]) -> None:
-    answer = ask(
+    answer = _ask(
+        draft,
         complete,
         "target_picture",
         context,
@@ -613,7 +719,8 @@ def target_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str,
 def optional_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any], requested: dict[str, bool]) -> None:
     for key, wanted in requested.items():
         if wanted:
-            draft["optional_deep_dives"][key] = ask(
+            draft["optional_deep_dives"][key] = _ask(
+                draft,
                 complete,
                 "optional_parts",
                 context,
@@ -623,7 +730,8 @@ def optional_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[st
 
 
 def closing_stage(complete: CompleteFn, context: dict[str, Any], draft: dict[str, Any]) -> None:
-    answer = ask(
+    answer = _ask(
+        draft,
         complete,
         "closing",
         context,

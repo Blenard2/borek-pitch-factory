@@ -49,7 +49,7 @@ def test_the_fixture_library_meets_the_reference_quality_bar() -> None:
     ("mutate", "expected"),
     [
         (lambda item: item.update(discovery_questions=["Is quoting important to you?", "Do you use spreadsheets?"]), "no discovery question asks for a number"),
-        (lambda item: item.update(how_it_works="Reads the drawing, extracts features and drafts the quotation."), "does not end with the role"),
+        (lambda item: item.update(how_it_works="Reads the drawing, extracts features and drafts the quotation."), "does not end with the person or role"),
         (lambda item: item.update(opportunity_signal="Opportunity if quotes take days."), "repeats the printed label"),
     ],
 )
@@ -112,12 +112,27 @@ def test_an_answer_below_the_bar_is_retried_once_with_the_reasons() -> None:
     assert "Is this relevant?" not in printed(paper)
 
 
-def test_the_quality_bar_never_fails_an_analysis() -> None:
+def test_the_quality_bar_never_fails_an_analysis(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level("WARNING", logger=live.__name__)
     still_weak = generate(POPULATED, complete=WeakFirstModel(second="weak"))
     assert still_weak["status"] == "ready" and "Is this still relevant?" in printed(still_weak)
     broken_retry = generate(POPULATED, complete=WeakFirstModel(second="broken"))
     assert broken_retry["status"] == "ready", "the first, valid answer is used when the retry breaks"
     assert "Is this relevant?" in printed(broken_retry)
+    # PR #12 review: what is still missing is kept with the analysis and logged - never printed.
+    for paper in (still_weak, broken_retry):
+        warnings = paper["generation"]["quality_warnings"]
+        assert len(warnings) == 1 and warnings[0].startswith("deep_dives: opportunity ")
+        assert "number, duration, share, frequency or cost" in warnings[0]
+        assert "quality_warnings" not in printed(paper) and warnings[0] not in printed(paper)
+    assert sum("below the quality bar after one retry" in record.getMessage() for record in caplog.records) == 2
+
+
+def test_no_quality_warning_is_recorded_when_the_bar_is_met() -> None:
+    corrected = generate(POPULATED, complete=WeakFirstModel())
+    assert "quality_warnings" not in corrected["generation"], "a corrected retry leaves nothing to review"
+    assert "quality_warnings" not in generate(POPULATED, complete=FakeModel())["generation"]
+    assert "quality_warnings" not in generate(POPULATED)["generation"], "fixture mode has no model answers to judge"
 
 
 # --------------------------------------------------------------- industry wording in the chapter texts
@@ -265,3 +280,93 @@ def test_an_approved_calibrated_analysis_feeds_master_presentation_v1() -> None:
     for text in (analysis["areas"][0]["name"], analysis["areas"][0]["opportunities"][0]["title"], analysis["target_workflows"][0]["human_decision_gate"]):
         assert text in deck, text
     assert paper["presentation_brief"]["core_thesis"] == analysis["research"]["core_thesis"]["text"]
+
+
+# --------------------------------------------------------------- PR #12 review findings
+
+
+AI_ONLY_STEPS = [
+    "Reads the drawing, validates the dimensions and sends the quote automatically.",
+    "The model classifies each claim and approves clean ones.",
+    "The system reviews every record and releases compliant batches.",
+    "Extracts positions, adjusts prices and confirms the order.",
+    "AI decides the priority and steers the schedule.",
+    "The assistant checks the invoice and releases payment.",
+    "Matches orders against stock and sends confirmations to customers.",
+]
+HUMAN_STEPS = [
+    "Reads the request, extracts scope and drafts the proposal; business development leads refine the strategy.",
+    "Structures inclusion criteria, checks records and flags likely fails; clinicians decide every case.",
+    "Collects results against specifications and assembles the release pack; the Qualified Person reviews and releases.",
+    "Translates call-offs into staffing needs per shift and proposes deployments; operations management decides.",
+    "Generates documents from approved templates; HR checks and signs.",
+    "Extracts, codes and matches; clean cases flow through, deviations go to a person with context.",
+    "Proposes the route and the loading order; the shift lead confirms before release.",
+    "Drafts the customs papers per shipment; customs specialists check special cases.",
+    "Builds the tour plan from orders and driver hours; dispatchers approve the plan.",
+    "Prepares the dose record; the duty pharmacist releases it.",
+    "Ranks candidates for the slot; the site manager chooses.",
+    "Drafts the change order with evidence; it is approved by the account manager.",
+    "Structures the event and drafts the assessment; QA classifies, decides and approves.",
+    "Completes missing fields and routes the request; buyers see only cases that need a decision.",
+]
+
+
+@pytest.mark.parametrize("text", AI_ONLY_STEPS)
+def test_finding_1_an_automated_step_is_not_a_human_decision(text: str) -> None:
+    assert not live.names_human_step(text)
+    answer = library_deep_dive()
+    answer["opportunities"][0]["how_it_works"] = text
+    assert any("not the AI or the system" in problem for problem in live.quality_problems("deep_dives", answer))
+
+
+@pytest.mark.parametrize("text", HUMAN_STEPS)
+def test_finding_1_a_named_person_or_function_is_recognised(text: str) -> None:
+    assert live.names_human_step(text), "no false rejection of a legitimate human step"
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["Does this cost you days?", "Is the error rate known?", "Do you track hours per batch?", "Are weekly costs reported?", "Can you see the costs?"],
+)
+def test_finding_2_a_yes_no_question_is_not_measurable(question: str) -> None:
+    assert not live.measurable_question(question)
+    answer = library_deep_dive()
+    answer["opportunities"][0]["discovery_questions"] = [question, "Do you use spreadsheets for it?"]
+    assert any("yes/no questions do not count" in problem for problem in live.quality_problems("deep_dives", answer))
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "How many days does a full quotation take today?",
+        "What does one week of unplanned overtime cost?",
+        "When do you learn that an order will slip?",
+        "Which share of claims is audited per month?",
+        "Do you know how many credit notes are checked line by line?",
+        "What is the no-show rate per cohort?",
+        "Is planning based on call-offs - and how often does it change per week?",
+        "Can you estimate the cost per order?",
+    ],
+)
+def test_finding_2_open_and_quantity_questions_stay_measurable(question: str) -> None:
+    assert live.measurable_question(question)
+
+
+def test_the_library_names_a_person_for_every_decision() -> None:
+    for area in load_library()["areas"]:
+        for item in area["opportunities"]:
+            assert live.names_human_step(item["how_it_works"]), item["id"]
+            assert any(live.measurable_question(question) for question in item["discovery_questions"]), item["id"]
+
+
+def test_finding_3_warnings_are_stored_bounded_and_accepted_by_the_contract() -> None:
+    from services.framework.discovery_analysis.model import validate_discovery_analysis
+
+    paper = generate(POPULATED, complete=WeakFirstModel(second="weak"))
+    validate_discovery_analysis(paper)
+    paper["generation"]["quality_warnings"] = ["x" * 300] * live.MAX_QUALITY_WARNINGS
+    validate_discovery_analysis(paper)
+    paper["generation"]["quality_warnings"].append("one too many")
+    with pytest.raises(Exception, match="quality_warnings"):
+        validate_discovery_analysis(paper)

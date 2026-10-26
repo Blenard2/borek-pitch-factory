@@ -67,7 +67,8 @@
           "properties": {"roles_employees": {"type": "boolean"}, "decision_map": {"type": "boolean"}, "system_interfaces": {"type": "boolean"}}
         },
         "stages": {"type": "array", "items": {"$ref": "#/$defs/Stage"}},
-        "website_research": {"$ref": "#/$defs/WebsiteResearch"}
+        "website_research": {"$ref": "#/$defs/WebsiteResearch"},
+        "quality_warnings": {"type": "array", "description": "BAP-9 Phase 2: reference-quality rules a live stage answer still missed after its one retry. For review; never printed.", "maxItems": 40, "items": {"type": "string", "minLength": 1, "maxLength": 300}}
       }
     },
     "WebsiteResearch": {

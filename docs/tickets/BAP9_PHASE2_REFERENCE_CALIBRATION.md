@@ -68,7 +68,9 @@ No live baseline was generated: it needs a paid model call, which was not author
 
 ## Quality bar in code (`live.quality_problems`)
 
-Checked per model answer; a miss is retried once with the reasons. It is a quality bar, not a contract: if the retry fails, the first valid answer is used and generation never fails because of it. Checks: thesis framing; repeated or capability-only titles; ≥1 measurable question per opportunity; a human step in the future process; no "Opportunity if" in the signal; no duplicate results, signals or processes; chain blocks taken from the part-2 opportunities (learning loop exempt). The fixture library passes all checks.
+Checked per model answer; a miss is retried once with the reasons. It is a quality bar, not a contract: if the retry fails, the first valid answer is used and generation never fails because of it. What the used answer still misses is logged and stored in `generation.quality_warnings` (optional field, never printed, at most 40 entries). Checks: thesis framing; repeated or capability-only titles; ≥1 measurable question per opportunity (a quantity asked for, or an open question about cost or time — yes/no questions do not count); a human decision in the future process (the deciding subject must be a person, role, team or function, not the AI or the system); no "Opportunity if" in the signal; no duplicate results, signals or processes; chain blocks taken from the part-2 opportunities (learning loop exempt). The fixture library passes all checks.
+
+PR #12 review: the first version accepted automation verbs without a person ("the system approves clean cases"), yes/no questions containing "cost" or "days", and kept no record of answers still below the bar. All three were reproduced in tests and fixed; two library texts that named no decider (pricing check, shift hand-over) now do.
 
 ## Validation
 

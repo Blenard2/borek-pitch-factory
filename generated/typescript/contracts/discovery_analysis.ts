@@ -59,6 +59,12 @@ export interface Generation {
   };
   stages: Stage[];
   website_research?: WebsiteResearch;
+  /**
+   * BAP-9 Phase 2: reference-quality rules a live stage answer still missed after its one retry. For review; never printed.
+   *
+   * @maxItems 40
+   */
+  quality_warnings?: string[];
 }
 export interface Stage {
   key:
