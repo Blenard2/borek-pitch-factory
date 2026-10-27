@@ -18,6 +18,7 @@ from llm.claude.client import (
     structured_complete,
 )
 from services.observability.llm_logger import run_logged_llm_call
+from services.transcript.speaker_names import FINDING_LABELS, SPEAKER_NAME
 
 PROMPT_VERSION = "meeting-extraction:v2"
 SCHEMA_VERSION = "1.0"
@@ -41,18 +42,10 @@ MIN_EVIDENCE_WORDS = 3
 _LINE_LEAD = (
     r"(?i)^\s*(?:[-*\u2022]\s+)?"  # list bullet
     r"(?:[\[(]?\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{1,3})?[\])]?\s*(?:[-\u2013\u2014]\s*)?)?"  # time stamp
-    r"(?:[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9 .'\-_()]{0,80}:\s*)??"  # speaker name (BAP-13: also "Jörg", "Müller")
+    rf"(?:{SPEAKER_NAME}:\s*)??"  # speaker name, any script ("Dr. Jürgen Weiß"), as the turn splitter reads it
 )
-# BAP-13: German labels as well - the labelled statement is read verbatim either way.
-_LABELS: tuple[tuple[str, str], ...] = (
-    ("requirements", r"requirements?|anforderung(?:en)?"),
-    ("challenges", r"challenges?|herausforderung(?:en)?"),
-    ("priorities", r"priorit(?:y|ies)|priorität(?:en)?"),
-    ("opportunities", r"opportunit(?:y|ies)|chancen?|potenziale?"),
-    ("discussed_solutions", r"discussed solutions?|besprochene lösung(?:en)?|lösungsansatz|lösungsansätze"),
-    ("decisions", r"decisions?|entscheidung(?:en)?|beschlüsse|beschluss"),
-    ("follow_ups", r"follow[- ]?ups?|nächster? schritte?|nächste schritte|to-?dos?"),
-)
+# English and German labels (BAP-13), shared with the turn splitter - the statement is read verbatim either way.
+_LABELS: tuple[tuple[str, str], ...] = FINDING_LABELS
 _LINE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
     (category, re.compile(_LINE_LEAD + r"(?:" + label + r")\s*:\s*(.+)$")) for category, label in _LABELS
 )

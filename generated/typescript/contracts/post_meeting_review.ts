@@ -41,6 +41,10 @@ export interface Transcript {
   revision: string | null;
   turn_count: number;
   /**
+   * Speaker changes found inside single stored speaker turns. Above 0, statements of different speakers were read as one turn (for example a transcript uploaded before speaker names with umlauts were recognised), so findings may be merged or attributed to the wrong speaker; uploading the file again reads it with the current rules.
+   */
+  merged_speaker_changes: number;
+  /**
    * True for the transcript the stored extraction was made from.
    */
   analysed: boolean;

@@ -117,6 +117,10 @@
 .transcriptList .check { align-items: center; margin: 0; }
 .transcriptList .check > span { flex: 1; }
 .transcriptBadge { margin-left: auto; font-style: normal; font-weight: var(--pitch-weight-semibold); letter-spacing: .05em; white-space: nowrap; }
+.transcriptBadges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 10px; margin-left: auto; }
+.transcriptBadges .transcriptBadge { margin-left: 0; }
+.transcriptBadgeMuted { color: var(--pitch-gray-500); }
+.root .transcriptWarning { margin: 8px 0 0; padding: 8px 12px; border-left: 3px solid var(--pitch-red); background: var(--pitch-gray-50); color: var(--pitch-red); font-size: var(--pitch-text-caption); }
 .transcriptIconEmpty { color: var(--pitch-gray-500); }
 .sourceMeta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--pitch-gray-200); }
 .sourceMeta dt { color: var(--pitch-gray-500); font-size: var(--pitch-text-caption); letter-spacing: .05em; text-transform: uppercase; }

@@ -106,6 +106,7 @@
         "created_at",
         "revision",
         "turn_count",
+        "merged_speaker_changes",
         "analysed"
       ],
       "properties": {
@@ -136,6 +137,11 @@
         "turn_count": {
           "type": "integer",
           "minimum": 0
+        },
+        "merged_speaker_changes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Speaker changes found inside single stored speaker turns. Above 0, statements of different speakers were read as one turn (for example a transcript uploaded before speaker names with umlauts were recognised), so findings may be merged or attributed to the wrong speaker; uploading the file again reads it with the current rules."
         },
         "analysed": {
           "type": "boolean",

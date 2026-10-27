@@ -30,13 +30,13 @@ from services.transcript.ingestion import (
     _TIMESTAMP_RE,
     ingest_transcript,
 )
+from services.transcript.speaker_names import SPEAKER_NAME, clean_speaker, is_finding_label, normalize_text
 
 UNKNOWN_SPEAKER = "unknown"
 
 _VOICE_TAG_RE = re.compile(r"<v\s+([^>]+)>", re.IGNORECASE)
-_SPEAKER_PREFIX_RE = re.compile(
-    r"^(?P<speaker>[A-Za-z][A-Za-z0-9 .'\-_()]{0,80}):\s*(?P<text>.*)$"
-)
+# Names in any script: "Dr. Jürgen Weiß", "Petra Schäfer", "Sarah O'Neill-Hughes" (see speaker_names).
+_SPEAKER_PREFIX_RE = re.compile(rf"^(?P<speaker>{SPEAKER_NAME}):\s*(?P<text>.*)$")
 
 
 # "[02:15]", "(00:02:15)", "00:02:15", "02:15.500", optionally followed by a dash.
@@ -44,13 +44,11 @@ _LEADING_TIMESTAMP_RE = re.compile(r"^\s*[\[(]?\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d
 _LIST_BULLET_RE = re.compile(r"^\s*[-*\u2022]\s+")
 # "At 14:00 I have a call": the colon belongs to a clock time, not to a speaker called "At 14".
 _CLOCK_TIME_SPLIT_RE = re.compile(r"\d$")
-# Labels that start a finding, not a speaker's turn.
-_STATEMENT_LABELS = frozenset(
-    {
-        "requirement", "requirements", "challenge", "challenges", "priority", "priorities", "opportunity", "opportunities",
-        "discussed solution", "discussed solutions", "decision", "decisions", "follow-up", "follow-ups", "follow up", "followup",
-    }
-)
+
+
+def _is_label(name: str) -> bool:
+    """A finding label ("Decision", "Entscheidung", "Nächste Schritte"), not a speaker."""
+    return is_finding_label(name.strip())
 
 
 def _speaker_prefix(line: str) -> re.Match[str] | None:
@@ -63,7 +61,7 @@ def _speaker_prefix(line: str) -> re.Match[str] | None:
     if prefix is None:
         return None
     speaker = prefix.group("speaker").strip()
-    if speaker.casefold() in _STATEMENT_LABELS:
+    if _is_label(speaker):
         return None
     if _CLOCK_TIME_SPLIT_RE.search(speaker) and re.match(r"\d{2}(?!\d)", prefix.group("text")):
         return None
@@ -77,7 +75,7 @@ def _without_lead(line: str) -> str:
 
 def _is_statement_label(line: str) -> bool:
     label = _SPEAKER_PREFIX_RE.match(_without_lead(line))
-    return label is not None and label.group("speaker").strip().casefold() in _STATEMENT_LABELS
+    return label is not None and _is_label(label.group("speaker"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,11 +90,11 @@ def split_speaker_turns(filename: str, content: bytes) -> list[SpeakerTurn]:
     extension = ingested.extension
 
     if extension == ".vtt":
-        raw_turns = _turns_from_cues(_decode_text_bytes(content), skip_webvtt_header=True)
+        raw_turns = _turns_from_cues(normalize_text(_decode_text_bytes(content)), skip_webvtt_header=True)
     elif extension == ".srt":
-        raw_turns = _turns_from_cues(_decode_text_bytes(content), skip_webvtt_header=False)
+        raw_turns = _turns_from_cues(normalize_text(_decode_text_bytes(content)), skip_webvtt_header=False)
     else:
-        raw_turns = _turns_from_plain_text(ingested.normalized_text)
+        raw_turns = _turns_from_plain_text(normalize_text(ingested.normalized_text))
 
     if not raw_turns:
         raise TranscriptIngestionError(
@@ -198,5 +196,76 @@ def _turns_from_plain_text(text: str) -> list[tuple[str, str]]:
 
 
 def _clean_speaker(label: str) -> str:
-    cleaned = " ".join(label.replace("_", " ").split())
+    cleaned = clean_speaker(label)
     return cleaned if cleaned else UNKNOWN_SPEAKER
+
+
+# ---------------------------------------------------------------------------- merged speaker check
+# Turns are split once, at upload, and stored. A transcript read with older rules (before names
+# such as "Dr. Jürgen Weiß" were recognised), or a line holding several speakers, keeps another
+# speaker's "Name:" inside one stored turn. Those statements are not lost from the text, but they
+# are attributed to the wrong speaker and a labelled statement after them is not read on its own.
+# The check below finds such places in stored turns, so the review can say so instead of reporting
+# that the findings match the transcript.
+_EMBEDDED_TIME = r"[\[(]?\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{1,3})?[\])]?"
+# "… [00:03:05] Zoë Brandt: Decision: …" - a time stamp, then a name: strong evidence.
+_TIMED_SPEAKER_RE = re.compile(rf"(?<!\S){_EMBEDDED_TIME}\s*(?:[-\u2013\u2014]\s*)?(?P<name>{SPEAKER_NAME}):\s+\S")
+# "… by Friday. Petra Schäfer: Agreed …" - a sentence end, then something that looks like a name.
+_SENTENCE_SPEAKER_RE = re.compile(rf"(?<=[.!?\u2026])[\"\u201d\u2019)]?\s+(?P<name>{SPEAKER_NAME}):\s+\S")
+_TITLE_WORD_RE = re.compile(r"(?i)^(?:dr|prof|dipl|ing|mag|mr|mrs|ms|herr|frau)\b")
+_NAME_PARTICLES = frozenset({"von", "van", "de", "der", "den", "zu", "di", "da", "le", "la", "del", "dos", "du"})
+# Headings that are written like names but introduce a statement.
+_HEADINGS = frozenset(
+    {"next steps", "action items", "summary", "note", "notes", "agenda", "zusammenfassung", "notiz", "notizen", "tagesordnung", "fazit"}
+)
+
+
+# German capitalises nouns, so "Das Ziel:" or "Unser Vorschlag:" look like names; so do English
+# headings like "The Plan:". A name does not start with an article, a pronoun or one of these words.
+_NOT_A_NAME_START = frozenset(
+    {
+        "der", "die", "das", "den", "dem", "des", "ein", "eine", "einer", "eines", "unser", "unsere", "mein", "meine", "ihr", "ihre",
+        "wir", "ich", "sie", "es", "dieser", "diese", "dieses", "kein", "keine", "the", "a", "an", "our", "my", "your", "their",
+        "this", "that", "these", "we", "i", "it", "key", "main", "open", "next", "action", "wichtig", "offene", "offener",
+    }
+)
+
+
+def _looks_like_person(name: str, known: set[str]) -> bool:
+    words = name.split()
+    if name.casefold() in known:
+        return True
+    if not 2 <= len(words) <= 5 or words[0].casefold() in _NOT_A_NAME_START:
+        return False
+    return any(_TITLE_WORD_RE.match(word) for word in words) or all(
+        word[0].isupper() or _TITLE_WORD_RE.match(word) or word.casefold() in _NAME_PARTICLES for word in words
+    )
+
+
+def merged_speaker_changes(sections: list[dict[str, object]]) -> int:
+    """How many speaker changes stored turns hold inside their text (0 when turns are clean).
+
+    ``sections`` are stored speaker turns (``speaker_role``, ``content``). Finding labels and
+    headings ("Decision:", "Nächste Schritte:", "Summary:") are not speakers and are not counted.
+    """
+    known = {
+        clean_speaker(str(section.get("speaker_role") or "")).casefold()
+        for section in sections
+        if str(section.get("speaker_role") or "") not in ("", UNKNOWN_SPEAKER)
+    }
+    count = 0
+    for section in sections:
+        text = normalize_text(str(section.get("content") or ""))
+        # One speaker change per name: "Dr. Jürgen Weiß:" is not counted again as "Jürgen Weiß:".
+        ends: set[int] = set()
+        for match in _TIMED_SPEAKER_RE.finditer(text):
+            name = clean_speaker(match.group("name"))
+            if match.start() > 0 and not _is_label(name) and name.casefold() not in _HEADINGS:
+                ends.add(match.end("name"))
+        for match in _SENTENCE_SPEAKER_RE.finditer(text):
+            name = clean_speaker(match.group("name"))
+            if _is_label(name) or name.casefold() in _HEADINGS or not _looks_like_person(name, known):
+                continue
+            ends.add(match.end("name"))
+        count += len(ends)
+    return count
