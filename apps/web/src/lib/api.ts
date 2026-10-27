@@ -229,6 +229,15 @@ function opportunityPath(opportunityId: string): string {
   return `/opportunities/${resolveBackendOpportunityId(opportunityId)}`;
 }
 
+/** BAP-12: the language client documents are generated in ("en" | "de"); see documentLanguage.ts. */
+export type GenerationLanguage = "en" | "de";
+
+/** The JSON body naming the generation language, or no body when none is given. */
+function generationBody(language: GenerationLanguage | null | undefined, extra: Record<string, unknown> = {}): string | undefined {
+  const body = language === "en" || language === "de" ? { ...extra, language } : extra;
+  return Object.keys(body).length ? JSON.stringify(body) : undefined;
+}
+
 export interface PreviewClientSeed {
   company_name: string;
   contact_person?: string;
@@ -257,6 +266,7 @@ export async function ensureBackendOpportunityId(
   accessToken: string,
   opportunityId: string,
   seed?: PreviewClientSeed | null,
+  language?: GenerationLanguage | null,
 ): Promise<string> {
   if (UUID_RE.test(opportunityId)) return opportunityId;
   const owner = getAuthOwnerId();
@@ -279,6 +289,8 @@ export async function ensureBackendOpportunityId(
       client_name: seed.company_name,
       opportunity_name: seed.meeting_purpose?.trim() || seed.company_name,
       department: "Sales",
+      // BAP-12: the document language chosen for this client is stored with it from the start.
+      ...(language === "en" || language === "de" ? { language } : {}),
       stage1_intake: {
         client_web_page: validWebsite,
         poc_name: seed.contact_person?.trim() || null,
@@ -341,10 +353,13 @@ export async function generateDiscoveryPaper(
   accessToken: string,
   opportunityId: string,
   seed?: PreviewClientSeed | null,
+  language?: GenerationLanguage | null,
 ): Promise<Record<string, unknown>> {
-  const backendId = await ensureBackendOpportunityId(accessToken, opportunityId, seed);
+  const backendId = await ensureBackendOpportunityId(accessToken, opportunityId, seed, language);
+  // BAP-12: Discovery 1 is written in the chosen language; the server also stores it on the client.
   return apiFetch(`${opportunityPath(backendId)}/discovery-paper/generate`, accessToken, {
     method: "POST",
+    body: generationBody(language),
   });
 }
 
@@ -370,18 +385,23 @@ export async function getStage1Outputs(
 export async function regenerateStage1Presentation(
   accessToken: string,
   opportunityId: string,
+  language?: GenerationLanguage | null,
 ): Promise<Stage1OutputsEnvelope> {
+  // BAP-12: naming the language lets the server refuse a deck against a Discovery in another language.
   return apiFetch(`${opportunityPath(opportunityId)}/stage1-outputs/presentation/regenerate`, accessToken, {
     method: "POST",
+    body: generationBody(language),
   });
 }
 
 export async function generateStage1Outputs(
   accessToken: string,
   opportunityId: string,
+  language?: GenerationLanguage | null,
 ): Promise<Stage1OutputsEnvelope> {
   return apiFetch(`${opportunityPath(opportunityId)}/stage1-outputs/generate`, accessToken, {
     method: "POST",
+    body: generationBody(language),
   });
 }
 

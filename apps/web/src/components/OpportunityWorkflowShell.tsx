@@ -13,6 +13,7 @@ import { displayClientName } from "@/lib/clientInformation";
 import type { DiscoveryFirstWorkspaceFixture } from "@/lib/discoveryFirst";
 import { PostMeetingShell } from "@/components/PostMeetingShell";
 import { PresentationHeadline, PresentationSourceProvider } from "@/components/PresentationHeadline";
+import { DocumentLanguageBadge } from "@/components/DocumentLanguageSelector";
 
 interface OpportunityWorkflowShellProps {
   fixture: DiscoveryFirstWorkspaceFixture;
@@ -61,6 +62,8 @@ export function OpportunityWorkflowShell({ fixture, children }: OpportunityWorkf
                 <p className="discovery-workflow-meta">{live ? "Live workspace · Progress is shown with each artifact below." : workspaceProgress}</p>
               </div>
             )}
+            {/* BAP-12: the language this client's documents are generated in (not the interface language). */}
+            <DocumentLanguageBadge language={preview?.document_language} prefix="Document language" />
           </div>
           {activeSection === "post_meeting" ? (
             <DiscoveryWorkflowStepper

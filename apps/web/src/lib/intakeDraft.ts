@@ -6,6 +6,7 @@ import {
   type ClientInformationExtras,
 } from "./clientInformation";
 import type { ClientInformationViewModel } from "./discoveryFirst";
+import { normalizeDocumentLanguage, type DocumentLanguage } from "./documentLanguage";
 
 const LEGACY_KEY = "borek-premeeting-create-draft-v1";
 
@@ -13,6 +14,8 @@ export interface IntakeDraft {
   step: 1 | 2 | 3;
   values: ClientInformationViewModel;
   extras: ClientInformationExtras;
+  /** BAP-12: the document language chosen while creating the client (English when missing). */
+  document_language?: DocumentLanguage;
 }
 
 export function intakeDraftStorageKey(ownerId: string): string {
@@ -56,7 +59,10 @@ export function parseIntakeDraft(value: unknown): IntakeDraft | null {
     if (draft.step === 2) delete errors.meeting_purpose;
     if (Object.keys(errors).length || Object.keys(validateClientInformationExtras(normalizedExtras)).length) return null;
   }
-  return { step: draft.step, values, extras: normalizedExtras };
+  return {
+    step: draft.step, values, extras: normalizedExtras,
+    ...(draft.document_language === undefined ? {} : { document_language: normalizeDocumentLanguage(draft.document_language) }),
+  };
 }
 
 export function restoreIntakeDraft(ownerId: string | null, storage = intakeStorage()): IntakeDraft | null {

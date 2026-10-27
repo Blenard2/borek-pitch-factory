@@ -6,7 +6,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { PostMeetingPhaseNav, usePostMeeting } from "@/components/PostMeetingShell";
 import { generateMeetingExtraction, listAvailableUseCases, saveSelectedUseCases, uploadTranscript, type AvailableUseCase } from "@/lib/api";
-import { needsDiscovery2 } from "@/lib/postMeetingDiscovery";
+import { approvedDiscovery2Language, loadPostMeetingDiscovery, needsDiscovery2 } from "@/lib/postMeetingDiscovery";
+import { DocumentLanguageWarning, useDocumentLanguage } from "@/components/DocumentLanguageSelector";
+import { documentLanguageErrorMessage, downstreamLanguageGate } from "@/lib/documentLanguage";
 import { isMasterJourney } from "@/lib/discoveryFirst";
 import { awaitRunningMasterV2, generateAndAwaitMasterV2, loadMasterV2Status, masterV2Error, masterV2StageText, type MasterV2Status } from "@/lib/masterPresentationV2";
 import { generateAndAwaitPostMeetingPresentation } from "@/lib/ppt2Generation";
@@ -44,6 +46,9 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
   const [v2, setV2] = useState<MasterV2Status | null>(null);
   const [v2Stage, setV2Stage] = useState<string | null>(null);
   const [v2Error, setV2Error] = useState<string | null>(null);
+  // BAP-12: V2 is written in the language of the approved Discovery 2.
+  const selectedLanguage = useDocumentLanguage(opportunityId).language;
+  const [discovery2Language, setDiscovery2Language] = useState<{ language: "en" | "de"; versionNumber: number } | null>(null);
   // Which meeting input is in front. Both stay mounted, so typed notes survive switching.
   const [inputTab, setInputTab] = useState<"transcript" | "notes">("transcript");
   // The readiness checklist is always shown on desktop. At 960px and below it is collapsed behind
@@ -225,17 +230,18 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
   }, [accessToken, live, opportunityId, v2?.state, v2JobId]);
 
   async function generateV2() {
+    if (v2LanguageGate.blocked) return;
     if (!review || !accessToken || !live || operation.current) return;
     const controller = new AbortController();
     operation.current = controller;
     setBusy("Generating Master Presentation V2"); setError(null); setSaved(null); setV2Error(null); setV2Stage("QUEUED");
     setV2((value) => value ? { ...value, state: "generating", can_generate: false } : value);
     try {
-      setV2(await generateAndAwaitMasterV2(accessToken, opportunityId, (job) => setV2Stage(job.current_stage), controller.signal));
+      setV2(await generateAndAwaitMasterV2(accessToken, opportunityId, (job) => setV2Stage(job.current_stage), controller.signal, discovery2Language?.language ?? selectedLanguage));
       setSaved("Master Presentation V2 is ready.");
     } catch (cause) {
       if (controller.signal.aborted) return;
-      setV2Error(masterV2Error(cause));
+      setV2Error(documentLanguageErrorMessage(cause) ?? masterV2Error(cause));
       // Show what the server holds now: a failed job, a still-running one, or changed sources.
       try { setV2(await loadMasterV2Status(accessToken, opportunityId)); } catch { /* the error above is shown */ }
       try { await refresh(accessToken, controller.signal); } catch { /* the review on screen stays */ }
@@ -314,6 +320,15 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
   ] : [];
   const requiredSteps = readiness.filter((row) => !row.optional);
   const canGenerateV2 = Boolean(review?.readiness.ready_for_v2 && confirmedCurrent);
+  const v2LanguageGate = downstreamLanguageGate(selectedLanguage, discovery2Language, { artifact: "Master Presentation V2", source: "Discovery 2" });
+  useEffect(() => {
+    if (!accessToken || !live || !canGenerateV2) { setDiscovery2Language(null); return; }
+    const controller = new AbortController();
+    void loadPostMeetingDiscovery(accessToken, opportunityId, controller.signal)
+      .then((value) => { if (!controller.signal.aborted) setDiscovery2Language(approvedDiscovery2Language(value)); })
+      .catch(() => { if (!controller.signal.aborted) setDiscovery2Language(null); });
+    return () => controller.abort();
+  }, [accessToken, live, opportunityId, canGenerateV2]);
   // Tabs follow the usual keyboard pattern: arrow keys, Home and End move between them, and only
   // the selected tab is in the page's tab order. Switching never touches what was typed.
   const INPUT_TABS = ["transcript", "notes"] as const;
@@ -467,6 +482,8 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
           </div>
             : null}
 
+          {/* BAP-12: V2 waits for a Discovery 2 in the client's document language; explained, not hidden. */}
+          {canGenerateV2 && v2LanguageGate.message && <DocumentLanguageWarning>{v2LanguageGate.message}</DocumentLanguageWarning>}
           {/* One primary action: the next step the current state allows. Each one calls the same
               handler as before and is held back by the same gate. */}
           <div className={styles.primaryAction} data-testid="primary-action">
@@ -480,7 +497,7 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
               : !confirmedCurrent ? <button className="btn btn-primary" disabled={editingDisabled} onClick={() => void confirm()}>{busy === "Confirming findings" ? "Confirming..." : "Confirm meeting information"}</button>
               : discovery2Pending ? <Link className="btn btn-primary" data-testid="open-discovery2" href={`${root}/post-meeting-discovery`}>{discovery2?.status === "draft" ? "Review and approve Discovery 2" : discovery2?.status === "stale" ? "Generate Discovery 2 again" : "Continue to Discovery 2"}</Link>
               : v2?.state === "ready" ? <Link className="btn btn-primary" data-testid="open-v2" href={`${root}/post-meeting-presentation`}>Open Master Presentation V2</Link>
-              : canGenerateV2 && v2 ? <button className="btn btn-primary" data-testid="generate-v2" disabled={editingDisabled || !v2.can_generate} onClick={() => void generateV2()}>
+              : canGenerateV2 && v2 ? <button className="btn btn-primary" data-testid="generate-v2" disabled={editingDisabled || !v2.can_generate || v2LanguageGate.blocked} onClick={() => void generateV2()}>
                 {v2.state === "failed" ? "Retry Master Presentation V2" : v2.state === "outdated" ? "Generate a new V2 revision" : "Generate Master Presentation V2"}</button>
               : null}
           </div>

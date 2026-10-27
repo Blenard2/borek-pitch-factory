@@ -8,6 +8,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { useLanguage } from "@/components/LanguageProvider";
 import { usePreviewJourney } from "@/components/PreviewJourneyProvider";
 import { ApiRequestError, saveAdditionalInformation } from "@/lib/api";
+import { DocumentLanguageField, DocumentLanguageSelector } from "@/components/DocumentLanguageSelector";
+import { DEFAULT_DOCUMENT_LANGUAGE, documentLanguageLabel, type DocumentLanguage } from "@/lib/documentLanguage";
 import {
   ClientInformationAdapterError,
   clientInformationErrorMessage,
@@ -87,6 +89,8 @@ export function ClientInformationEditor({ initialRecord }: ClientInformationEdit
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
+  // BAP-12: the document language of the client being created; sent with it to the server.
+  const [documentLanguage, setDocumentLanguageChoice] = useState<DocumentLanguage>(DEFAULT_DOCUMENT_LANGUAGE);
   const createMode = initialRecord.opportunity_id === "new";
   const knownOpportunity = getOpportunity(initialRecord.opportunity_id);
   const currentRecord = initialRecord.source === "live" && knownOpportunity?.client.source !== "live"
@@ -133,6 +137,7 @@ export function ClientInformationEditor({ initialRecord }: ClientInformationEdit
     setDraft(stored?.values ?? initialRecord.values);
     setExtras(stored?.extras ?? EMPTY_CLIENT_INFORMATION_EXTRAS);
     setCreateStep(stored?.step ?? 1);
+    setDocumentLanguageChoice(stored?.document_language ?? DEFAULT_DOCUMENT_LANGUAGE);
     setFieldErrors({});
     setExtraErrors({});
     setError(null);
@@ -145,6 +150,7 @@ export function ClientInformationEditor({ initialRecord }: ClientInformationEdit
       step,
       values: normalizeClientInformation(draft),
       extras: normalizeClientInformationExtras(extras),
+      document_language: documentLanguage,
     });
     if (!persisted) {
       setNotice(null);
@@ -260,6 +266,7 @@ export function ClientInformationEditor({ initialRecord }: ClientInformationEdit
         const created = createOpportunity(
           normalizeClientInformation(draft),
           normalizeClientInformationExtras(extras),
+          documentLanguage,
         );
         clearIntakeDraft(ownerId);
         router.push(`/opportunities/${encodeURIComponent(created.opportunity_id)}/discovery`);
@@ -469,6 +476,15 @@ export function ClientInformationEditor({ initialRecord }: ClientInformationEdit
             {createStep === 3 ? (
               <section className="premeeting-generate-review">
                 <h3>{copy.clientForm.reviewTitle}</h3><p>{copy.clientForm.reviewLead}</p>
+                <DocumentLanguageField
+                  value={documentLanguage}
+                  disabled={busy}
+                  onChange={(next) => {
+                    setDocumentLanguageChoice(next);
+                    persistIntakeDraft(ownerId, { step: 3, values: normalizeClientInformation(draft), extras: normalizeClientInformationExtras(extras), document_language: next });
+                  }}
+                  description={`Discovery, presentations and the follow-up email for this client are generated in ${documentLanguageLabel(documentLanguage)}. You can change it before the first Discovery is generated, or later with a new Discovery version. The app's own language is set separately.`}
+                />
               </section>
             ) : null}
             <div className="client-information-form-actions">
@@ -514,6 +530,15 @@ export function ClientInformationEditor({ initialRecord }: ClientInformationEdit
       {liveRecord || !canEdit ? <p role="status">{liveRecord
         ? "In a live session only Additional information can be changed here; it is saved for this client and used by the next Discovery generation. The other client fields are read-only: the backend update contract cannot safely round-trip all five fields with revision checks. Extras are local preview metadata, not live-saved data."
         : "This opportunity is not available in your local preview. Editing is disabled."}</p> : null}
+
+      {!createMode && knownOpportunity ? (
+        <div className="document-language-panel">
+          <DocumentLanguageSelector
+            opportunityId={record.opportunity_id}
+            description="Client documents are generated in this language. A change applies to the next Discovery generation; approved documents keep their language. The app's own language is set separately."
+          />
+        </div>
+      ) : null}
 
       {editing && canEdit ? (
         <form id="client-information-form" className="client-information-form" onSubmit={(event) => void save(event)} noValidate>

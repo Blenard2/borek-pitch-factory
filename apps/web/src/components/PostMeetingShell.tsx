@@ -8,6 +8,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { usePreviewMeeting } from "@/components/usePreviewMeeting";
 import { WORKFLOW_STATUS_CATALOG, isMasterJourney, workflowStepLabel } from "@/lib/discoveryFirst";
 import { loadPostMeetingWorkflow, postMeetingError, showsWorkflowCheckpoints, workflowCompleted, type PostMeetingWorkflow } from "@/lib/postMeeting";
+import { DocumentLanguageBadge, useDocumentLanguage } from "@/components/DocumentLanguageSelector";
 import styles from "./post-meeting.module.css";
 
 const PostMeetingContext = createContext<{
@@ -69,6 +70,7 @@ function PostMeetingSession({ opportunityId, companyName, contactPerson, childre
     return () => controller.abort();
   }, [accessToken, live, opportunityId, revision, pathname]);
 
+  const documentLanguage = useDocumentLanguage(opportunityId).language;
   return <PostMeetingContext.Provider value={{ workflow, refreshWorkflow: () => setRevision((value) => value + 1), companyName, contactPerson }}>
     <div className="app-workspace discovery-workflow-shell">
       <SiteHeader opportunityId={opportunityId} activeSection="post_meeting" />
@@ -78,6 +80,10 @@ function PostMeetingSession({ opportunityId, companyName, contactPerson, childre
         {error ? <div className={styles.error} role="alert">{error} <button className="btn btn-secondary" onClick={() => setRevision((value) => value + 1)}>Retry workflow</button></div> : null}
         {live && !workflow && !error ? <p role="status">Loading workflow status...</p> : null}
         {previewMode && preview.loading ? <p role="status">Checking local preview confirmation...</p> : null}
+        {canView ? <p className="document-language-shell" data-testid="post-meeting-document-language">
+          <DocumentLanguageBadge language={documentLanguage} prefix="Document language" />
+          <small>Discovery 2, Master Presentation V2 and the email follow the language of their approved source.</small>
+        </p> : null}
         {canView ? children : !error && !preview.loading && (!live || workflow) ? <section className={styles.card} aria-labelledby="post-meeting-locked-title">
           <h1 id="post-meeting-locked-title">Complete the first meeting to continue</h1>
           <p>Post-meeting inputs unlock after you mark the first meeting completed on the pre-meeting presentation screen.</p>

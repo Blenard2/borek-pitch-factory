@@ -117,6 +117,23 @@ def test_presentation_v1_is_built_in_the_language_of_the_approved_discovery(clie
     assert deck["status"] == "ready"
     manifest = stored_versions(deck["presentation_id"])[0]["generation_source_manifest"]
     assert (manifest["language"], manifest["master_language"]) == ("de", "en")
+    # BAP-12: the deck and its version list say which part is in which language.
+    center = ok(get(client, f"/presentations/{deck['presentation_id']}/deck"))
+    assert (center["source"]["language"], center["source"]["master_language"], center["source"]["other_language_findings"]) == ("de", "en", 0)
+    versions = ok(get(client, f"/presentations/{deck['presentation_id']}/versions"))
+    assert [(row["source"]["language"], row["source"]["master_language"]) for row in versions] == [("de", "en")]
+
+
+def test_discovery_versions_list_their_language_without_the_paper(client: TestClient) -> None:
+    """BAP-12: the version list names each version's language, so history needs no paper download."""
+    opportunity_id = ok(create(client, GERMAN_CLIENT), 201)["id"]
+    ok(discovery(client, opportunity_id))
+    ok(post(client, f"/opportunities/{opportunity_id}/discovery-paper/approve"))
+    ok(discovery(client, opportunity_id, {"language": "en"}))
+    rows = ok(get(client, f"/opportunities/{opportunity_id}/discovery-paper/versions"))["versions"]
+    assert sorted((row["version_number"], row["status"], row["language"]) for row in rows) == [(1, "approved", "de"), (2, "draft", "en")]
+    assert all("paper_json" not in row for row in rows), "the list stays light"
+    assert ok(get(client, f"/opportunities/{opportunity_id}/discovery-paper/approved"))["language"] == "de"
 
 
 def test_another_client_cannot_generate_in_any_language(client: TestClient) -> None:

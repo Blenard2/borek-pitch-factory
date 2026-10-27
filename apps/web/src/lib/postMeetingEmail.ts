@@ -71,6 +71,8 @@ export const selectedAttachmentBytes = (draft: Pick<PostMeetingEmail, "attachmen
 export interface EmailSource {
   presentationId: string; presentationVersionId: string; versionNumber: number; finalizedAt: string;
   extractionMode: string | null; confirmedFindings: number | null; excludedFindings: number | null;
+  /** BAP-13: the email's language - the finalized package's. Drafts from before BAP-13 are English. */
+  language: "en" | "de";
 }
 export interface PostMeetingEmail {
   id: string; revision: number; status: "draft" | "confirmed"; selectedLength: EmailLength | null;
@@ -233,6 +235,7 @@ export function parsePostMeetingEmail(value: unknown, opportunityId: string): Po
           finalizedAt: isString(source.finalized_at) ? source.finalized_at : "",
           extractionMode: isString(source.extraction_execution_mode) ? source.extraction_execution_mode : null,
           confirmedFindings: count("confirmed_finding_count"), excludedFindings: count("excluded_finding_count"),
+          language: source.language === "de" ? "de" : "en",
         }
       : null,
     sourceStatus: draft.source_status === "valid" || draft.source_status === "changed" ? draft.source_status : "not_applicable",

@@ -420,7 +420,8 @@ test("Figma post-meeting layout: tabs keep both inputs, findings are grouped, th
   assert.ok(action.includes('discovery2Pending ? <Link className="btn btn-primary" data-testid="open-discovery2" href={`${root}/post-meeting-discovery`}>'), "after the confirmation, Discovery 2 comes before V2");
   assert.ok(action.indexOf("v2Generating ?") < action.indexOf("!transcript ?"), "a running job shows a disabled progress button before anything else can be started");
   assert.equal(source.match(/className="btn btn-primary"/g)?.length, 11, "primary buttons exist only in that one slot");
-  assert.ok(action.includes('disabled={editingDisabled || !v2.can_generate} onClick={() => void generateV2()}'), "generation keeps the server's gate");
+  // BAP-12 adds the language gate next to the server's gate; it never replaces it.
+  assert.ok(action.includes('disabled={editingDisabled || !v2.can_generate || v2LanguageGate.blocked} onClick={() => void generateV2()}'), "generation keeps the server's gate");
   assert.ok(source.includes('{ key: "v2", label: "Master Presentation V2", value: confirmedCurrent && review.readiness.ready_for_v2 ? v2Label : confirmedCurrent && discovery2Pending ? "After Discovery 2" : "After confirmation"'), "never shown as ready before it is");
   // Layout: main column and compact card on desktop, stacked with the status first on smaller screens.
   assert.match(css, /\.inputTabs button \{[^}]*min-width: 168px/);

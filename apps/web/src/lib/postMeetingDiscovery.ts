@@ -19,6 +19,8 @@ export interface Discovery2Item {
 }
 export interface Discovery2Section { key: Discovery2SectionKey; title: string; items: Discovery2Item[] }
 export interface Discovery2Document {
+  /** BAP-13: the content language, inherited from the approved Discovery 1 (absent before BAP-13: English). */
+  language?: string;
   status: "not_generated" | "generating" | "ready" | "failed";
   document_id: string | null; generated_at: string | null; title: string; client_name: string;
   error: { code: string; message: string } | null;
@@ -49,6 +51,8 @@ export interface PostMeetingDiscovery {
   opportunity_id: string; state: Discovery2State; document: Discovery2Document;
   current_version: Discovery2Version | null; versions: Discovery2Version[];
   input_blockers: string[]; finalized: boolean; ready_for_v2: boolean;
+  /** BAP-13: items that read as another language than the document - kept as confirmed, never translated. */
+  language_check?: { language: string; other_language_item_ids: string[] } | null;
 }
 
 export const ORIGIN_LABEL: Record<Discovery2Origin, string> = {
@@ -80,8 +84,15 @@ export async function loadPostMeetingDiscovery(token: string, opportunityId: str
   return parsePostMeetingDiscovery(await apiFetch(path(opportunityId), token, { signal, cache: "no-store" }));
 }
 
-export async function generatePostMeetingDiscovery(token: string, opportunityId: string) {
-  return parsePostMeetingDiscovery(await apiFetch(path(opportunityId, "/generate"), token, { method: "POST" }));
+/**
+ * BAP-12: with ``language`` the server refuses (409 LANGUAGE_MISMATCH, before anything is written)
+ * when the approved Discovery 1 is in another language; without it, Discovery 2 inherits that language.
+ */
+export async function generatePostMeetingDiscovery(token: string, opportunityId: string, language?: "en" | "de") {
+  return parsePostMeetingDiscovery(await apiFetch(path(opportunityId, "/generate"), token, {
+    method: "POST",
+    ...(language ? { body: JSON.stringify({ language }) } : {}),
+  }));
 }
 
 /** The edited sections, each as its items in order; an item without ``id`` is new. */
@@ -117,6 +128,16 @@ export function changedSections(document: Discovery2Document, edits: Record<Disc
   const original = editableSections(document);
   return DISCOVERY2_SECTION_KEYS.filter((key) => JSON.stringify(original[key] ?? []) !== JSON.stringify(edits[key] ?? []))
     .map((key) => ({ key, items: (edits[key] ?? []).map((item) => (item.id ? { id: item.id, text: item.text } : { text: item.text })) }));
+}
+
+/**
+ * BAP-12: the language of the approved Discovery 2 that Master Presentation V2 is built from, when
+ * the approved version is the current one (otherwise V2 is blocked by Discovery 2 anyway).
+ */
+export function approvedDiscovery2Language(data: PostMeetingDiscovery | null): { language: "en" | "de"; versionNumber: number } | null {
+  const approved = data?.state.approved_version;
+  if (!data || !approved || data.current_version?.id !== approved.version_id) return null;
+  return { language: data.document.language === "de" ? "de" : "en", versionNumber: approved.version_number };
 }
 
 /** Discovery 2 must be approved and current before Master Presentation V2. */

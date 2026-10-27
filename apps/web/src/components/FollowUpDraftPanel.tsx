@@ -18,6 +18,8 @@ import {
   type EmailAttachment, type EmailLength, type EmailWorkingCopy, type FollowupStaticsForm, type PostMeetingEmail,
 } from "@/lib/postMeetingEmail";
 import { downloadPostMeetingPresentation, loadExistingPostMeetingPresentation, type PostMeetingPresentation } from "@/lib/postMeetingPresentation";
+import { DocumentLanguageBadge, DocumentLanguageWarning, useDocumentLanguage } from "@/components/DocumentLanguageSelector";
+import { documentLanguageErrorMessage, documentLanguageLabel } from "@/lib/documentLanguage";
 import styles from "./post-meeting.module.css";
 
 type Busy = null | "loading" | "generating" | "saving" | "confirming" | "exporting" | "statics" | "uploading";
@@ -73,6 +75,8 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
   const { accessToken, previewMode } = useAuth();
   const { workflow, companyName, contactPerson } = usePostMeeting();
   const live = Boolean(accessToken) && !previewMode;
+  // BAP-12: the email is written in the finalized package's language; the client's setting is shown beside it.
+  const selectedLanguage = useDocumentLanguage(opportunityId).language;
   const root = `/opportunities/${encodeURIComponent(opportunityId)}`;
   const master = isMasterJourney(workflow?.documents);
   const eligible = canPreparePostMeetingEmail(workflow);
@@ -159,7 +163,7 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
       if (!alive.current) return;
       if (isEmailConflict(cause)) setConflict(true);
       else if (isEmailHasEdits(cause)) setConfirmRegenerate(true);
-      else { if (isStaticsMissing(cause)) setEditStatics(true); setError(emailError(cause)); }
+      else { if (isStaticsMissing(cause)) setEditStatics(true); setError(documentLanguageErrorMessage(cause) ?? emailError(cause)); }
     } finally { lock.current = false; if (alive.current) setBusy(null); }
   }
 
@@ -413,6 +417,13 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
             </div>
             <small>Draft revision {draft.revision} · saved {dateTime(draft.updatedAt)}{draft.status === "confirmed" ? ` · confirmed ${dateTime(draft.confirmedAt)}` : ""}</small>
             {writerLabel(draft.writer) ? <small data-testid="email-writer" data-writer={draft.writer?.mode}>{writerLabel(draft.writer)}{draft.lengths[length].edited ? " This length has since been edited by you." : ""}</small> : null}
+            {draft.source ? <div data-testid="email-language"><DocumentLanguageBadge language={draft.source.language} prefix="Email language" /></div> : null}
+            {draft.source && draft.source.language !== selectedLanguage ? <DocumentLanguageWarning>
+              This email is in {documentLanguageLabel(draft.source.language)} because the finalized presentation package it is written from is in {documentLanguageLabel(draft.source.language)}. The client&apos;s document language is now {documentLanguageLabel(selectedLanguage)}: {selectedLanguage === "en" ? "an" : "a"} {documentLanguageLabel(selectedLanguage)} email needs a new Discovery, Discovery 2 and Master Presentation V2 in {documentLanguageLabel(selectedLanguage)}, finalized again. Nothing is translated automatically.
+            </DocumentLanguageWarning> : null}
+            {draft.reviewFlags.includes("statements_not_in_email_language") ? <div data-testid="email-language-check"><DocumentLanguageWarning>
+              Some confirmed statements are not in {documentLanguageLabel(draft.source?.language ?? "en")}. They are quoted as confirmed, not translated. Review and reword them in the text; acknowledging the review flag does not translate them.
+            </DocumentLanguageWarning></div> : null}
           </> : <div className={styles.emailEmpty}>
             <p>{busy === "loading" ? "Loading the saved email draft..." : eligible ? "No follow-up email has been prepared yet. It is written from the finalized presentation package: the confirmed meeting findings and your recipient and sender details." : "The follow-up email is written from the finalized presentation package."}</p>
             {eligible ? <div className={styles.actions}><button className="btn btn-primary" data-testid="email-generate" disabled={!live || !loaded || working || editStatics} onClick={() => void generate(false)}>{busy === "generating" ? "Generating..." : "Prepare email draft"}</button>

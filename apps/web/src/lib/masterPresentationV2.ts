@@ -56,9 +56,12 @@ export async function loadMasterV2Status(token: string, opportunityId: string, s
  * reports afterwards; the caller shows that, never an assumption about the job.
  */
 export async function generateAndAwaitMasterV2(
-  token: string, opportunityId: string, onJob?: (job: JobResponse) => void, signal?: AbortSignal,
+  token: string, opportunityId: string, onJob?: (job: JobResponse) => void, signal?: AbortSignal, language?: "en" | "de",
 ): Promise<MasterV2Status> {
-  const started = await apiFetch<MasterV2Started>(path(opportunityId, "/generate"), token, { method: "POST", signal });
+  // BAP-12: naming the language makes the server refuse a V2 against a Discovery 2 in another language.
+  const started = await apiFetch<MasterV2Started>(path(opportunityId, "/generate"), token, {
+    method: "POST", signal, ...(language ? { body: JSON.stringify({ language }) } : {}),
+  });
   if (started.product_version !== "V2" || !started.presentation_id) {
     throw new ApiRequestError("The API did not start a Master Presentation V2.", 409, "MASTER_V2_IDENTITY_MISMATCH");
   }

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -96,6 +96,12 @@ class DeckSourceResponse(BaseModel):
     discovery_schema_version: str
     # Master Presentation V2 only: the V1 version of the same presentation it follows.
     base_presentation_version_id: UUID | None = None
+    # BAP-12: the appendix language (the approved Discovery's) and the canonical master's own
+    # language - the master slides are never translated. Versions made before BAP-13 are English.
+    language: Literal["en", "de"] = "en"
+    master_language: Literal["en", "de"] = "en"
+    # V2: confirmed findings shown in their own words that read as the other language.
+    other_language_findings: int = 0
 
 
 class PresentationVersionSummaryResponse(BaseModel):
