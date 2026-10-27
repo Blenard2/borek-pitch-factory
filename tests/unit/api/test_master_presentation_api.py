@@ -145,6 +145,9 @@ def test_v1_is_the_canonical_deck_plus_an_appendix_from_the_approved_analysis(cl
         "appendix_slide_count": len(specs) - 26,
         "approved_discovery_version_id": approved["id"],
         "discovery_schema_version": "2.0",
+        "language": "en",
+        "master_language": "en",
+        "other_language_findings": 0,
     }
     assert [slide["slide_index"] for slide in center["slides"]] == list(range(len(specs)))
     first = client.get(f"/presentations/{presentation_id}/preview/slides/0.png", headers=headers())

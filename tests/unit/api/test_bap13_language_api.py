@@ -117,6 +117,23 @@ def test_presentation_v1_is_built_in_the_language_of_the_approved_discovery(clie
     assert deck["status"] == "ready"
     manifest = stored_versions(deck["presentation_id"])[0]["generation_source_manifest"]
     assert (manifest["language"], manifest["master_language"]) == ("de", "en")
+    # BAP-12: the deck and its version list say which part is in which language.
+    center = ok(get(client, f"/presentations/{deck['presentation_id']}/deck"))
+    assert (center["source"]["language"], center["source"]["master_language"], center["source"]["other_language_findings"]) == ("de", "en", 0)
+    versions = ok(get(client, f"/presentations/{deck['presentation_id']}/versions"))
+    assert [(row["source"]["language"], row["source"]["master_language"]) for row in versions] == [("de", "en")]
+
+
+def test_discovery_versions_list_their_language_without_the_paper(client: TestClient) -> None:
+    """BAP-12: the version list names each version's language, so history needs no paper download."""
+    opportunity_id = ok(create(client, GERMAN_CLIENT), 201)["id"]
+    ok(discovery(client, opportunity_id))
+    ok(post(client, f"/opportunities/{opportunity_id}/discovery-paper/approve"))
+    ok(discovery(client, opportunity_id, {"language": "en"}))
+    rows = ok(get(client, f"/opportunities/{opportunity_id}/discovery-paper/versions"))["versions"]
+    assert sorted((row["version_number"], row["status"], row["language"]) for row in rows) == [(1, "approved", "de"), (2, "draft", "en")]
+    assert all("paper_json" not in row for row in rows), "the list stays light"
+    assert ok(get(client, f"/opportunities/{opportunity_id}/discovery-paper/approved"))["language"] == "de"
 
 
 def test_another_client_cannot_generate_in_any_language(client: TestClient) -> None:
@@ -208,7 +225,27 @@ def test_a_german_journey_from_discovery_to_the_follow_up_email(client: TestClie
     # The approved Discovery 1 and 2 versions are unchanged by everything after them.
     package = ok(get(client, f"/opportunities/{opportunity_id}/workflow-status"))
     assert package["current_status"] == "finalized"
+    # PR #14 review: the page reads the package language from here before any draft exists.
+    manifest = package["finalization"]["ppt2_generation_source_manifest"]
+    assert (manifest["kind"], manifest["language"], manifest["master_language"]) == ("master_presentation_v2", "de", "en")
+    german = ok(generate_email(client, opportunity_id, language="de", overwrite_edits=True))
+    assert german["draft"]["source"]["language"] == "de", "the explicit language of the package is accepted"
     assert json.dumps(document, ensure_ascii=False).count("Kunden") >= 1
+
+
+def test_the_earlier_standalone_ppt2_refuses_german_instead_of_writing_english(client: TestClient) -> None:
+    """PR #14 review: PPT #2 (pitches without a Master Presentation) is English only."""
+    opportunity_id = ok(create(client, GERMAN_CLIENT), 201)["id"]
+    jobs = len(get_memory_store().generation_jobs)
+    for path in (f"/opportunities/{opportunity_id}/ppt2/generate", f"/opportunities/{opportunity_id}/ppt2/{UUID(int=1)}/regenerate"):
+        refused = client.post(path, headers=headers(), json={"language": "de"})
+        assert refused.status_code == 409 and refused.json()["error"]["code"] == "LANGUAGE_UNSUPPORTED", refused.text
+        assert client.post(path, headers=headers(), json={"language": "fr"}).status_code == 422
+    assert len(get_memory_store().generation_jobs) == jobs, "a refused request queues nothing"
+    # English, or no body at all, keeps the earlier behaviour (refused here only for its own reasons).
+    for body in ({"language": "en"}, None):
+        response = client.post(f"/opportunities/{opportunity_id}/ppt2/generate", headers=headers(), **({"json": body} if body else {}))
+        assert response.status_code != 422 and "LANGUAGE" not in response.text, response.text
 
 
 # --------------------------------------------------------------- PR #13 review findings

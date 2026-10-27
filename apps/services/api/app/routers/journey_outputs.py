@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.auth import get_current_user
 from app.dependencies import AuthUserDep, DataStoreDep
-from app.services.api_errors import bad_request
+from app.services.api_errors import bad_request, conflict
 from app.services.audit import AuditAction, AuditObjectType, record_audit_event
 from app.services import followup_email
 from app.services.discovery_paper import (
@@ -920,15 +920,28 @@ def post_owner_reviewed(
     )
 
 
+def _require_ppt2_language(body: GenerationLanguageRequest | None) -> None:
+    """BAP-12: the earlier standalone PPT #2 is English only; German is refused, never written in English."""
+    if body is not None and body.language not in (None, "en"):
+        raise conflict(
+            "LANGUAGE_UNSUPPORTED",
+            "The earlier standalone post-meeting presentation (PPT #2) is generated in English only. "
+            "German post-meeting presentations are Master Presentation V2.",
+        )
+
+
 @router.post("/{opportunity_id}/ppt2/generate")
 def post_ppt2_generate(
     opportunity_id: UUID,
     user: AuthUserDep,
     store: DataStoreDep,
+    body: GenerationLanguageRequest | None = None,
 ) -> dict:
     from app.services.presentation_generation import (
         enqueue_post_meeting_presentation_generate,
     )
+
+    _require_ppt2_language(body)
 
     record_audit_event(
         store,
@@ -950,10 +963,13 @@ def post_ppt2_regenerate(
     presentation_id: UUID,
     user: AuthUserDep,
     store: DataStoreDep,
+    body: GenerationLanguageRequest | None = None,
 ) -> dict:
     from app.services.presentation_generation import (
         enqueue_post_meeting_presentation_generate,
     )
+
+    _require_ppt2_language(body)
 
     record_audit_event(
         store,

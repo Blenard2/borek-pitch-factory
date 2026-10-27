@@ -54,7 +54,8 @@ test("the parser keeps all three lengths, the pinned source and the real attachm
   assert.equal(draft.revision, 3);
   assert.deepEqual([draft.lengths.short.subject, draft.lengths.medium.subject, draft.lengths.extensive.subject], ["Short subject", "Medium subject", "Long subject"]);
   assert.equal(draft.lengths.medium.edited, true);
-  assert.deepEqual(draft.source, { presentationId: presentation, presentationVersionId: version, versionNumber: 2, finalizedAt: "2026-10-09T07:00:00Z", extractionMode: "fixture", confirmedFindings: 6, excludedFindings: 1 });
+  // BAP-12: a draft written before BAP-13 names no language and is English.
+  assert.deepEqual(draft.source, { presentationId: presentation, presentationVersionId: version, versionNumber: 2, finalizedAt: "2026-10-09T07:00:00Z", extractionMode: "fixture", confirmedFindings: 6, excludedFindings: 1, language: "en" });
   assert.deepEqual(draft.attachments.map((item) => [item.format, item.selected, item.available]), [["pptx", false, true], ["pdf", true, true]]);
   assert.equal(draft.recipients?.to[0].email, "dana@acme.example");
   assert.equal(parsePostMeetingEmail({ ...envelope(), draft: null }, id), null);
@@ -523,7 +524,7 @@ test("BAP-8: the follow-up email step shows no workflow checkpoints, and keeps e
 
   // The email step keeps generation, editing, attachments, review/approval and export.
   const panel = read("../components/FollowUpDraftPanel.tsx");
-  for (const call of ["generatePostMeetingEmail(token, opportunityId, overwrite)", "savePostMeetingEmail(token, opportunityId, draft,",
+  for (const call of ["generatePostMeetingEmail(token, opportunityId, overwrite, gate.language)", "savePostMeetingEmail(token, opportunityId, draft,",
     "attachments: { [attachment.key]: !attachment.selected }", "confirmPostMeetingEmail(token, opportunityId, draft,",
     "exportPostMeetingEmail(token, opportunityId, draft)", "downloadEmailAttachment(token, attachment)",
     '<PostMeetingPhaseNav opportunityId={opportunityId} active="review" />']) {

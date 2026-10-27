@@ -130,7 +130,8 @@ test("labels tell Master Presentation V1, V2 and the earlier PPT #2 apart withou
 test("the V2 action is offered only when the API allows it, and owner review stays a separate step", () => {
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
   const meeting = read("../components/MeetingEvidencePanel.tsx");
-  assert.match(meeting, /data-testid="generate-v2" disabled=\{editingDisabled \|\| !v2.can_generate\} onClick=\{\(\) => void generateV2\(\)\}/);
+  // BAP-12: the language gate is added next to the server's gate.
+  assert.match(meeting, /data-testid="generate-v2" disabled=\{editingDisabled \|\| !v2.can_generate \|\| v2LanguageGate.blocked\} onClick=\{\(\) => void generateV2\(\)\}/);
   assert.match(meeting, /"Retry Master Presentation V2" : v2.state === "outdated" \? "Generate a new V2 revision" : "Generate Master Presentation V2"/);
   assert.match(meeting, /data-testid="v2-progress">\{masterV2StageText\(v2Stage\)\}/);
   assert.match(meeting, /data-testid="v2-error"/);

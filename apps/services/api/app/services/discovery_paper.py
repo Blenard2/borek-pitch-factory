@@ -325,6 +325,9 @@ def _public_version(row: dict[str, Any], *, include_paper: bool = True) -> dict[
         "created_at": _iso(row["created_at"]),
         "updated_at": _iso(row["updated_at"]),
         "approved_at": _iso(row["approved_at"]) if row.get("approved_at") else None,
+        # BAP-12: the content language of this version, so version lists can show it without
+        # loading every paper. Versions made before BAP-13 are English.
+        "language": stored_language((row.get("paper_json") or {}).get("language") if isinstance(row.get("paper_json"), dict) else None),
     }
     if include_paper:
         payload["paper_json"] = copy.deepcopy(row["paper_json"])

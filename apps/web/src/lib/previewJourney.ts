@@ -2,6 +2,7 @@ import type { ClientDirectoryItem } from "./clientDirectory";
 import type { ClientInformationExtras, ClientInformationRecord } from "./clientInformation";
 import type { ClientInformationViewModel, WorkflowSnapshotViewModel } from "./discoveryFirst";
 import { canDownloadDiscoveryPdf, type DiscoveryWorkspaceVersion } from "./discoveryWorkspace";
+import { normalizeDocumentLanguage, type DocumentLanguage } from "./documentLanguage";
 
 export type PreviewPresentationState = "waiting" | "generating" | "ready" | "failed";
 
@@ -24,6 +25,12 @@ export interface PreviewOpportunity {
   approved_discovery?: DiscoveryWorkspaceVersion | null;
   presentation: PreviewPresentation;
   workflow: WorkflowSnapshotViewModel;
+  /**
+   * BAP-12: the language client documents are generated in (not the interface language). For a
+   * server opportunity this mirrors the API's `language`; a client that exists only here carries
+   * it until the server record is created with it. Missing means English.
+   */
+  document_language?: DocumentLanguage;
 }
 
 export interface PreviewJourneyState {
@@ -81,6 +88,7 @@ export function parsePreviewJourney(value: unknown): PreviewJourneyState {
   }
   const parsed = structuredClone(row as PreviewJourneyState);
   for (const opportunity of Object.values(parsed.opportunities)) {
+    opportunity.document_language = normalizeDocumentLanguage(opportunity.document_language);
     const discovery = opportunity.discovery;
     if (discovery.pdf_artifact_id && discovery.pdf_download_url && discovery.pdf_source_revision == null) {
       discovery.pdf_source_revision = discovery.revision;

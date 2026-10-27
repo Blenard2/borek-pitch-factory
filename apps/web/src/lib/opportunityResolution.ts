@@ -1,6 +1,7 @@
 import { ApiRequestError, apiFetch } from "./api";
 import { BACKEND_UUID } from "./backendOpportunityMap";
 import { WORKFLOW_STATUS_CATALOG, isMasterJourney } from "./discoveryFirst";
+import { normalizeDocumentLanguage } from "./documentLanguage";
 import { emptyLiveDiscovery } from "./liveDiscovery";
 import type { PreviewOpportunity } from "./previewJourney";
 
@@ -41,6 +42,8 @@ export async function loadLiveOpportunity(token: string, routeId: string, backen
     },
     discovery: emptyLiveDiscovery(routeId),
     presentation: { state: "waiting", version_id: null, source_discovery_version_id: null, slide_count: 0 },
+    // BAP-12: the server's document language is the truth on every load (refresh, reopen, Pre/Post).
+    document_language: normalizeDocumentLanguage(row.language),
     workflow: {
       revision: 0, current_status: current.id,
       completed_statuses: WORKFLOW_STATUS_CATALOG.filter((status) => workflow.steps?.some((step) => uiStatus(step.key) === status.id && step.state === "completed")).map((status) => status.id),

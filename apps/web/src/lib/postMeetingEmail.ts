@@ -71,6 +71,8 @@ export const selectedAttachmentBytes = (draft: Pick<PostMeetingEmail, "attachmen
 export interface EmailSource {
   presentationId: string; presentationVersionId: string; versionNumber: number; finalizedAt: string;
   extractionMode: string | null; confirmedFindings: number | null; excludedFindings: number | null;
+  /** BAP-13: the email's language - the finalized package's. Drafts from before BAP-13 are English. */
+  language: "en" | "de";
 }
 export interface PostMeetingEmail {
   id: string; revision: number; status: "draft" | "confirmed"; selectedLength: EmailLength | null;
@@ -233,6 +235,7 @@ export function parsePostMeetingEmail(value: unknown, opportunityId: string): Po
           finalizedAt: isString(source.finalized_at) ? source.finalized_at : "",
           extractionMode: isString(source.extraction_execution_mode) ? source.extraction_execution_mode : null,
           confirmedFindings: count("confirmed_finding_count"), excludedFindings: count("excluded_finding_count"),
+          language: source.language === "de" ? "de" : "en",
         }
       : null,
     sourceStatus: draft.source_status === "valid" || draft.source_status === "changed" ? draft.source_status : "not_applicable",
@@ -276,9 +279,14 @@ export async function loadPostMeetingEmail(token: string, opportunityId: string,
 }
 
 /** Generates all three lengths. ``overwriteEdits`` is the owner's explicit consent to replace saved work. */
-export async function generatePostMeetingEmail(token: string, opportunityId: string, overwriteEdits = false) {
+/**
+ * BAP-12 / PR #14 review: ``language`` names the email's language explicitly. The API writes the
+ * email in the finalized package's language and refuses another one (409 LANGUAGE_MISMATCH) before
+ * anything is written; without it the package's language applies.
+ */
+export async function generatePostMeetingEmail(token: string, opportunityId: string, overwriteEdits = false, language?: "en" | "de") {
   const value = await apiFetch(draftsPath(opportunityId, "/generate"), token, {
-    method: "POST", body: JSON.stringify({ journey_stage: "deepening", overwrite_edits: overwriteEdits }),
+    method: "POST", body: JSON.stringify({ journey_stage: "deepening", overwrite_edits: overwriteEdits, ...(language ? { language } : {}) }),
   });
   const draft = parsePostMeetingEmail(value, opportunityId);
   if (!draft) throw new Error("No email draft was returned. Retry preparation.");

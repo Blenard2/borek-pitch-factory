@@ -7,6 +7,8 @@ import { usePostMeeting } from "@/components/PostMeetingShell";
 import { OwnerCheckpointPanel } from "@/components/OwnerCheckpointPanel";
 import { PostMeetingDocuments } from "@/components/PostMeetingDocuments";
 import { postMeetingDeckLabel } from "@/lib/masterPresentationV2";
+import { DeckLanguageNotice, DocumentLanguageWarning } from "@/components/DocumentLanguageSelector";
+import { deckLanguageSummary, otherLanguageReviewText } from "@/lib/documentLanguage";
 import { downloadPresentationVersion, loadEarlierVersions, versionLabel, type EarlierVersion } from "@/lib/presentationLive";
 import {
   downloadPostMeetingPresentation, loadExistingPostMeetingPresentation, postMeetingPresentationError,
@@ -214,6 +216,12 @@ function PresentationSession({ opportunityId, accessToken, live }: {
             </>}
           </div>
           <p className="discovery-preview-caption">{master ? "Previews and downloads are those of this exact version. Master Presentation V1 stays available as an earlier version of the same presentation." : "Previews and downloads are those of this exact version. Changes detected before or after a request are rejected. PPT #1 remains a separate pre-meeting artifact."}</p>
+          {deck?.source ? <DeckLanguageNotice source={deck.source} /> : null}
+          {deck?.source && deckLanguageSummary(deck.source)?.otherLanguageFindings ? (
+            <div data-testid="v2-language-check"><DocumentLanguageWarning>
+              {otherLanguageReviewText(deckLanguageSummary(deck.source)!.otherLanguageFindings, deckLanguageSummary(deck.source)!.content, "presentation's appendix")}
+            </DocumentLanguageWarning></div>
+          ) : null}
           {deck?.source ? <p className="discovery-preview-caption" data-testid="master-presentation-v2-summary">
             Master Presentation {deck.source.product_version} ({deck.source.product_stage === "post_meeting" ? "post-meeting" : deck.source.product_stage}) · revision {deck.source.revision} · {deck.source.canonical_slide_count} slides of the canonical Borek deck, unchanged · {deck.source.appendix_slide_count} appendix slides from the confirmed findings of the first meeting.
           </p> : null}

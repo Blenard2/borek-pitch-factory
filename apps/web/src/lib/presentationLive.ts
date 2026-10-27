@@ -2,6 +2,7 @@ import {
   ApiRequestError, apiFetch, apiFetchBlob, getWorkflowStatus,
   type WorkflowStatusResponse,
 } from "./api";
+import { deckLanguageSummary } from "./documentLanguage";
 import type { FirstPitchResult } from "./ppt1Generation";
 
 export interface DeckResponse {
@@ -31,6 +32,12 @@ export interface DeckSource {
   discovery_schema_version: string;
   /** Master Presentation V2 only: the V1 version of the same presentation it follows. */
   base_presentation_version_id?: string | null;
+  /** BAP-13: language of the client-specific appendix (the approved Discovery's). */
+  language?: string;
+  /** BAP-13: language of the canonical Borek master slides - they are never translated. */
+  master_language?: string;
+  /** BAP-13 (V2): confirmed findings that read as another language than the appendix. */
+  other_language_findings?: number;
 }
 
 export interface SlideResponse {
@@ -232,7 +239,9 @@ export async function loadEarlierVersions(token: string, presentationId: string,
 /** "Master Presentation V2 · revision 3". The product version comes from the server, never from the number. */
 export function versionLabel(version: Pick<EarlierVersion, "versionNumber" | "source">) {
   const product = version.source?.product_version;
-  return `${product === "V1" || product === "V2" ? `Master Presentation ${product} · ` : ""}revision ${version.versionNumber}`;
+  // BAP-12: a version that reports its language names it, so historical English decks stay recognisable.
+  const language = typeof version.source?.language === "string" ? ` · ${deckLanguageSummary(version.source)?.label}` : "";
+  return `${product === "V1" || product === "V2" ? `Master Presentation ${product} · ` : ""}revision ${version.versionNumber}${language}`;
 }
 
 /** A version is immutable, so its files need no latest-version check. */

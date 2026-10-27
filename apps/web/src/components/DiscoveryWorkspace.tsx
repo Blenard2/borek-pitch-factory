@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { WorkflowArtifactTabs } from "@/components/WorkflowArtifactTabs";
 import { usePreviewJourney } from "@/components/PreviewJourneyProvider";
+import { useDocumentLanguage } from "@/components/DocumentLanguageSelector";
 import { ApiRequestError } from "@/lib/api";
 import {
   approveLiveDiscovery,
@@ -104,6 +105,7 @@ export function DiscoveryWorkspace({ initialVersion }: DiscoveryWorkspaceProps) 
   const errorRef = useRef<HTMLParagraphElement>(null);
   const selected = version.pages.find((page) => page.id === selectedId) ?? version.pages[0];
   const preview = getOpportunity(initialVersion.opportunity_id);
+  const documentLanguage = useDocumentLanguage(initialVersion.opportunity_id).language;
   const persistedVersion = preview?.discovery;
   const readyCount = version.pages.filter((page) => page.state === "ready").length;
   const generatingPage = version.pages.find((page) => page.state === "generating");
@@ -161,7 +163,7 @@ export function DiscoveryWorkspace({ initialVersion }: DiscoveryWorkspaceProps) 
     try {
       const options = { signal: controller.signal, onPaper: publish };
       const next = action === "generate"
-        ? await generateLiveDiscovery(accessToken, initialVersion.opportunity_id, preview?.client.values, options)
+        ? await generateLiveDiscovery(accessToken, initialVersion.opportunity_id, preview?.client.values, options, documentLanguage)
         : action === "approve"
           ? await approveLiveDiscovery(accessToken, initialVersion.opportunity_id)
           : await loadLiveDiscovery(accessToken, initialVersion.opportunity_id, options);

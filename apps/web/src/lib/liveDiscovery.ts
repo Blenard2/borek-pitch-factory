@@ -167,6 +167,7 @@ export async function loadLiveDiscovery(token: string, opportunityId: string, op
 
 export async function generateLiveDiscovery(
   token: string, opportunityId: string, seed: PreviewClientSeed | undefined, options: ReadOptions = {},
+  language?: "en" | "de",
 ): Promise<DiscoveryWorkspaceVersion> {
   options.signal?.throwIfAborted();
   // This backend persists progressive snapshots during its synchronous POST. Poll GET only;
@@ -191,7 +192,8 @@ export async function generateLiveDiscovery(
   options.signal?.addEventListener("abort", stopPolling, { once: true });
   let paper: unknown;
   try {
-    paper = await generateDiscoveryPaper(token, opportunityId, seed);
+    // BAP-12: the client's document language, named explicitly (it also sets the journey language).
+    paper = await generateDiscoveryPaper(token, opportunityId, seed, language);
   } finally {
     stopPolling();
     options.signal?.removeEventListener("abort", stopPolling);

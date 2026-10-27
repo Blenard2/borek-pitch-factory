@@ -7,6 +7,7 @@ import type { ClientDirectoryItem } from "@/lib/clientDirectory";
 import { normalizeClientInformation, normalizeClientInformationExtras, type ClientInformationExtras, type ClientInformationRecord } from "@/lib/clientInformation";
 import type { ClientInformationViewModel, WorkflowSnapshotViewModel } from "@/lib/discoveryFirst";
 import { createDiscoveryWorkspaceFixture, type DiscoveryWorkspaceVersion } from "@/lib/discoveryWorkspace";
+import { DEFAULT_DOCUMENT_LANGUAGE, normalizeDocumentLanguage, type DocumentLanguage } from "@/lib/documentLanguage";
 import {
   EMPTY_PREVIEW_JOURNEY,
   parsePreviewJourney,
@@ -29,7 +30,9 @@ interface PreviewJourneyContextValue {
   opportunities: PreviewOpportunity[];
   directoryItems: ClientDirectoryItem[];
   getOpportunity: (opportunityId: string) => PreviewOpportunity | null;
-  createOpportunity: (values: ClientInformationViewModel, extras: ClientInformationExtras) => PreviewOpportunity;
+  createOpportunity: (values: ClientInformationViewModel, extras: ClientInformationExtras, documentLanguage?: DocumentLanguage) => PreviewOpportunity;
+  /** BAP-12: records the document language of a client held here (the server copy is saved separately). */
+  setDocumentLanguage: (opportunityId: string, language: DocumentLanguage) => void;
   updateClient: (record: ClientInformationRecord, extras?: ClientInformationExtras) => void;
   registerLiveOpportunity: (opportunity: PreviewOpportunity) => void;
   updateDiscovery: (version: DiscoveryWorkspaceVersion) => void;
@@ -96,7 +99,7 @@ export function PreviewJourneyProvider({ children }: { children: React.ReactNode
     return hydrated && ownerId ? state.opportunities[opportunityId] ?? null : null;
   }
 
-  function createOpportunity(values: ClientInformationViewModel, extras: ClientInformationExtras): PreviewOpportunity {
+  function createOpportunity(values: ClientInformationViewModel, extras: ClientInformationExtras, documentLanguage: DocumentLanguage = DEFAULT_DOCUMENT_LANGUAGE): PreviewOpportunity {
     const normalized = normalizeClientInformation(values);
     const opportunityId = previewOpportunityId(normalized.company_name);
     const now = new Date().toISOString();
@@ -127,9 +130,16 @@ export function PreviewJourneyProvider({ children }: { children: React.ReactNode
       discovery,
       presentation: { state: "waiting", version_id: null, source_discovery_version_id: null, slide_count: 0 },
       workflow: workflow(1, "client_information", []),
+      document_language: normalizeDocumentLanguage(documentLanguage),
     };
     replaceOpportunity(opportunity);
     return opportunity;
+  }
+
+  function setDocumentLanguage(opportunityId: string, language: DocumentLanguage) {
+    const current = getOpportunity(opportunityId);
+    if (!current || current.document_language === language) return;
+    replaceOpportunity({ ...current, document_language: normalizeDocumentLanguage(language), updated_at: new Date().toISOString() });
   }
 
   function updateClient(record: ClientInformationRecord, extras?: ClientInformationExtras) {
@@ -176,6 +186,7 @@ export function PreviewJourneyProvider({ children }: { children: React.ReactNode
       directoryItems: opportunities.map(previewDirectoryItem),
       getOpportunity,
       createOpportunity,
+      setDocumentLanguage,
       updateClient,
       registerLiveOpportunity: replaceOpportunity,
       updateDiscovery,

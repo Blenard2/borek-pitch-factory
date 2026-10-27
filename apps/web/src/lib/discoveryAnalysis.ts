@@ -1,7 +1,7 @@
 // Discovery v2: the AI Opportunity Analysis. The server stores the content once and derives the
 // printed pages from it (page_manifest), so the page count is whatever the content needs.
 // Papers stored with schema 1.0 (seven fixed pages) are not handled here: see liveDiscovery.ts.
-import { ApiRequestError, apiFetch, generateDiscoveryPaper, resolveBackendOpportunityId, type PreviewClientSeed } from "./api";
+import { ApiRequestError, apiFetch, generateDiscoveryPaper, resolveBackendOpportunityId, type GenerationLanguage, type PreviewClientSeed } from "./api";
 
 export const ANALYSIS_SCHEMA_VERSION = "2.0";
 export const PAGE_TYPES = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9"] as const;
@@ -333,8 +333,8 @@ export async function viewOf(token: string, opportunityId: string, payload: unkn
   return { paper, version: await currentVersion(token, backendId, paper, options) };
 }
 
-export async function generateAnalysis(token: string, opportunityId: string, seed: PreviewClientSeed | undefined): Promise<unknown> {
-  return generateDiscoveryPaper(token, opportunityId, seed);
+export async function generateAnalysis(token: string, opportunityId: string, seed: PreviewClientSeed | undefined, language?: GenerationLanguage): Promise<unknown> {
+  return generateDiscoveryPaper(token, opportunityId, seed, language);
 }
 
 export async function saveAnalysisSection(

@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import UUID, uuid5
 
+from services.language import stored_language
+
 from app.services.api_errors import conflict, not_found
 from app.services.data import DataStore
 from app.services.deck_assets import (
@@ -204,6 +206,11 @@ def _deck_source(version: dict[str, object], *, slide_count: int) -> dict[str, o
         "appendix_slide_count": max(slide_count - canonical, 0),
         "approved_discovery_version_id": manifest["approved_discovery_version_id"],
         "discovery_schema_version": manifest["discovery_schema_version"],
+        # BAP-12: the appendix language and the canonical master's own language, so the deck can
+        # say which part is in which language. Versions made before BAP-13 are English.
+        "language": stored_language(manifest.get("language")),
+        "master_language": stored_language(manifest.get("master_language")),
+        "other_language_findings": int(manifest.get("other_language_findings") or 0),
     }
 
 

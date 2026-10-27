@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/components/AuthProvider";
 import { WorkflowArtifactTabs } from "@/components/WorkflowArtifactTabs";
+import { DocumentLanguageBadge, DocumentLanguageSelector, DocumentLanguageWarning, useDocumentLanguage } from "@/components/DocumentLanguageSelector";
+import { documentLanguageErrorMessage, documentLanguageLabel, languageChangeNotice, normalizeDocumentLanguage } from "@/lib/documentLanguage";
 import { usePreviewJourney } from "@/components/PreviewJourneyProvider";
 import { ApiRequestError } from "@/lib/api";
 import {
@@ -110,6 +112,8 @@ export function DiscoveryAnalysisWorkspace({ opportunityId, legacy }: DiscoveryA
   const live = Boolean(accessToken) && !previewMode;
   const { getOpportunity, approveDiscovery } = usePreviewJourney();
   const preview = getOpportunity(opportunityId);
+  // BAP-12: the language the next Discovery is generated in (the opportunity's, saved on the server).
+  const documentLanguage = useDocumentLanguage(opportunityId).language;
   const scope = `${opportunityId}:${live}:${accessToken ?? ""}`;
   const requestRef = useRef(0);
   const [view, setView] = useState<AnalysisView | null>(null);
@@ -151,7 +155,7 @@ export function DiscoveryAnalysisWorkspace({ opportunityId, legacy }: DiscoveryA
   }
 
   function fail(cause: unknown) {
-    setError(cause instanceof ApiRequestError || cause instanceof Error ? cause.message : "The request failed.");
+    setError(documentLanguageErrorMessage(cause) ?? (cause instanceof ApiRequestError || cause instanceof Error ? cause.message : "The request failed."));
   }
 
   useEffect(() => {
@@ -208,7 +212,8 @@ export function DiscoveryAnalysisWorkspace({ opportunityId, legacy }: DiscoveryA
     setNotice(null);
     setEditTarget(null);
     try {
-      await generateAnalysis(accessToken, opportunityId, preview?.client.values);
+      // The language is named explicitly: the server writes this version in it and stores it on the client.
+      await generateAnalysis(accessToken, opportunityId, preview?.client.values, documentLanguage);
     } catch (cause) {
       fail(cause);
     } finally {
@@ -293,6 +298,15 @@ export function DiscoveryAnalysisWorkspace({ opportunityId, legacy }: DiscoveryA
   const retryResearch = () => {
     if (window.confirm("Analyse the website again? This generates a new draft analysis; an approved version stays unchanged.")) void generate();
   };
+  const generating = paper.status === "generating" || busy === "generate";
+  const paperLanguage = normalizeDocumentLanguage(paper.language);
+  // Shown, never acted on: changing the language does not regenerate or touch an approved version.
+  const languageNotice = paper.status === "ready"
+    ? languageChangeNotice(documentLanguage, { language: paperLanguage, status: approved ? "approved" : "draft", versionNumber: view?.version?.version_number ?? null })
+    : null;
+  const regenerateQuestion = paper.status === "ready" && paperLanguage !== documentLanguage
+    ? `Generate a new analysis in ${documentLanguageLabel(documentLanguage)}? It becomes a new draft that needs your review and approval. The ${documentLanguageLabel(paperLanguage)} version${approved ? " stays approved and" : ""} stays in the history unchanged.`
+    : "Generate a new analysis? It becomes a new draft. An approved version stays unchanged.";
   const statusLine = loadState === "loading" ? "Loading Discovery from the server..."
     : paper.status === "generating" || busy === "generate" ? `Generating: ${progress.current?.label ?? "starting"} (${progress.done} of ${progress.total} steps done)`
     : paper.status === "failed" ? `Generation stopped at "${progress.failed?.label ?? "an earlier step"}". Nothing partial was kept; restart the generation.`
@@ -318,16 +332,27 @@ export function DiscoveryAnalysisWorkspace({ opportunityId, legacy }: DiscoveryA
           <div role="status" aria-live="polite">
             <strong>{live ? "AI Opportunity Analysis" : "Sample analysis (preview mode)"}</strong>
             <p data-testid="discovery-status">{live ? statusLine : `${manifest.length} pages · illustrative library content, no server session`}</p>
+            {paper.status === "ready" ? <DocumentLanguageBadge language={paperLanguage} prefix={!live ? "Sample language" : view?.version ? `Version ${view.version.version_number} language` : "Language"} /> : null}
           </div>
+          <DocumentLanguageSelector
+            opportunityId={opportunityId}
+            compact
+            locked={generating || loadState === "loading"}
+            lockedReason={generating ? "The language cannot change while a Discovery is being generated." : null}
+            description={paper.status === "not_generated" || !live
+              ? undefined
+              : "The next Discovery generation uses this language. Approved versions keep their language."}
+          />
           {live && paper.status === "not_generated" && loadState === "loaded" ? (
             <button className="btn btn-primary" type="button" disabled={busy !== null} onClick={() => void generate()}>{busy === "generate" ? "Generating..." : "Generate analysis"}</button>
           ) : live && (paper.status === "failed" || paper.status === "ready") ? (
             <button className="btn btn-secondary" type="button" disabled={busy !== null || Boolean(editTarget)} onClick={() => {
-              if (paper.status === "failed" || window.confirm("Generate a new analysis? It becomes a new draft. An approved version stays unchanged.")) void generate();
-            }}>{busy === "generate" ? "Generating..." : paper.status === "failed" ? "Restart generation" : "Regenerate"}</button>
+              if (paper.status === "failed" || window.confirm(regenerateQuestion)) void generate();
+            }}>{busy === "generate" ? "Generating..." : paper.status === "failed" ? "Restart generation" : paperLanguage !== documentLanguage ? `Regenerate in ${documentLanguageLabel(documentLanguage)}` : "Regenerate"}</button>
           ) : null}
         </div>
 
+        {languageNotice ? <DocumentLanguageWarning>{languageNotice}</DocumentLanguageWarning> : null}
         {researchState ? (
           <section
             className={`discovery-research-status is-${researchState.kind}`}
