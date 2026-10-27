@@ -524,7 +524,7 @@ test("BAP-8: the follow-up email step shows no workflow checkpoints, and keeps e
 
   // The email step keeps generation, editing, attachments, review/approval and export.
   const panel = read("../components/FollowUpDraftPanel.tsx");
-  for (const call of ["generatePostMeetingEmail(token, opportunityId, overwrite)", "savePostMeetingEmail(token, opportunityId, draft,",
+  for (const call of ["generatePostMeetingEmail(token, opportunityId, overwrite, gate.language)", "savePostMeetingEmail(token, opportunityId, draft,",
     "attachments: { [attachment.key]: !attachment.selected }", "confirmPostMeetingEmail(token, opportunityId, draft,",
     "exportPostMeetingEmail(token, opportunityId, draft)", "downloadEmailAttachment(token, attachment)",
     '<PostMeetingPhaseNav opportunityId={opportunityId} active="review" />']) {

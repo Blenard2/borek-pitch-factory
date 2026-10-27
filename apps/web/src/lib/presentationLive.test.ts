@@ -291,7 +291,7 @@ test("the workspace shows the approved source and never substitutes fixture slid
   assert.match(source, /revision \{liveDeck\.source\.revision\}/);
   assert.doesNotMatch(source, /Master Presentation V\{liveDeck\.versionNumber\}/);
   // BAP-12: the call also names the language of the approved Discovery.
-  assert.match(source, /generateAndAwaitFirstPitch\(accessToken, opportunityId, undefined, \{ regenerate, language: approvedLanguage\?\.language \?\? documentLanguage \}\)/);
+  assert.match(source, /generateAndAwaitFirstPitch\(accessToken, opportunityId, undefined, \{ regenerate, language: approvedLanguage\.status === "verified" \? approvedLanguage\.language : documentLanguage \}\)/);
   assert.match(source, /approvedSourceId !== liveDeck\.source\.approved_discovery_version_id/);
   assert.match(source, /No fixture content is shown in a live session/);
   assert.match(source, /const slides = live \? \(liveDeck\?\.slides \?\? \[\]\)/, "live slides come from the server only");

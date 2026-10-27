@@ -474,22 +474,25 @@ export async function saveSelectedUseCases(
   });
 }
 
+/** BAP-12: the earlier standalone PPT #2 is English only; the API refuses "de" (409 LANGUAGE_UNSUPPORTED). */
 export async function generatePpt2(
   accessToken: string,
   opportunityId: string,
+  language?: GenerationLanguage | null,
 ): Promise<Ppt2GenerateResponse> {
-  return apiFetch(`${opportunityPath(opportunityId)}/ppt2/generate`, accessToken, { method: "POST" });
+  return apiFetch(`${opportunityPath(opportunityId)}/ppt2/generate`, accessToken, { method: "POST", body: generationBody(language) });
 }
 
 export async function regeneratePpt2(
   accessToken: string,
   opportunityId: string,
   presentationId: string,
+  language?: GenerationLanguage | null,
 ): Promise<Ppt2GenerateResponse> {
   return apiFetch(
     `${opportunityPath(opportunityId)}/ppt2/${presentationId}/regenerate`,
     accessToken,
-    { method: "POST" },
+    { method: "POST", body: generationBody(language) },
   );
 }
 

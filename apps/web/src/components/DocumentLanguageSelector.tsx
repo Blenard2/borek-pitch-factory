@@ -141,6 +141,36 @@ export function DocumentLanguageSelector({ opportunityId, locked = false, locked
   );
 }
 
+/**
+ * PR #14 review: the document language as shown in the page header of every workflow page, with a
+ * "Change" button that opens the selector in place. Changing it only saves the setting; every
+ * generate action keeps its own language gate, so no approved document is touched or bypassed.
+ */
+export function DocumentLanguageControl({ opportunityId, note }: { opportunityId: string; note?: string }) {
+  const state = useDocumentLanguage(opportunityId);
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  return (
+    <div className="document-language-control" data-testid="document-language-control">
+      <div className="document-language-control-row">
+        <DocumentLanguageBadge language={state.language} prefix="Document language" />
+        <button type="button" className="btn btn-secondary document-language-change" aria-expanded={open} aria-controls={panelId}
+          onClick={() => setOpen((value) => !value)}>{open ? "Done" : "Change"}</button>
+      </div>
+      {note && !open ? <small className="document-language-help">{note}</small> : null}
+      <div id={panelId} hidden={!open} className="document-language-control-panel">
+        {open ? <DocumentLanguageSelector
+          opportunityId={opportunityId}
+          compact
+          description={state.live
+            ? "Saved for this client. Only the next generation uses it: approved documents keep their language, and anything built from a document in another language waits for a new approved version."
+            : undefined}
+        /> : null}
+      </div>
+    </div>
+  );
+}
+
 /** A small, read-only label: the language a document was generated in. */
 export function DocumentLanguageBadge({ language, prefix = "Language" }: { language: unknown; prefix?: string }) {
   const code = normalizeDocumentLanguage(language);

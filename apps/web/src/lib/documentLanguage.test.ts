@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync as readFileFromDisk } from "node:fs";
 
-import { ApiRequestError, ensureBackendOpportunityId, generateDiscoveryPaper, generateStage1Outputs, regenerateStage1Presentation } from "./api";
+import { ApiRequestError, ensureBackendOpportunityId, generateDiscoveryPaper, generatePpt2, generateStage1Outputs, regeneratePpt2, regenerateStage1Presentation } from "./api";
 import {
   DEFAULT_DOCUMENT_LANGUAGE, DOCUMENT_LANGUAGES, deckLanguageSummary, documentLanguageErrorMessage, documentLanguageLabel, downstreamLanguageGate,
-  languageChangeMessage, languageChangeMode, languageChangeNotice, loadApprovedDiscovery1Language, normalizeDocumentLanguage, otherLanguageReviewText,
-  saveDocumentLanguage,
+  emailLanguageRemedy, failedLookup, finalizedPackageLanguage, languageChangeMessage, languageChangeMode, languageChangeNotice,
+  loadApprovedDiscovery1Language, lookupFrom, normalizeDocumentLanguage, otherLanguageReviewText, saveDocumentLanguage, sourceLanguageGate,
 } from "./documentLanguage";
 import { parseIntakeDraft } from "./intakeDraft";
 import { generateAndAwaitMasterV2 } from "./masterPresentationV2";
@@ -375,7 +375,7 @@ test("the workspaces wire the language without regenerating or approving on chan
   assert.match(v1, /<DeckLanguageNotice source=\{liveDeck\.source\} \/>/);
   const d2 = source("../components/PostMeetingDiscoveryPanel.tsx");
   assert.match(d2, /disabled=\{!live \|\| !state\.can_generate \|\| busy !== null \|\| languageGate\.blocked\}/);
-  assert.match(d2, /generatePostMeetingDiscovery\(token, opportunityId, discovery1\?\.language \?\? selectedLanguage\)/);
+  assert.match(d2, /generatePostMeetingDiscovery\(token, opportunityId, discovery1\.status === "verified" \? discovery1\.language : selectedLanguage\)/);
   const v2 = source("../components/PostMeetingPresentationWorkspace.tsx");
   assert.match(v2, /<DeckLanguageNotice source=\{deck\.source\} \/>/);
   const email = source("../components/FollowUpDraftPanel.tsx");
@@ -383,4 +383,123 @@ test("the workspaces wire the language without regenerating or approving on chan
   assert.match(email, /acknowledging the review flag does not translate them/);
   const create = source("../components/ClientInformationEditor.tsx");
   assert.match(create, /normalizeClientInformationExtras\(extras\),\n\s+documentLanguage,\n\s+\);/, "the new client carries the chosen language");
+});
+
+// ------------------------------------------------------------------------ PR #14 review fixes
+
+const v1Names = { artifact: "Master Presentation V1", source: "Discovery" };
+
+test("review 2: an unresolved or failed source lookup keeps generation closed, with a retry", () => {
+  const loading = sourceLanguageGate("de", { status: "loading" }, v1Names);
+  assert.deepEqual([loading.blocked, loading.pending, loading.retry], [true, true, false]);
+  assert.match(loading.message!, /^Checking the language of the approved Discovery before Master Presentation V1 can be generated/);
+  const failed = sourceLanguageGate("en", failedLookup(new Error("network down")), v1Names);
+  assert.deepEqual([failed.blocked, failed.pending, failed.retry], [true, false, true], "even when the selection would match");
+  assert.match(failed.message!, /could not be checked \(network down\)/);
+  assert.match(failed.message!, /not generated until it is verified, so it cannot come out in the wrong language\. Nothing was generated or changed\.$/);
+  assert.match(sourceLanguageGate("en", failedLookup(new ApiRequestError("x", 401)), v1Names).message!, /Sign in again/);
+  const none = sourceLanguageGate("de", lookupFrom(null), v1Names);
+  assert.deepEqual([none.blocked, none.message], [false, null], "nothing approved yet: nothing to contradict");
+  const verified = sourceLanguageGate("de", lookupFrom({ language: "de", versionNumber: 3 }), v1Names);
+  assert.deepEqual([verified.blocked, verified.language], [false, "de"]);
+  const mismatch = sourceLanguageGate("de", lookupFrom({ language: "en", versionNumber: 3 }), v1Names);
+  assert.deepEqual([mismatch.blocked, mismatch.retry, mismatch.language], [true, false, "en"]);
+});
+
+test("review 2: every inheriting workspace starts its check as pending and fails closed", () => {
+  const v1 = source("../components/PresentationWorkspace.tsx");
+  assert.match(v1, /setApprovedLanguage\(\{ status: "loading" \}\)/);
+  assert.match(v1, /: \{ status: "failed", message: "the approved Discovery version was not found" \}\);/, "an approved id without a version is not a pass");
+  assert.match(v1, /setApprovedLanguage\(failedLookup\(cause\)\)/);
+  assert.match(v1, /data-testid="v1-language-retry" onClick=\{\(\) => setLanguageCheck\(\(value\) => value \+ 1\)\}>Check again/);
+  assert.doesNotMatch(v1, /downstreamLanguageGate|setApprovedLanguage\(null\)/, "no path turns an unknown language into a pass");
+  const d2 = source("../components/PostMeetingDiscoveryPanel.tsx");
+  assert.match(d2, /useState<SourceLanguageLookup>\(\{ status: "loading" \}\)/);
+  assert.match(d2, /setDiscovery1\(failedLookup\(cause\)\)/);
+  assert.match(d2, /data-testid="discovery2-language-retry"/);
+  assert.doesNotMatch(d2, /downstreamLanguageGate|setDiscovery1\(null\)/);
+  const v2 = source("../components/MeetingEvidencePanel.tsx");
+  assert.match(v2, /setDiscovery2Language\(\{ status: "loading" \}\)/);
+  assert.match(v2, /: \{ status: "failed", message: "the approved Discovery 2 was not found" \}\);/);
+  assert.match(v2, /setDiscovery2Language\(failedLookup\(cause\)\)/);
+  assert.match(v2, /data-testid="v2-language-retry"/);
+  assert.doesNotMatch(v2, /downstreamLanguageGate|setDiscovery2Language\(null\)/);
+});
+
+test("review 1: the finalized package's language is read before any draft exists", () => {
+  const master = (language?: string) => ({ ppt2_generation_source_manifest: { kind: "master_presentation_v2", ...(language ? { language } : {}) } });
+  assert.deepEqual(finalizedPackageLanguage(master("de")), { status: "verified", language: "de", versionNumber: null });
+  assert.deepEqual(finalizedPackageLanguage(master()), { status: "verified", language: "en", versionNumber: null }, "finalized before BAP-13: English");
+  assert.deepEqual(finalizedPackageLanguage({ ppt2_generation_source_manifest: { kind: "ppt2" } }), { status: "verified", language: "en", versionNumber: null }, "earlier flows are English only");
+  assert.deepEqual(finalizedPackageLanguage(null), { status: "none" });
+  assert.equal(finalizedPackageLanguage({}).status, "failed");
+  assert.equal(finalizedPackageLanguage("x").status, "failed");
+  assert.equal(finalizedPackageLanguage(master("fr")).status, "failed", "an unknown language is never guessed");
+});
+
+test("review 1: an email in another language than the client's setting is not generated", () => {
+  const names = { artifact: "The follow-up email", source: "finalized presentation package", remedy: emailLanguageRemedy };
+  const gate = sourceLanguageGate("de", finalizedPackageLanguage({ ppt2_generation_source_manifest: { kind: "master_presentation_v2", language: "en" } }), names);
+  assert.equal(gate.blocked, true);
+  assert.match(gate.message!, /^The document language is Deutsch, but the finalized presentation package is in English\./);
+  assert.match(gate.message!, /The finalized package and its approved documents stay unchanged\. For a Deutsch email, generate and approve Discovery, Discovery 2 and Master Presentation V2 in Deutsch and finalize that package/);
+  assert.match(gate.message!, /or switch the document language back to English to prepare the email from this package\.$/);
+  assert.equal(sourceLanguageGate("de", { status: "loading" }, names).blocked, true, "unknown package language: closed");
+  const open = sourceLanguageGate("de", finalizedPackageLanguage({ ppt2_generation_source_manifest: { kind: "master_presentation_v2", language: "de" } }), names);
+  assert.deepEqual([open.blocked, open.language], [false, "de"]);
+});
+
+test("review 1: the email request names the verified language; drafts, edits and confirmations are untouched", async () => {
+  await withApi(() => Response.json({ opportunity_id: backendId, journey_stage: "deepening", draft: null }), async (calls) => {
+    await assert.rejects(generatePostMeetingEmail("test-token", backendId, true, "de"));
+    assert.deepEqual(calls[0].body, { journey_stage: "deepening", overwrite_edits: true, language: "de" });
+  });
+  const panel = source("../components/FollowUpDraftPanel.tsx");
+  assert.match(panel, /const gate = emailLanguageGate\(selectedLanguage, latest\);\n\s+if \(gate\.blocked\) throw new Error/, "re-checked against the package as it is now");
+  assert.match(panel, /generatePostMeetingEmail\(token, opportunityId, overwrite, gate\.language\)/);
+  assert.match(panel, /workflow \? finalizedPackageLanguage\(workflow\.finalization\) : \{ status: "loading" \}/);
+  for (const control of [
+    'data-testid="email-generate" disabled={!live || !loaded || working || editStatics || emailGate.blocked}',
+    'data-testid="email-regenerate" disabled={working || !eligible || emailGate.blocked}',
+    'disabled={working || emailGate.blocked} onClick={() => void generate(true)}>Replace with a new draft',
+  ]) assert.ok(panel.includes(control), control);
+  // Only generation is gated: saving, attachments, review checks and confirmation keep their own gates.
+  assert.ok(panel.includes('data-testid="email-save" disabled={working || !dirty.length || overLimit || conflict}'));
+  assert.doesNotMatch(panel, /const (save|confirm|toggleAttachment|approve) = [^\n]*emailGate/);
+  assert.match(panel, /data-testid="email-language-retry" onClick=\{refreshWorkflow\}/);
+});
+
+test("review 3: the language can be changed from every workflow page, never past an approved source", () => {
+  const selector = source("../components/DocumentLanguageSelector.tsx");
+  assert.match(selector, /export function DocumentLanguageControl/);
+  assert.match(selector, /aria-expanded=\{open\} aria-controls=\{panelId\}/, "a disclosure button, announced as such");
+  assert.match(selector, /\{open \? "Done" : "Change"\}/);
+  const pre = source("../components/OpportunityWorkflowShell.tsx");
+  assert.match(pre, /<DocumentLanguageControl opportunityId=\{fixture\.opportunity_id\} \/>/, "Discovery and Client Presentation pages");
+  const post = source("../components/PostMeetingShell.tsx");
+  assert.match(post, /<DocumentLanguageControl opportunityId=\{opportunityId\}/, "Discovery 2, V2 and email pages");
+  // The control saves the setting only; each generate action keeps its gate (see review 2 and 1).
+  assert.doesNotMatch(selector, /\b(generate|approve|finalize)\w*\(/i);
+});
+
+test("review 4: Client Presentation and the earlier flows carry or refuse the language", async () => {
+  // Client Presentation = the pre-meeting Presentation page: Master Presentation V1 + the BAP-2 heading.
+  const shell = source("../components/OpportunityWorkflowShell.tsx");
+  assert.match(shell, /pathname\.endsWith\("\/presentations"\) \? \(\n\s+<PresentationHeadline/);
+  assert.match(source("../app/opportunities/[opportunityId]/presentations/page.tsx"), /PresentationWorkspace/, "the Client Presentation route renders the V1 workspace");
+  // Earlier standalone PPT #2 is English only: "en" is sent, "de" is refused by the API.
+  await withApi(() => ({ job_id: "j", status: "queued", presentation_id: otherBackendId, presentation_version_id: null, journey_stage: "post_meeting" }), async (calls) => {
+    await generatePpt2("test-token", backendId, "en");
+    await regeneratePpt2("test-token", backendId, otherBackendId, "en");
+    await generatePpt2("test-token", backendId);
+    assert.deepEqual(calls.map((call) => call.body), [{ language: "en" }, { language: "en" }, undefined]);
+  });
+  const meeting = source("../components/MeetingEvidencePanel.tsx");
+  assert.match(meeting, /const legacyLanguageBlocked = selectedLanguage !== "en";/);
+  assert.match(meeting, /Boolean\(conflictingNotes\) \|\| legacyLanguageBlocked\} onClick=\{\(\) => void generateDocuments\(\)\}/);
+  assert.match(meeting, /language: "en",\n\s+\}\);/);
+  // The Discovery viewer for papers in the earlier format sends the language too.
+  const legacy = source("../components/DiscoveryWorkspace.tsx");
+  assert.match(legacy, /generateLiveDiscovery\(accessToken, initialVersion\.opportunity_id, preview\?\.client\.values, options, documentLanguage\)/);
+  assert.match(source("./liveDiscovery.ts"), /generateDiscoveryPaper\(token, opportunityId, seed, language\)/);
 });

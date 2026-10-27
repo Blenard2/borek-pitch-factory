@@ -3497,4 +3497,13 @@ body:has(.app-workspace) {
 }
 .document-language-shell { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; color: var(--pitch-gray-500); font-size: 0.72rem; }
 /* The badge keeps its words whole next to a long headline; it wraps below it on a narrow screen. */
-.discovery-workflow-heading .document-language-badge { flex-shrink: 0; align-self: flex-start; margin-top: 6px; white-space: nowrap; }
+.discovery-workflow-heading .document-language-badge { white-space: nowrap; }
+.document-language-control { display: grid; gap: 6px; min-width: 0; max-width: 100%; }
+.discovery-workflow-heading > .document-language-control { flex-shrink: 0; align-self: flex-start; justify-items: end; max-width: 360px; margin-top: 6px; }
+.document-language-control-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.document-language-change { min-height: 32px; padding: 4px 12px; font-size: 0.75rem; }
+.document-language-control-panel { padding: 12px 14px; border: 1px solid var(--pitch-gray-200); border-radius: var(--pitch-control-radius); background: #fff; text-align: left; justify-self: stretch; }
+@media (max-width: 640px) {
+  .discovery-workflow-heading > .document-language-control { justify-items: start; max-width: 100%; }
+  .document-language-change { min-height: 44px; }
+}

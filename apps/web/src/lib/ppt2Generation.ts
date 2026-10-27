@@ -29,7 +29,7 @@ export async function generateAndAwaitPostMeetingPresentation(
   accessToken: string,
   opportunityId: string,
   onJob?: (job: JobResponse) => void,
-  options?: { regeneratePresentationId?: string },
+  options?: { regeneratePresentationId?: string; language?: "en" | "de" },
 ): Promise<PostMeetingPresentationResult> {
   const current = await getWorkflowStatus(accessToken, opportunityId);
   const ready = current.documents?.ppt2;
@@ -45,8 +45,8 @@ export async function generateAndAwaitPostMeetingPresentation(
     throw new ApiRequestError("PPT #2 changed before regeneration. Reload and review the current version.", 409, "PPT2_IDENTITY_AMBIGUOUS");
   }
   const started = options?.regeneratePresentationId
-    ? await regeneratePpt2(accessToken, opportunityId, options.regeneratePresentationId)
-    : await generatePpt2(accessToken, opportunityId);
+    ? await regeneratePpt2(accessToken, opportunityId, options.regeneratePresentationId, options.language)
+    : await generatePpt2(accessToken, opportunityId, options?.language);
   let job: JobResponse | null = null;
   if (started.job_id) {
     if (started.status === "COMPLETED") {

@@ -8,7 +8,7 @@ import { PostMeetingPhaseNav, usePostMeeting } from "@/components/PostMeetingShe
 import { generateMeetingExtraction, listAvailableUseCases, saveSelectedUseCases, uploadTranscript, type AvailableUseCase } from "@/lib/api";
 import { approvedDiscovery2Language, loadPostMeetingDiscovery, needsDiscovery2 } from "@/lib/postMeetingDiscovery";
 import { DocumentLanguageWarning, useDocumentLanguage } from "@/components/DocumentLanguageSelector";
-import { documentLanguageErrorMessage, downstreamLanguageGate } from "@/lib/documentLanguage";
+import { documentLanguageErrorMessage, documentLanguageLabel, failedLookup, sourceLanguageGate, type SourceLanguageLookup } from "@/lib/documentLanguage";
 import { isMasterJourney } from "@/lib/discoveryFirst";
 import { awaitRunningMasterV2, generateAndAwaitMasterV2, loadMasterV2Status, masterV2Error, masterV2StageText, type MasterV2Status } from "@/lib/masterPresentationV2";
 import { generateAndAwaitPostMeetingPresentation } from "@/lib/ppt2Generation";
@@ -48,7 +48,9 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
   const [v2Error, setV2Error] = useState<string | null>(null);
   // BAP-12: V2 is written in the language of the approved Discovery 2.
   const selectedLanguage = useDocumentLanguage(opportunityId).language;
-  const [discovery2Language, setDiscovery2Language] = useState<{ language: "en" | "de"; versionNumber: number } | null>(null);
+  // PR #14 review: fail-closed - V2 waits until the approved Discovery 2's language is verified.
+  const [discovery2Language, setDiscovery2Language] = useState<SourceLanguageLookup>({ status: "none" });
+  const [languageCheck, setLanguageCheck] = useState(0);
   // Which meeting input is in front. Both stay mounted, so typed notes survive switching.
   const [inputTab, setInputTab] = useState<"transcript" | "notes">("transcript");
   // The readiness checklist is always shown on desktop. At 960px and below it is collapsed behind
@@ -237,7 +239,7 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
     setBusy("Generating Master Presentation V2"); setError(null); setSaved(null); setV2Error(null); setV2Stage("QUEUED");
     setV2((value) => value ? { ...value, state: "generating", can_generate: false } : value);
     try {
-      setV2(await generateAndAwaitMasterV2(accessToken, opportunityId, (job) => setV2Stage(job.current_stage), controller.signal, discovery2Language?.language ?? selectedLanguage));
+      setV2(await generateAndAwaitMasterV2(accessToken, opportunityId, (job) => setV2Stage(job.current_stage), controller.signal, discovery2Language.status === "verified" ? discovery2Language.language : selectedLanguage));
       setSaved("Master Presentation V2 is ready.");
     } catch (cause) {
       if (controller.signal.aborted) return;
@@ -252,14 +254,17 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
   }
 
   // Previous document flow (standalone PPT #2). Not part of the Master Presentation V2 path.
+  // BAP-12: that flow writes English only. A German client is not given English documents silently.
+  const legacyLanguageBlocked = selectedLanguage !== "en";
   async function generateDocuments() {
-    if (!review || !transcript || notesDirty) return;
+    if (!review || !transcript || notesDirty || legacyLanguageBlocked) return;
     await run("Preparing documents", async (token, signal) => {
       const prepared = await prepareMeetingEvidence(token, opportunityId, transcriptId, notes, baseline, { signal, onProgress: setBusy });
       signal.throwIfAborted();
       setBusy("Generating documents");
       await generateAndAwaitPostMeetingPresentation(token, opportunityId, () => signal.throwIfAborted(), {
         regeneratePresentationId: prepared.workflow.documents.ppt2?.presentation_id,
+        language: "en",
       });
       if (!signal.aborted) router.push(`${root}/follow-up`);
     });
@@ -320,15 +325,24 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
   ] : [];
   const requiredSteps = readiness.filter((row) => !row.optional);
   const canGenerateV2 = Boolean(review?.readiness.ready_for_v2 && confirmedCurrent);
-  const v2LanguageGate = downstreamLanguageGate(selectedLanguage, discovery2Language, { artifact: "Master Presentation V2", source: "Discovery 2" });
+  const v2LanguageGate = sourceLanguageGate(selectedLanguage, discovery2Language, { artifact: "Master Presentation V2", source: "Discovery 2" });
   useEffect(() => {
-    if (!accessToken || !live || !canGenerateV2) { setDiscovery2Language(null); return; }
+    // V2 is offered only once Discovery 2 is approved and current; before that nothing is verified.
+    if (!accessToken || !live || !canGenerateV2) { setDiscovery2Language({ status: "none" }); return; }
     const controller = new AbortController();
+    setDiscovery2Language({ status: "loading" });
     void loadPostMeetingDiscovery(accessToken, opportunityId, controller.signal)
-      .then((value) => { if (!controller.signal.aborted) setDiscovery2Language(approvedDiscovery2Language(value)); })
-      .catch(() => { if (!controller.signal.aborted) setDiscovery2Language(null); });
+      .then((value) => {
+        if (controller.signal.aborted) return;
+        const approved = approvedDiscovery2Language(value);
+        // The review says V2 is ready, so a missing approved Discovery 2 is a contradiction: fail closed.
+        setDiscovery2Language(approved
+          ? { status: "verified", language: approved.language, versionNumber: approved.versionNumber }
+          : { status: "failed", message: "the approved Discovery 2 was not found" });
+      })
+      .catch((cause) => { if (!controller.signal.aborted) setDiscovery2Language(failedLookup(cause)); });
     return () => controller.abort();
-  }, [accessToken, live, opportunityId, canGenerateV2]);
+  }, [accessToken, live, opportunityId, canGenerateV2, languageCheck]);
   // Tabs follow the usual keyboard pattern: arrow keys, Home and End move between them, and only
   // the selected tab is in the page's tab order. Switching never touches what was typed.
   const INPUT_TABS = ["transcript", "notes"] as const;
@@ -483,7 +497,10 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
             : null}
 
           {/* BAP-12: V2 waits for a Discovery 2 in the client's document language; explained, not hidden. */}
-          {canGenerateV2 && v2LanguageGate.message && <DocumentLanguageWarning>{v2LanguageGate.message}</DocumentLanguageWarning>}
+          {canGenerateV2 && v2LanguageGate.message && <DocumentLanguageWarning>
+            {v2LanguageGate.message}
+            {v2LanguageGate.retry && <> <button className="btn btn-secondary" type="button" data-testid="v2-language-retry" onClick={() => setLanguageCheck((value) => value + 1)}>Check again</button></>}
+          </DocumentLanguageWarning>}
           {/* One primary action: the next step the current state allows. Each one calls the same
               handler as before and is held back by the same gate. */}
           <div className={styles.primaryAction} data-testid="primary-action">
@@ -514,7 +531,8 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
           {legacyJourney ? <details data-testid="previous-document-flow">
             <summary><small>Previous document flow</small></summary>
             <p><small>Generates the earlier standalone PPT #2 and follow-up documents. This pitch has no Master Presentation, so the earlier flow applies. It does not use your confirmation.</small></p>
-            <button className="btn btn-secondary" disabled={editingDisabled || !transcript || notesDirty || !workflow?.documents.approved_discovery || Boolean(conflictingNotes)} onClick={() => void generateDocuments()}>Generate documents</button>
+            <button className="btn btn-secondary" disabled={editingDisabled || !transcript || notesDirty || !workflow?.documents.approved_discovery || Boolean(conflictingNotes) || legacyLanguageBlocked} onClick={() => void generateDocuments()}>Generate documents</button>
+            {legacyLanguageBlocked && <DocumentLanguageWarning>The earlier document flow writes English documents only, and this client&apos;s document language is {documentLanguageLabel(selectedLanguage)}. Switch the document language to English to use it; German post-meeting documents are Master Presentation V2.</DocumentLanguageWarning>}
             {workflow?.documents.ppt2?.latest_ready_version_id ? <div className={styles.actions}><Link href={`${root}/post-meeting-presentation`}>View existing presentation</Link></div> : null}
           </details> : null}
           </div>

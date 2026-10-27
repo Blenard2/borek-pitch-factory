@@ -19,7 +19,7 @@ import {
 } from "@/lib/postMeetingEmail";
 import { downloadPostMeetingPresentation, loadExistingPostMeetingPresentation, type PostMeetingPresentation } from "@/lib/postMeetingPresentation";
 import { DocumentLanguageBadge, DocumentLanguageWarning, useDocumentLanguage } from "@/components/DocumentLanguageSelector";
-import { documentLanguageErrorMessage, documentLanguageLabel } from "@/lib/documentLanguage";
+import { documentLanguageErrorMessage, documentLanguageLabel, emailLanguageRemedy, finalizedPackageLanguage, sourceLanguageGate, type DocumentLanguage } from "@/lib/documentLanguage";
 import styles from "./post-meeting.module.css";
 
 type Busy = null | "loading" | "generating" | "saving" | "confirming" | "exporting" | "statics" | "uploading";
@@ -71,15 +71,25 @@ const dateTime = (value: string | null) => (value ? new Date(value).toLocaleStri
 // The original on-page review card instead of the Review & confirm dialog (docs/followup-email-review-ui.md).
 const ADVANCED_REVIEW = advancedReviewUi();
 
+/** The language gate of the follow-up email: the finalized package's language, fail-closed. */
+function emailLanguageGate(selected: DocumentLanguage, workflow: { finalization: unknown } | null) {
+  return sourceLanguageGate(selected, workflow ? finalizedPackageLanguage(workflow.finalization) : { status: "loading" }, {
+    artifact: "The follow-up email", source: "finalized presentation package", remedy: emailLanguageRemedy,
+  });
+}
+
 export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string }) {
   const { accessToken, previewMode } = useAuth();
-  const { workflow, companyName, contactPerson } = usePostMeeting();
+  const { workflow, refreshWorkflow, companyName, contactPerson } = usePostMeeting();
   const live = Boolean(accessToken) && !previewMode;
   // BAP-12: the email is written in the finalized package's language; the client's setting is shown beside it.
   const selectedLanguage = useDocumentLanguage(opportunityId).language;
   const root = `/opportunities/${encodeURIComponent(opportunityId)}`;
   const master = isMasterJourney(workflow?.documents);
   const eligible = canPreparePostMeetingEmail(workflow);
+  // PR #14 review: the email is generated only in the language of the finalized package, and only
+  // when that equals the client's document language. Unknown (still loading, unreadable) = closed.
+  const emailGate = emailLanguageGate(selectedLanguage, workflow);
 
   const [draft, setDraft] = useState<PostMeetingEmail | null>(null);
   const [copy, setCopy] = useState<EmailWorkingCopy | null>(null);
@@ -170,7 +180,11 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
   const generate = (overwrite: boolean) => run("generating", async (token) => {
     const latest = await loadPostMeetingWorkflow(token, opportunityId);
     if (!canPreparePostMeetingEmail(latest)) throw new Error("The documents are no longer finalized. Return to owner review before preparing an email.");
-    const next = await generatePostMeetingEmail(token, opportunityId, overwrite);
+    // Checked again against the package as it is now, then named explicitly: the API refuses a
+    // different language before anything is written.
+    const gate = emailLanguageGate(selectedLanguage, latest);
+    if (gate.blocked) throw new Error(gate.message ?? "The language of the finalized package could not be checked.");
+    const next = await generatePostMeetingEmail(token, opportunityId, overwrite, gate.language);
     if (!alive.current) return;
     adopt(next); setConfirmRegenerate(false); setConflict(false);
     setNotice("A new draft was generated from the finalized presentation package.");
@@ -344,11 +358,15 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
         <button className="btn btn-secondary" disabled={working} onClick={() => void resolveConflict(true)}>Keep my text and review</button>
       </div>
     </div> : null}
+    {live && eligible && emailGate.message ? <div data-testid="email-language-gate"><DocumentLanguageWarning>
+      {emailGate.message}
+      {emailGate.retry ? <> <button className="btn btn-secondary" type="button" data-testid="email-language-retry" onClick={refreshWorkflow}>Check again</button></> : null}
+    </DocumentLanguageWarning></div> : null}
     {confirmRegenerate ? <div className={`${styles.notice} ${styles.emailDecision}`} role="alertdialog" aria-label="Regenerate the email draft" data-testid="email-regenerate-warning">
       <strong>Regenerating replaces all three lengths.</strong>
       <p>Your edits{draft?.status === "confirmed" ? " and the confirmation" : ""} will be replaced by a new draft from the finalized package. This cannot be undone.</p>
       <div className={styles.actions}>
-        <button className="btn btn-primary" disabled={working} onClick={() => void generate(true)}>Replace with a new draft</button>
+        <button className="btn btn-primary" disabled={working || emailGate.blocked} onClick={() => void generate(true)}>Replace with a new draft</button>
         <button className="btn btn-secondary" disabled={working} onClick={() => setConfirmRegenerate(false)}>Keep my draft</button>
       </div>
     </div> : null}
@@ -413,12 +431,12 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
             <div className={styles.actions}>
               <button className={dirty.length ? "btn btn-primary" : "btn btn-secondary"} data-testid="email-save" disabled={working || !dirty.length || overLimit || conflict} onClick={() => void save()}>{busy === "saving" ? "Saving..." : "Save changes"}</button>
               {dirty.length ? <button className="btn btn-secondary" disabled={working} onClick={() => setCopy(workingCopy(draft))}>Discard unsaved changes</button> : null}
-              <button className="btn btn-secondary" data-testid="email-regenerate" disabled={working || !eligible} onClick={requestGenerate}>{busy === "generating" ? "Generating..." : "Regenerate from the finalized package"}</button>
+              <button className="btn btn-secondary" data-testid="email-regenerate" disabled={working || !eligible || emailGate.blocked} onClick={requestGenerate}>{busy === "generating" ? "Generating..." : "Regenerate from the finalized package"}</button>
             </div>
             <small>Draft revision {draft.revision} · saved {dateTime(draft.updatedAt)}{draft.status === "confirmed" ? ` · confirmed ${dateTime(draft.confirmedAt)}` : ""}</small>
             {writerLabel(draft.writer) ? <small data-testid="email-writer" data-writer={draft.writer?.mode}>{writerLabel(draft.writer)}{draft.lengths[length].edited ? " This length has since been edited by you." : ""}</small> : null}
             {draft.source ? <div data-testid="email-language"><DocumentLanguageBadge language={draft.source.language} prefix="Email language" /></div> : null}
-            {draft.source && draft.source.language !== selectedLanguage ? <DocumentLanguageWarning>
+            {draft.source && draft.source.language !== selectedLanguage && !emailGate.blocked ? <DocumentLanguageWarning>
               This email is in {documentLanguageLabel(draft.source.language)} because the finalized presentation package it is written from is in {documentLanguageLabel(draft.source.language)}. The client&apos;s document language is now {documentLanguageLabel(selectedLanguage)}: {selectedLanguage === "en" ? "an" : "a"} {documentLanguageLabel(selectedLanguage)} email needs a new Discovery, Discovery 2 and Master Presentation V2 in {documentLanguageLabel(selectedLanguage)}, finalized again. Nothing is translated automatically.
             </DocumentLanguageWarning> : null}
             {draft.reviewFlags.includes("statements_not_in_email_language") ? <div data-testid="email-language-check"><DocumentLanguageWarning>
@@ -426,7 +444,7 @@ export function FollowUpDraftPanel({ opportunityId }: { opportunityId: string })
             </DocumentLanguageWarning></div> : null}
           </> : <div className={styles.emailEmpty}>
             <p>{busy === "loading" ? "Loading the saved email draft..." : eligible ? "No follow-up email has been prepared yet. It is written from the finalized presentation package: the confirmed meeting findings and your recipient and sender details." : "The follow-up email is written from the finalized presentation package."}</p>
-            {eligible ? <div className={styles.actions}><button className="btn btn-primary" data-testid="email-generate" disabled={!live || !loaded || working || editStatics} onClick={() => void generate(false)}>{busy === "generating" ? "Generating..." : "Prepare email draft"}</button>
+            {eligible ? <div className={styles.actions}><button className="btn btn-primary" data-testid="email-generate" disabled={!live || !loaded || working || editStatics || emailGate.blocked} onClick={() => void generate(false)}>{busy === "generating" ? "Generating..." : "Prepare email draft"}</button>
               {editStatics ? <small>Save the recipient and sender first.</small> : null}</div>
               : <p><Link href={`${root}/${master ? "post-meeting-presentation" : "review"}`}>{master ? "Review and finalize Master Presentation V2" : "Review and finalize the current documents"}</Link> before preparing the email.</p>}
             {!loaded && busy !== "loading" && live ? <button className="btn btn-secondary" onClick={() => setReload((value) => value + 1)}>Retry loading</button> : null}

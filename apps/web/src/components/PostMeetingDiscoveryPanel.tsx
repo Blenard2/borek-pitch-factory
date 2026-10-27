@@ -12,8 +12,8 @@ import {
 } from "@/lib/postMeetingDiscovery";
 import { DocumentLanguageBadge, DocumentLanguageWarning, useDocumentLanguage } from "@/components/DocumentLanguageSelector";
 import {
-  documentLanguageErrorMessage, downstreamLanguageGate, loadApprovedDiscovery1Language, normalizeDocumentLanguage, otherLanguageReviewText,
-  type ApprovedDiscoveryLanguage,
+  documentLanguageErrorMessage, failedLookup, loadApprovedDiscovery1Language, lookupFrom, normalizeDocumentLanguage, otherLanguageReviewText,
+  sourceLanguageGate, type SourceLanguageLookup,
 } from "@/lib/documentLanguage";
 import styles from "./post-meeting.module.css";
 
@@ -46,16 +46,19 @@ export function PostMeetingDiscoveryPanel({ opportunityId }: { opportunityId: st
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   // BAP-12: Discovery 2 inherits the language of the approved Discovery 1.
   const selectedLanguage = useDocumentLanguage(opportunityId).language;
-  const [discovery1, setDiscovery1] = useState<ApprovedDiscoveryLanguage | null>(null);
+  // PR #14 review: fail-closed - while the lookup runs or after it failed, Discovery 2 waits.
+  const [discovery1, setDiscovery1] = useState<SourceLanguageLookup>({ status: "loading" });
+  const [languageCheck, setLanguageCheck] = useState(0);
   useEffect(() => {
     if (!accessToken || !live) return;
     const controller = new AbortController();
+    setDiscovery1({ status: "loading" });
     void loadApprovedDiscovery1Language(accessToken, opportunityId, controller.signal)
-      .then((value) => { if (!controller.signal.aborted) setDiscovery1(value); })
-      .catch(() => { if (!controller.signal.aborted) setDiscovery1(null); });
+      .then((value) => { if (!controller.signal.aborted) setDiscovery1(lookupFrom(value)); })
+      .catch((cause) => { if (!controller.signal.aborted) setDiscovery1(failedLookup(cause)); });
     return () => controller.abort();
-  }, [accessToken, live, opportunityId, reload]);
-  const languageGate = downstreamLanguageGate(selectedLanguage, discovery1, { artifact: "Discovery 2", source: "Discovery 1" });
+  }, [accessToken, live, opportunityId, reload, languageCheck]);
+  const languageGate = sourceLanguageGate(selectedLanguage, discovery1, { artifact: "Discovery 2", source: "Discovery 1" });
 
   const adopt = useCallback((next: PostMeetingDiscovery) => {
     setData(next);
@@ -91,7 +94,7 @@ export function PostMeetingDiscoveryPanel({ opportunityId }: { opportunityId: st
   const generate = () => run("generating", async (token) => {
     if (languageGate.blocked) return;
     // Named explicitly: the server refuses before writing anything if Discovery 1 is in another language.
-    const next = await generatePostMeetingDiscovery(token, opportunityId, discovery1?.language ?? selectedLanguage);
+    const next = await generatePostMeetingDiscovery(token, opportunityId, discovery1.status === "verified" ? discovery1.language : selectedLanguage);
     if (!alive.current) return;
     adopt(next); refreshWorkflow();
     setNotice(`Discovery 2 version ${next.current_version?.version_number ?? ""} was generated. Review it, edit where needed and approve it.`);
@@ -141,14 +144,17 @@ export function PostMeetingDiscoveryPanel({ opportunityId }: { opportunityId: st
           <strong>{STATE_LABEL[state.status]}</strong>
           {current ? <small>Version {current.version_number} · {current.status === "approved" ? `approved ${when(current.approved_at)}` : "draft"}</small> : null}
           {generationLabel ? <small data-testid="discovery2-mode">{generationLabel}</small> : null}
-          {current ? <DocumentLanguageBadge language={documentLanguage} /> : discovery1 ? <DocumentLanguageBadge language={discovery1.language} prefix="Will be generated in" /> : null}
+          {current ? <DocumentLanguageBadge language={documentLanguage} /> : discovery1.status === "verified" ? <DocumentLanguageBadge language={discovery1.language} prefix="Will be generated in" /> : null}
         </p> : null}
       </header>
 
       {!live ? <p className={styles.notice}>Discovery 2 is generated from the stored meeting information. Sign in to a live session to generate, edit and approve it.</p> : null}
       {error ? <div className={styles.error} role="alert" data-testid="discovery2-error">{error} <button className="btn btn-secondary" onClick={() => setReload((value) => value + 1)}>Reload</button></div> : null}
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
-      {live && languageGate.message ? <DocumentLanguageWarning>{languageGate.message}</DocumentLanguageWarning> : null}
+      {live && languageGate.message && (!current || state?.status === "stale" || state?.status === "failed") ? <DocumentLanguageWarning>
+        {languageGate.message}
+        {languageGate.retry ? <> <button className="btn btn-secondary" type="button" data-testid="discovery2-language-retry" onClick={() => setLanguageCheck((value) => value + 1)}>Check again</button></> : null}
+      </DocumentLanguageWarning> : null}
       {current && otherLanguageText ? <div data-testid="discovery2-language-check"><DocumentLanguageWarning>{otherLanguageText}</DocumentLanguageWarning></div> : null}
       {busy === "loading" ? <p role="status">Loading Discovery 2...</p> : null}
       {busy === "generating" ? <p role="status" className={styles.progressLine} data-testid="discovery2-progress">Generating Discovery 2 from Discovery 1, the transcript, your notes and the confirmed findings...</p> : null}

@@ -279,9 +279,14 @@ export async function loadPostMeetingEmail(token: string, opportunityId: string,
 }
 
 /** Generates all three lengths. ``overwriteEdits`` is the owner's explicit consent to replace saved work. */
-export async function generatePostMeetingEmail(token: string, opportunityId: string, overwriteEdits = false) {
+/**
+ * BAP-12 / PR #14 review: ``language`` names the email's language explicitly. The API writes the
+ * email in the finalized package's language and refuses another one (409 LANGUAGE_MISMATCH) before
+ * anything is written; without it the package's language applies.
+ */
+export async function generatePostMeetingEmail(token: string, opportunityId: string, overwriteEdits = false, language?: "en" | "de") {
   const value = await apiFetch(draftsPath(opportunityId, "/generate"), token, {
-    method: "POST", body: JSON.stringify({ journey_stage: "deepening", overwrite_edits: overwriteEdits }),
+    method: "POST", body: JSON.stringify({ journey_stage: "deepening", overwrite_edits: overwriteEdits, ...(language ? { language } : {}) }),
   });
   const draft = parsePostMeetingEmail(value, opportunityId);
   if (!draft) throw new Error("No email draft was returned. Retry preparation.");

@@ -8,7 +8,7 @@ import { useReportPresentationSource } from "@/components/PresentationHeadline";
 import { WorkflowArtifactTabs } from "@/components/WorkflowArtifactTabs";
 import { FirstMeetingHandoff } from "@/components/FirstMeetingHandoff";
 import { DeckLanguageNotice, DocumentLanguageBadge, DocumentLanguageWarning, useDocumentLanguage } from "@/components/DocumentLanguageSelector";
-import { documentLanguageErrorMessage, downstreamLanguageGate, loadApprovedDiscovery1Language, type ApprovedDiscoveryLanguage } from "@/lib/documentLanguage";
+import { documentLanguageErrorMessage, failedLookup, loadApprovedDiscovery1Language, sourceLanguageGate, type SourceLanguageLookup } from "@/lib/documentLanguage";
 import { DISCOVERY_PAGE_CATALOG } from "@/lib/discoveryFirst";
 import { canDownloadDiscoveryPdf } from "@/lib/discoveryWorkspace";
 import { generateAndAwaitFirstPitch, resumeFirstPitch } from "@/lib/ppt1Generation";
@@ -63,7 +63,9 @@ function PresentationSession({ opportunityId, accessToken, live }: PresentationW
   // BAP-12: V1 is written in the language of the approved Discovery. When the client's document
   // language was changed after that approval, V1 waits for a new Discovery in the new language.
   const documentLanguage = useDocumentLanguage(opportunityId).language;
-  const [approvedLanguage, setApprovedLanguage] = useState<ApprovedDiscoveryLanguage | null>(null);
+  // PR #14 review: fail-closed - V1 waits until the approved Discovery's language is verified.
+  const [approvedLanguage, setApprovedLanguage] = useState<SourceLanguageLookup>({ status: "none" });
+  const [languageCheck, setLanguageCheck] = useState(0);
   // BAP-2: the heading shows the title and main opportunity of the Discovery this deck was built
   // from. While the deck loads or is generated this is "pending", so no other Discovery is shown.
   useReportPresentationSource(live ? presentationSourceFor(opportunityId, livePhase, liveDeck) : null);
@@ -179,14 +181,22 @@ function PresentationSession({ opportunityId, accessToken, live }: PresentationW
   }, [accessToken, deckKey, liveDeck, liveReady, opportunityId, previewKey, selectedLiveSlide]);
 
   useEffect(() => {
-    if (!live || !accessToken || !approvedSourceId) { setApprovedLanguage(null); return; }
+    // Without an approved Discovery, V1 is blocked by the approval gate; nothing to verify.
+    if (!live || !accessToken || !approvedSourceId) { setApprovedLanguage({ status: "none" }); return; }
     const controller = new AbortController();
+    setApprovedLanguage({ status: "loading" });
     void loadApprovedDiscovery1Language(accessToken, opportunityId, controller.signal)
-      .then((value) => { if (!controller.signal.aborted) setApprovedLanguage(value); })
-      .catch(() => { if (!controller.signal.aborted) setApprovedLanguage(null); });
+      .then((value) => {
+        if (controller.signal.aborted) return;
+        // The workflow names an approved Discovery, so "none" here would be a contradiction: fail closed.
+        setApprovedLanguage(value
+          ? { status: "verified", language: value.language, versionNumber: value.versionNumber }
+          : { status: "failed", message: "the approved Discovery version was not found" });
+      })
+      .catch((cause) => { if (!controller.signal.aborted) setApprovedLanguage(failedLookup(cause)); });
     return () => controller.abort();
-  }, [accessToken, live, opportunityId, approvedSourceId]);
-  const languageGate = downstreamLanguageGate(documentLanguage, live ? approvedLanguage : null, { artifact: "Master Presentation V1", source: "Discovery" });
+  }, [accessToken, live, opportunityId, approvedSourceId, languageCheck]);
+  const languageGate = sourceLanguageGate(documentLanguage, live ? approvedLanguage : { status: "none" }, { artifact: "Master Presentation V1", source: "Discovery" });
 
   async function generate(regenerate = false) {
     if (languageGate.blocked) return;
@@ -205,7 +215,7 @@ function PresentationSession({ opportunityId, accessToken, live }: PresentationW
     setLivePhase("generating");
     try {
       // Naming the language lets the server refuse instead of building on a Discovery in another language.
-      const result = await generateAndAwaitFirstPitch(accessToken, opportunityId, undefined, { regenerate, language: approvedLanguage?.language ?? documentLanguage });
+      const result = await generateAndAwaitFirstPitch(accessToken, opportunityId, undefined, { regenerate, language: approvedLanguage.status === "verified" ? approvedLanguage.language : documentLanguage });
       if (controller.signal.aborted) return;
       const deck = await loadLivePresentation(accessToken, opportunityId, result, controller.signal);
       if (controller.signal.aborted) return;
@@ -334,7 +344,10 @@ function PresentationSession({ opportunityId, accessToken, live }: PresentationW
               )}
               <p className="discovery-preview-caption">{live ? "Live rendered previews of this version. Version changes detected during requests are rejected; the other ready versions of this presentation stay available for download below." : "Local content preview from approved Discovery, not a rendered presentation artifact."}</p>
               {live && liveReady && liveDeck?.source ? <DeckLanguageNotice source={liveDeck.source} /> : null}
-              {languageGate.message ? <DocumentLanguageWarning>{languageGate.message}</DocumentLanguageWarning> : null}
+              {languageGate.message ? <DocumentLanguageWarning>
+                {languageGate.message}
+                {languageGate.retry ? <> <button className="btn btn-secondary" type="button" data-testid="v1-language-retry" onClick={() => setLanguageCheck((value) => value + 1)}>Check again</button></> : null}
+              </DocumentLanguageWarning> : null}
               {live && liveReady && liveDeck?.source ? (
                 <p className="discovery-preview-caption" data-testid="master-presentation-summary">
                   Master Presentation {liveDeck.source.product_version} ({liveDeck.source.product_stage === "pre_meeting" ? "pre-meeting" : liveDeck.source.product_stage}) · revision {liveDeck.source.revision} · {liveDeck.source.canonical_slide_count} slides of the canonical Borek deck, unchanged · {liveDeck.source.appendix_slide_count} client appendix slides from the approved Discovery analysis.
@@ -352,7 +365,7 @@ function PresentationSession({ opportunityId, accessToken, live }: PresentationW
                 <div role="status" aria-live="polite" aria-atomic="true">
                   <strong>{phase === "generating" ? live ? `Generating ${product}` : `Generating slide ${String(Math.min(readyCount + 1, totalSlides)).padStart(2, "0")}` : phase === "loading" ? `Loading ${product}` : phase === "load-failed" ? `${product} could not be loaded` : phase === "failed" ? `${product} generation failed` : downloadable ? `${product} ready for review` : approved ? `Ready to generate ${product}` : "Generation blocked"}</strong>
                   <p>{readyCount} of {totalSlides} {live ? "slide previews loaded" : "slides ready"}</p>
-                  {live && approvedLanguage ? <DocumentLanguageBadge language={approvedLanguage.language} prefix={`Approved Discovery v${approvedLanguage.versionNumber}`} /> : null}
+                  {live && approvedLanguage.status === "verified" ? <DocumentLanguageBadge language={approvedLanguage.language} prefix={`Approved Discovery v${approvedLanguage.versionNumber}`} /> : null}
                 </div>
                 {phase === "failed" || phase === "waiting" || phase === "idle" || (phase === "load-failed" && approved) || (!live && phase === "ready") ? (
                   <button className="btn btn-primary" type="button" disabled={!approved || languageGate.blocked} onClick={() => void generate()}>

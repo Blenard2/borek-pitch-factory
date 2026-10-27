@@ -168,6 +168,88 @@ export function downstreamLanguageGate(
   };
 }
 
+/**
+ * PR #14 review: what is known about the language of the approved source an artifact inherits.
+ * Generation is allowed only when this is settled - "none" (nothing approved yet, so nothing can be
+ * contradicted) or "verified". While the lookup is running or after it failed, the gate stays
+ * closed: an unknown source language is never treated as a match. The API's 409 stays the final
+ * safeguard either way.
+ */
+export type SourceLanguageLookup =
+  | { status: "loading" }
+  | { status: "failed"; message: string }
+  | { status: "none" }
+  | { status: "verified"; language: DocumentLanguage; versionNumber: number | null };
+
+export interface SourceLanguageGate extends LanguageGate {
+  /** The check is still running: the button waits, the page says so. */
+  pending: boolean;
+  /** The check failed and can be retried. */
+  retry: boolean;
+}
+
+interface GateNames {
+  artifact: string;
+  source: string;
+  /** What to do instead, when the default "generate a new <source>" does not fit (e.g. the email). */
+  remedy?: (selected: DocumentLanguage, source: DocumentLanguage) => string;
+}
+
+/** The gate for an artifact that inherits its language from an approved source - fail-closed. */
+export function sourceLanguageGate(selected: DocumentLanguage, lookup: SourceLanguageLookup, names: GateNames): SourceLanguageGate {
+  if (lookup.status === "loading") {
+    return { blocked: true, pending: true, retry: false, language: selected, message: `Checking the language of the approved ${names.source} before ${names.artifact} can be generated...` };
+  }
+  if (lookup.status === "failed") {
+    return {
+      blocked: true, pending: false, retry: true, language: selected,
+      message: `The language of the approved ${names.source} could not be checked (${lookup.message}). ${names.artifact} is not generated until it is verified, so it cannot come out in the wrong language. Nothing was generated or changed.`,
+    };
+  }
+  if (lookup.status === "none") return { blocked: false, pending: false, retry: false, language: selected, message: null };
+  const gate = downstreamLanguageGate(selected, { language: lookup.language, versionNumber: lookup.versionNumber }, names);
+  if (gate.blocked && names.remedy) {
+    const version = lookup.versionNumber ? ` (version ${lookup.versionNumber})` : "";
+    gate.message = `The document language is ${documentLanguageLabel(selected)}, but the ${names.source}${version} is in ${documentLanguageLabel(lookup.language)}. `
+      + `${names.artifact} is always written in the language of its ${names.source}, so it is not generated now. ${names.remedy(selected, lookup.language)}`;
+  }
+  return { ...gate, pending: false, retry: false };
+}
+
+/** The lookup state for a value read from the API: null means nothing is approved yet. */
+export function lookupFrom(value: { language: DocumentLanguage; versionNumber?: number | null } | null): SourceLanguageLookup {
+  return value ? { status: "verified", language: value.language, versionNumber: value.versionNumber ?? null } : { status: "none" };
+}
+
+/** A failed lookup, with a short reason for the page. */
+export function failedLookup(error: unknown): SourceLanguageLookup {
+  const message = documentLanguageErrorMessage(error) ?? (error instanceof Error && error.message ? error.message : "the server did not answer");
+  return { status: "failed", message: message.replace(/\.$/, "") };
+}
+
+/**
+ * The language of the finalized presentation package the follow-up email is written from. The
+ * workflow status carries the package's frozen generation manifest; a Master Presentation V2
+ * package names its language (BAP-13; none before it = English). An earlier, standalone package
+ * is English only. Without a finalization nothing can be generated anyway.
+ */
+export function finalizedPackageLanguage(finalization: unknown): SourceLanguageLookup {
+  if (finalization === null || finalization === undefined) return { status: "none" };
+  if (typeof finalization !== "object" || Array.isArray(finalization)) return { status: "failed", message: "the finalized package could not be read" };
+  const manifest = (finalization as Record<string, unknown>).ppt2_generation_source_manifest;
+  if (!manifest || typeof manifest !== "object") return { status: "failed", message: "the finalized package names no presentation" };
+  const record = manifest as Record<string, unknown>;
+  if (record.kind !== "master_presentation_v2") return { status: "verified", language: "en", versionNumber: null };
+  if (record.language !== undefined && !isDocumentLanguage(record.language)) return { status: "failed", message: "the finalized package names an unknown language" };
+  return { status: "verified", language: normalizeDocumentLanguage(record.language), versionNumber: null };
+}
+
+/** The remedy for the email: a package is finalized and immutable, so a new one is needed. */
+export function emailLanguageRemedy(selected: DocumentLanguage, source: DocumentLanguage): string {
+  return `The finalized package and its approved documents stay unchanged. For ${selected === "en" ? "an" : "a"} ${documentLanguageLabel(selected)} email, generate and approve Discovery, Discovery 2 and Master Presentation V2 in ${documentLanguageLabel(selected)} and finalize that package; `
+    + `or switch the document language back to ${documentLanguageLabel(source)} to prepare the email from this package.`;
+}
+
 /** What changing the language means right now - shown next to the selector, never acted on by itself. */
 export function languageChangeNotice(
   selected: DocumentLanguage,
