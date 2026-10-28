@@ -1,6 +1,6 @@
 name: Deploy
 
-# Deploys main to the Azure Container Apps behind
+# Deploys the test branch to the Azure Container Apps behind
 #   https://web.gentletree-93d291c0.germanywestcentral.azurecontainerapps.io
 #
 # That deployment is the internal development and PM test environment
@@ -21,7 +21,7 @@ name: Deploy
 on:
   push:
     branches:
-      - main
+      - test
   workflow_dispatch:
 
 permissions:
@@ -43,7 +43,7 @@ jobs:
   preflight:
     name: Check that the environment is restricted
     # A manual run from another branch deploys nothing.
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/test'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
