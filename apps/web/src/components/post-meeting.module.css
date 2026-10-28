@@ -140,6 +140,9 @@
 .sourceBadge { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--pitch-blue) 10%, white); color: var(--pitch-blue); font-style: normal; font-size: var(--pitch-text-caption); }
 .sourceBadgeNotes { background: var(--pitch-gray-50); color: var(--pitch-gray-500); }
 .sourceBadgeBoth { background: color-mix(in srgb, var(--pitch-teal) 12%, white); color: var(--pitch-teal); }
+.internalBadge { background: color-mix(in srgb, var(--pitch-red) 10%, white); color: var(--pitch-red); }
+.root .shareChoice { display: inline-flex; align-items: center; gap: 8px; justify-self: start; font-size: var(--pitch-text-caption); cursor: pointer; }
+.root .shareChoice input { width: auto; height: auto; margin: 0; flex: none; }
 .findingText { font-weight: inherit; }
 .root .findingExcluded .check > span { text-decoration: none; }
 .findingExcluded .findingText { text-decoration: line-through; }

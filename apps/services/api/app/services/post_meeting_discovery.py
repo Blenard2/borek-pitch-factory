@@ -37,6 +37,7 @@ from services.meeting.discovery2 import (
     content_hash,
     empty_discovery2,
     generate_discovery2,
+    has_customer_meeting_content,
     has_meeting_content,
     safe_file_name,
     validate_discovery2,
@@ -320,6 +321,12 @@ def approve_post_meeting_discovery(
         )
     if not has_meeting_content(latest["document_json"]):
         raise bad_request("DISCOVERY2_NO_MEETING_CONTENT", "Discovery 2 needs at least one item from the meeting before it can be approved.")
+    if not has_customer_meeting_content(latest["document_json"]):
+        raise bad_request(
+            "DISCOVERY2_NO_CLIENT_CONTENT",
+            "Every item from the meeting comes only from your personal notes, which stay internal. "
+            "Share at least one of them with the client, or add a point in your own words, before approving.",
+        )
     store.approve_discovery2_version(version_id=latest["id"], user_id=user_id, expected_content_hash=expected_content_hash)
     return get_post_meeting_discovery(store, opportunity_id=opportunity_id, user_id=user_id)
 

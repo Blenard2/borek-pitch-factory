@@ -85,11 +85,13 @@ def approved_row(**overrides: Any) -> dict[str, Any]:
 VERIFIED = {"transcript", "personal_notes", "both"}
 
 
-def discovery2_row(items: dict[str, list[dict[str, str]]], approved: dict[str, Any] | None = None) -> dict[str, Any]:
+def discovery2_row(items: dict[str, list[dict[str, str]]], approved: dict[str, Any] | None = None, *, share_notes: bool = True) -> dict[str, Any]:
     """BAP-7: the approved Discovery 2 the fixture generator makes from these reviewed findings.
 
     Its meeting items are the confirmed findings word for word. A finding without a verified
-    source keeps that source, so the snapshot can refuse it.
+    source keeps that source, so the snapshot can refuse it. Notes-only items are internal unless
+    the owner shares them (audit 2026-10-27); these planner tests cover shared observations, so the
+    owner shared them unless ``share_notes`` is False.
     """
     usable = {category: [{**item, "source": item["source"] if item["source"] in VERIFIED else "transcript"} for item in items.get(category, [])] for category in DISCOVERY2_CATEGORIES}
     arguments = dict(
@@ -118,6 +120,8 @@ def discovery2_row(items: dict[str, list[dict[str, str]]], approved: dict[str, A
         for item in section["items"]:
             if item["origin"] == "meeting" and item["text"] in unverified:
                 item["source"] = "unverified"
+            if share_notes and item["source"] == "personal_notes":
+                item["share_with_client"] = True
     return {
         "id": "88888888-8888-4888-8888-888888888888",
         "opportunity_id": OPPORTUNITY["id"],
@@ -164,7 +168,7 @@ def texts(slides: list[dict[str, Any]]) -> list[str]:
 
 def test_snapshot_freezes_content_and_identities_and_keeps_excluded_findings_out() -> None:
     snapshot = snapshot_for()
-    assert (snapshot["kind"], snapshot["planner_version"]) == ("master_presentation_v2_snapshot", "master-presentation-v2:v2")
+    assert (snapshot["kind"], snapshot["planner_version"]) == ("master_presentation_v2_snapshot", "master-presentation-v2:v3")
     assert snapshot["master"]["master_sha256"] == "2c23670e46dc2ce71d3527b0acc846cad54572d9817977ec26c3efe17f51dd5a"
     assert snapshot["approved_discovery"]["version_id"] == "33333333-3333-4333-8333-333333333333"
     assert snapshot["approved_discovery"]["analysis"]["areas"], "the Discovery content itself is frozen, not only its id"
@@ -326,7 +330,7 @@ def test_the_slide_plan_follows_the_amount_of_confirmed_information() -> None:
     assert "What you need and what comes first (1/2)" in titles and "What you need and what comes first (2/2)" in titles
     assert "Where it is difficult today and where you see potential" in titles and "Solutions we talked about" in titles
     # Six observations and a reference do not fit one page: each kind gets its own, still labelled.
-    assert "What we noted for ourselves" in titles and "Borek references that fit what we heard" in titles
+    assert "Our observations after the meeting" in titles and "Borek references that fit what we heard" in titles
     assert "What we add from our side" not in titles
     assert len(rich) > len(minimal) + 4
     assert all(len(slide["content"].get("rows", [])) <= 6 for slide in rich)
@@ -523,3 +527,24 @@ def test_libreoffice_renders_the_v2_deck_in_inter_without_overlapping_text(case:
                 overlap_x = min(ax1, bx1) - max(ax0, bx0)
                 overlap_y = min(ay1, by1) - max(ay0, by0)
                 assert not (overlap_x > 2 and overlap_y > 0.35 * min(ay1 - ay0, by1 - by0)), f"slide {number}: '{text_a[:40]}' overlaps '{text_b[:40]}'"
+
+
+def test_notes_the_owner_did_not_share_never_reach_the_snapshot_or_a_slide() -> None:
+    """Audit 2026-10-27 (BUG-02): a notes-only finding is internal by default."""
+    items = reviewed()
+    snapshot = snapshot_for(items, approved_discovery2=discovery2_row(items, share_notes=False))
+    assert all(item["text"] != OBSERVATION for item in snapshot["findings"]["opportunities"])
+    assert snapshot["internal_findings"] == [{"category": "opportunities", "text": OBSERVATION}]
+    manifest = v2.generation_manifest(snapshot)
+    assert (manifest["confirmed_finding_count"], manifest["internal_finding_count"]) == (6, 1)
+    slides = appendix_of(snapshot)
+    flat = " ".join(texts(slides))
+    assert OBSERVATION not in flat and "noted for ourselves" not in flat
+    assert v2.generation_fingerprint(snapshot) != v2.generation_fingerprint(snapshot_for(items)), "sharing a note is a different V2 input"
+
+
+def test_the_observations_page_is_named_for_the_client() -> None:
+    items = reviewed(opportunities=[finding(f"Observation number {index} about the way the office handles requests.", "personal_notes") for index in range(1, 7)])
+    titles = [slide["content"].get("title") for slide in appendix_of(snapshot_for(items))]
+    assert "Our observations after the meeting" in titles and "What we noted for ourselves" not in titles
+    assert appendix_v2.V2_TEXT["de"]["noted_title"] == "Unsere Beobachtungen nach dem Gespräch"

@@ -237,14 +237,14 @@ def test_approved_v1_is_used_while_a_draft_exists_and_sources_stay_separate(monk
         assert "Northwind" in str(version["slides_json"])
         assert version["slides_json"][0]["sourceChapterIds"] == ["discovery.cover"]
         rendered = json.dumps(version["slides_json"])
-        assert NOTE_A in rendered
+        # Audit 2026-10-27 (BUG-02): the owner's notes are internal; no slide shows them. They
+        # stay in the frozen job input (checked below) for provenance and retries.
+        assert NOTE_A not in rendered
         assert REQUIREMENT in rendered
-        notes_slide = next(spec for spec in version["slides_json"] if spec["sourceChapterIds"] == ["notes"])
+        assert not [spec for spec in version["slides_json"] if spec["sourceChapterIds"] == ["notes"]]
         extraction_slide = next(
             spec for spec in version["slides_json"] if "meeting.requirements" in spec["sourceChapterIds"]
         )
-        assert NOTE_A in json.dumps(notes_slide)
-        assert REQUIREMENT not in json.dumps(notes_slide)
         assert REQUIREMENT in json.dumps(extraction_slide)
         assert NOTE_A not in json.dumps(extraction_slide)
         use_case_slide = next(
@@ -363,7 +363,8 @@ def test_optional_sources_and_stale_extraction_do_not_block() -> None:
             item["code"] == "MEETING_EXTRACTION_NOTES_STALE" for item in stale_input["warnings"]
         )
         assert stale_input["notes_revision_matches_extraction"] is False
-        assert NOTE_B in json.dumps(regenerated["slides_json"])
+        assert stale_input["personal_notes"]["text"] == NOTE_B, "the regeneration froze the current notes"
+        assert NOTE_B not in json.dumps(regenerated["slides_json"]), "internal notes are never on a slide"
 
 
 def test_worker_and_retry_use_the_frozen_input(monkeypatch) -> None:
@@ -398,7 +399,11 @@ def test_worker_and_retry_use_the_frozen_input(monkeypatch) -> None:
         store = get_memory_store()
         presentation_id = UUID(queued.json()["presentation_id"])
         version = latest_version(store, presentation_id)
-        assert NOTE_A in json.dumps(version["slides_json"])
+        # The worker used the input frozen at the request (notes A), not the later notes B. The
+        # notes are internal: frozen with the job, never on a slide (audit 2026-10-27, BUG-02).
+        first_job = min(store.generation_jobs.values(), key=lambda row: str(row["created_at"]))
+        assert row_enqueue(first_job)["ppt2_generation_input"]["personal_notes"]["text"] == NOTE_A
+        assert NOTE_A not in json.dumps(version["slides_json"])
         assert NOTE_B not in json.dumps(version["slides_json"])
         assert version["generation_source_manifest"]["approved_discovery_version_id"] == approved["id"]
 
@@ -431,7 +436,8 @@ def test_worker_and_retry_use_the_frozen_input(monkeypatch) -> None:
         retried = client.post(f"/jobs/{job['id']}/retry", headers=headers())
         assert retried.status_code == 202, retried.text
         retried_version = latest_version(store, presentation_id)
-        assert NOTE_B in json.dumps(retried_version["slides_json"])
+        assert row_enqueue(job)["ppt2_generation_input"]["personal_notes"]["text"] == NOTE_B, "the retry keeps the frozen input"
+        assert NOTE_B not in json.dumps(retried_version["slides_json"])
         assert "Revision C" not in json.dumps(retried_version["slides_json"])
         assert retried_version["generation_source_manifest"]["approved_discovery_version_id"] == approved["id"]
 
@@ -453,7 +459,7 @@ def test_explicit_regenerate_reuses_the_ppt2_id_and_refreshes_context() -> None:
         presentation_id = first.json()["presentation_id"]
         store = get_memory_store()
         first_version = latest_version(store, UUID(presentation_id))
-        assert NOTE_A in json.dumps(first_version["slides_json"])
+        assert NOTE_A not in json.dumps(first_version["slides_json"]), "internal notes are never on a slide"
         put_notes(client, opportunity_id, NOTE_B)
         edit_cover(client, opportunity_id, "Second Approved Client")
         second_paper = client.post(
@@ -470,7 +476,9 @@ def test_explicit_regenerate_reuses_the_ppt2_id_and_refreshes_context() -> None:
         second = latest_version(store, UUID(presentation_id))
         assert second["version_number"] == 2
         assert second["journey_stage"] == "post_meeting"
-        assert NOTE_B in json.dumps(second["slides_json"])
+        latest_job = max(store.generation_jobs.values(), key=lambda row: str(row["created_at"]))
+        assert row_enqueue(latest_job)["ppt2_generation_input"]["personal_notes"]["text"] == NOTE_B, "regeneration refreshed the context"
+        assert NOTE_B not in json.dumps(second["slides_json"])
         assert "Second Approved Client" in str(second["slides_json"])
         assert (
             second["generation_source_manifest"]["approved_discovery_version_id"]

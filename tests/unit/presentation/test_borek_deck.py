@@ -166,12 +166,11 @@ def test_fixture_post_meeting_deck_keeps_sources_apart_and_has_no_slide_cap() ->
         for slide in plan["slides"]
         if slide["frameworkReferences"]
     }
-    assert families == {"discovery", "notes", "meeting", "use_case"}
+    # Audit 2026-10-27 (BUG-02): the owner's personal notes are internal, never a slide.
+    assert families == {"discovery", "meeting", "use_case"}
     for slide in plan["slides"]:
         assert len({ref.split(".", 1)[0] for ref in slide["frameworkReferences"]}) <= 1
-    notes_slides = json.dumps([s for s in plan["slides"] if s["frameworkReferences"] == ["notes"]])
-    assert NOTE in notes_slides
-    assert REQUIREMENT not in notes_slides
+    assert NOTE not in json.dumps(plan)
 
 
 def test_post_meeting_omits_a_source_that_was_not_provided() -> None:
@@ -235,14 +234,19 @@ def test_post_meeting_may_carry_prices_but_not_mix_sources_on_a_slide() -> None:
     priced = {
         "slides": [
             _cover(),
-            _list_slide(["notes"], text="The price is EUR 500."),
+            _list_slide(["meeting.requirements"], text="The price is EUR 500."),
             _closing(),
         ]
     }
     plan = plan_post_meeting_deck(_ppt2_context(), planner=_Planner(priced))
     assert "EUR 500" in json.dumps(_by_layout(plan, "matrix_notes")["borekSlide"])
 
-    mixed = {"slides": [_cover(), _list_slide(["notes", "meeting.requirements"]), _closing()]}
+    # The owner's notes are not a source of the customer deck (BUG-02): citing them is refused.
+    notes = {"slides": [_cover(), _list_slide(["notes"]), _closing()]}
+    with pytest.raises(PresentationPlanValidationError):
+        plan_post_meeting_deck(_ppt2_context(), planner=_Planner(notes, notes, notes))
+
+    mixed = {"slides": [_cover(), _list_slide(["discovery.opportunity", "meeting.requirements"]), _closing()]}
     planner = _Planner(mixed, mixed, mixed)
     with pytest.raises(PresentationPlanValidationError, match="mixes sources"):
         plan_post_meeting_deck(_ppt2_context(), planner=planner)

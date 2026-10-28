@@ -363,7 +363,10 @@ def test_populated_context_is_reflected_and_stays_marked_as_user_input() -> None
     assert "Nordwind Maschinenbau" in analysis["framing"]["chapters"]["overview"]["headline"]
     assert "Reduce quote turnaround and invoice handling effort" in analysis["research"]["core_thesis"]["text"]
     assert analysis["research"]["company_profile"]["origin"] == "USER_INPUT"
-    assert "420 employees" in analysis["framing"]["chapters"]["overview"]["paragraphs"][0]
+    # The user's note steers the analysis and is kept as the recorded profile, but it is internal:
+    # never printed (audit 2026-10-27, BUG-02).
+    assert "420 employees" in analysis["research"]["company_profile"]["text"]
+    assert "420 employees" not in analysis["framing"]["chapters"]["overview"]["paragraphs"][0]
     assert {fact["origin"] for fact in analysis["research"]["known_facts"]} == {"USER_INPUT"}
     assert [area["id"] for area in analysis["areas"] if area["priority"]] == ["sales_quoting", "finance_controlling"]
     assert [area["id"] for area in analysis["areas"]][:2] == ["sales_quoting", "finance_controlling"]

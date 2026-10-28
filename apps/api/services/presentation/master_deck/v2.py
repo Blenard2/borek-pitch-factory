@@ -28,6 +28,7 @@ from typing import Any
 
 from services.language import in_other_language, stored_language
 from services.meeting.discovery2 import content_hash as discovery2_content_hash
+from services.meeting.discovery2 import is_internal_only
 from services.meeting.discovery2 import meeting_items as discovery2_meeting_items
 from services.presentation.borek_deck.deck_plan import PLAN_ENGINE
 from services.presentation.master_deck.appendix import AppendixPlanError, DISCOVERY_SCHEMA_VERSION, appendix_source_hash
@@ -152,15 +153,20 @@ def build_snapshot(
     if str((discovery2.get("sources") or {}).get("discovery1", {}).get("version_id")) != str(approved_discovery["id"]):
         raise SnapshotError("The approved Discovery 2 was generated from another Discovery version")
     findings: dict[str, list[dict[str, str]]] = {}
+    internal: list[dict[str, str]] = []
     for category, items in discovery2_meeting_items(discovery2).items():
         findings[category] = []
         for item in items:
+            if is_internal_only(item):
+                # The owner's own note, not shared with the client: kept for traceability, never on a slide.
+                internal.append({"category": category, "text": str(item["text"])})
+                continue
             source = "owner" if item["origin"] == "owner" or item.get("edited") else str(item["source"])
             if source not in FINDING_SOURCES:
                 # A finding whose origin cannot be shown is never presented as a fact.
                 raise SnapshotError("A Discovery 2 meeting item has no verified source; generate Discovery 2 again")
             findings[category].append({"text": str(item["text"]), "source": source})
-    shown = {item["text"] for items in findings.values() for item in items}
+    shown = {item["text"] for items in findings.values() for item in items} | {item["text"] for item in internal}
     excluded: list[str] = []
     for category in CATEGORIES:
         for item in reviewed_items.get(category, []):
@@ -204,6 +210,8 @@ def build_snapshot(
         "personal_notes": {"updated_at": personal_notes.get("updated_at"), "text": personal_notes.get("text")},
         "findings": findings,
         "excluded_findings": excluded,
+        # Notes-only items of the approved Discovery 2 the owner did not share with the client.
+        "internal_findings": internal,
         "use_cases": [
             {
                 key: item.get(key)
@@ -280,6 +288,8 @@ def generation_manifest(snapshot: dict[str, Any]) -> dict[str, Any]:
         "snapshot_hash": snapshot_hash(snapshot),
         "confirmed_finding_count": len(confirmed_findings(snapshot)),
         "excluded_finding_count": len(snapshot["excluded_findings"]),
+        # Absent in snapshots frozen before notes became internal by default.
+        "internal_finding_count": len(snapshot.get("internal_findings") or []),
         # BAP-13: the appendix language; the canonical master slides stay in the master's language.
         "language": stored_language(snapshot.get("language")),
         "master_language": get_master(snapshot["master"]["master_id"]).language,

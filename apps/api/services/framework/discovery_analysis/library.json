@@ -766,7 +766,6 @@
       "map_lead": "{count} opportunities along the value chain — each deepened in part 2 with solution, mechanics, result and discovery questions.",
       "business_case_lead": "Industry-typical impact ranges from comparable organisations, ordered by payback horizon.",
       "business_case_footnote": "Industry benchmarks as working hypotheses — to be validated against real metrics in the baseline workshop, not commitments. AI drafts, checks and orchestrates; people retain every approval, release and sign-off. Deployed via interfaces to the existing system landscape, no migration.",
-      "profile_provided": "Background to this conversation: {text}",
       "profile_researched": "From the {client} website (sources in the company background table): {text}",
       "profile_researched_unnamed": "From the company website (sources in the company background table): {text}",
       "background_nav": "Company background",

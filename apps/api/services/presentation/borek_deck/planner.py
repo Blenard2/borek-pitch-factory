@@ -37,7 +37,7 @@ from services.presentation.planner import (
     PresentationPlanningCallError,
     PresentationPlanValidationError,
 )
-from services.presentation.post_meeting import ppt2_title
+from services.presentation.post_meeting import customer_ppt2_input, ppt2_title
 from services.presentation.ppt1_constraints import commercial_strings
 
 PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
@@ -102,6 +102,8 @@ def plan_post_meeting_deck(
     When given, PPT #2 starts with exactly those slides and the model only plans the extension
     (notes, transcript summary, meeting extraction, use cases) plus the closing slide.
     """
+    # A customer deck: the owner's personal notes stay in the frozen job input only (BUG-02).
+    ppt2_input = customer_ppt2_input(ppt2_input)
     rules = POST_MEETING_PROMPT_PATH.read_text(encoding="utf-8")
     if ppt1_slides:
         rules += _PPT1_CARRY_OVER_RULES

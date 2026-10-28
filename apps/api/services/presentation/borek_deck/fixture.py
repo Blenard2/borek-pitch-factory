@@ -177,6 +177,10 @@ def _pre_meeting_content_slides(pages: dict[str, dict[str, Any]]) -> list[dict[s
 
 
 def deterministic_post_meeting_deck(ppt2_input: dict[str, Any]) -> dict[str, Any]:
+    from services.presentation.post_meeting import customer_ppt2_input
+
+    # A customer deck: never the owner's personal notes (audit 2026-10-27, BUG-02).
+    ppt2_input = customer_ppt2_input(ppt2_input)
     pages = _pages_by_key(ppt2_input["approved_discovery"]["pages"])
     name = client_name(ppt2_input["approved_discovery"]["pages"]) or "Borek Solutions Group"
     purpose = _field(pages.get("cover", {}).get("content"), "meeting_purpose")

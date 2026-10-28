@@ -171,6 +171,21 @@ def discovery1_content_hash(paper: dict[str, Any]) -> str:
     return sha256_text(canonical_json({"analysis": paper.get("analysis"), "presentation_brief": paper.get("presentation_brief")}))
 
 
+def is_internal_only(item: dict[str, Any]) -> bool:
+    """An item that rests only on the owner's personal notes and was not shared with the client.
+
+    Personal notes are the owner's own view ("the COO decides", "price-sensitive"). Such an item
+    stays in Discovery 2 for the owner's review, but no customer document shows it until the
+    owner deliberately marks it ``share_with_client``, which is part of the approved content.
+    """
+    return item.get("source") == "personal_notes" and item.get("share_with_client") is not True
+
+
+def customer_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The items a customer document may show."""
+    return [item for item in items if not is_internal_only(item)]
+
+
 def meeting_items(document: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     """The meeting and owner items of the seven finding categories: what V2 presents from the meeting."""
     by_key = {section["key"]: section for section in document.get("sections") or []}
@@ -566,6 +581,7 @@ def apply_section_edits(document: dict[str, Any], sections: list[dict[str, Any]]
             if len(text) > MAX_ITEM_CHARACTERS:
                 raise Discovery2Error(f"An item in {SECTION_TITLES[key]} is longer than {MAX_ITEM_CHARACTERS} characters.")
             item_id = entry.get("id")
+            share = entry.get("share_with_client")
             if item_id:
                 if item_id not in current:
                     raise Discovery2Error(f"Item {item_id} does not belong to {SECTION_TITLES[key]}.")
@@ -575,6 +591,11 @@ def apply_section_edits(document: dict[str, Any], sections: list[dict[str, Any]]
                     item["edited"] = True
                     if item["status"] == "carried_forward":
                         item["status"] = "updated"
+                if share is not None:
+                    if item["source"] != "personal_notes":
+                        raise Discovery2Error("Only an item from your personal notes can be shared with the client or kept internal.")
+                    # Sharing is a decision about the item, not a change of its wording.
+                    item["share_with_client"] = bool(share)
                 result.append(item)
             else:
                 new_id = f"o-{key}-{index + 1}"
@@ -591,6 +612,11 @@ def apply_section_edits(document: dict[str, Any], sections: list[dict[str, Any]]
 
 def has_meeting_content(document: dict[str, Any]) -> bool:
     return any(meeting_items(document).values())
+
+
+def has_customer_meeting_content(document: dict[str, Any]) -> bool:
+    """At least one meeting or owner item that customer documents may show."""
+    return any(customer_items(items) for items in meeting_items(document).values())
 
 
 def _iso(value: Any) -> str | None:

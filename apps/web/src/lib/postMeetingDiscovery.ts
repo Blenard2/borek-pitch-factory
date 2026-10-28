@@ -16,6 +16,8 @@ export type Discovery2Source = "discovery1" | "transcript" | "personal_notes" | 
 export interface Discovery2Item {
   id: string; text: string; origin: Discovery2Origin; status: "carried_forward" | "new" | "updated";
   source: Discovery2Source; evidence: string | null; discovery1_ref: string | null; edited: boolean;
+  /** Only for items from the owner's personal notes: shared with the client. Without it the item is internal. */
+  share_with_client?: boolean;
 }
 export interface Discovery2Section { key: Discovery2SectionKey; title: string; items: Discovery2Item[] }
 export interface Discovery2Document {
@@ -95,8 +97,18 @@ export async function generatePostMeetingDiscovery(token: string, opportunityId:
   }));
 }
 
+/**
+ * Audit 2026-10-27 (BUG-02): a point that rests only on the owner's personal notes is internal.
+ * It stays here for review, but no customer document (Word export, Master Presentation V2) shows
+ * it until the owner shares it with the client.
+ */
+export const isInternalOnly = (item: Pick<Discovery2Item, "source" | "share_with_client">) =>
+  item.source === "personal_notes" && item.share_with_client !== true;
+
+/** One item as edited. ``share_with_client`` is set only for items from the personal notes. */
+export type Discovery2EditItem = { id?: string; text: string; share_with_client?: boolean };
 /** The edited sections, each as its items in order; an item without ``id`` is new. */
-export type Discovery2Edits = { key: Discovery2SectionKey; items: { id?: string; text: string }[] }[];
+export type Discovery2Edits = { key: Discovery2SectionKey; items: Discovery2EditItem[] }[];
 
 export async function savePostMeetingDiscovery(token: string, opportunityId: string, current: Discovery2Version, sections: Discovery2Edits) {
   return parsePostMeetingDiscovery(await apiFetch(path(opportunityId), token, {
@@ -118,16 +130,23 @@ export async function downloadDiscovery2Docx(token: string, opportunityId: strin
   return blob;
 }
 
-/** The sections as editable text, in order. */
-export function editableSections(document: Discovery2Document): Record<Discovery2SectionKey, { id?: string; text: string }[]> {
-  return Object.fromEntries(document.sections.map((section) => [section.key, section.items.map((item) => ({ id: item.id, text: item.text }))])) as Record<Discovery2SectionKey, { id?: string; text: string }[]>;
+/** The sections as editable text, in order; items from the personal notes with their share choice. */
+export function editableSections(document: Discovery2Document): Record<Discovery2SectionKey, Discovery2EditItem[]> {
+  return Object.fromEntries(document.sections.map((section) => [section.key, section.items.map((item) => (
+    item.source === "personal_notes" ? { id: item.id, text: item.text, share_with_client: item.share_with_client === true } : { id: item.id, text: item.text }
+  ))])) as Record<Discovery2SectionKey, Discovery2EditItem[]>;
 }
 
 /** Only the sections whose items changed are sent. */
-export function changedSections(document: Discovery2Document, edits: Record<Discovery2SectionKey, { id?: string; text: string }[]>): Discovery2Edits {
+export function changedSections(document: Discovery2Document, edits: Record<Discovery2SectionKey, Discovery2EditItem[]>): Discovery2Edits {
   const original = editableSections(document);
   return DISCOVERY2_SECTION_KEYS.filter((key) => JSON.stringify(original[key] ?? []) !== JSON.stringify(edits[key] ?? []))
-    .map((key) => ({ key, items: (edits[key] ?? []).map((item) => (item.id ? { id: item.id, text: item.text } : { text: item.text })) }));
+    .map((key) => ({
+      key,
+      items: (edits[key] ?? []).map((item) => (item.id
+        ? { id: item.id, text: item.text, ...(item.share_with_client === undefined ? {} : { share_with_client: item.share_with_client }) }
+        : { text: item.text })),
+    }));
 }
 
 /**

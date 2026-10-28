@@ -183,8 +183,10 @@ def test_a_german_journey_from_discovery_to_the_follow_up_email(client: TestClie
     docx = client.get(f"/opportunities/{opportunity_id}/post-meeting-discovery/versions/{version_id}/download/docx", headers=headers())
     assert docx.status_code == 200
     xml = zipfile.ZipFile(io.BytesIO(docx.content)).read("word/document.xml").decode("utf-8")
-    for label in ("Zusammenfassung", "Neu aus dem Gespräch", "Übernommen aus Discovery 1", "Quellen", "Prioritäten"):
+    for label in ("Zusammenfassung", "Aus unserem Gespräch", "Prioritäten", "Bitte korrigieren Sie uns"):
         assert label in xml, label
+    for internal in ("Übernommen aus Discovery 1", "Neu aus dem Gespräch", "Quellen", "Testgenerator"):
+        assert internal not in xml, f"customer file shows internal label {internal}"
     assert all(letter in xml for letter in "äöüß")
 
     # Discovery 2 in another language than the approved Discovery 1 is refused, not mixed.

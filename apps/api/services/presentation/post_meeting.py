@@ -82,6 +82,8 @@ def planning_input_from_ppt2_context(context: dict[str, Any]) -> dict[str, Any]:
             "version_id": str(discovery["version_id"]),
             "pages": _discovery_pages(discovery.get("paper_json") or {}),
         },
+        # Frozen with the job for provenance and retries. The deck itself never sees them:
+        # every planner reads ``customer_ppt2_input`` (audit 2026-10-27, BUG-02).
         "personal_notes": (
             None
             if notes.get("status") != "available"
@@ -144,6 +146,7 @@ def plan_post_meeting_from_context(
         from llm.client import LlmClient
 
         planner = LlmClient()
+    ppt2_context = customer_ppt2_input(ppt2_context)
     return run_planning_attempts(
         _planner_payload(ppt2_context),
         client=planner,
@@ -154,6 +157,7 @@ def plan_post_meeting_from_context(
 
 def deterministic_post_meeting_plan(ppt2_context: dict[str, Any]) -> dict[str, Any]:
     """Fixture plan: discovery pages, then each present post-meeting source."""
+    ppt2_context = customer_ppt2_input(ppt2_context)
     slides: list[dict[str, Any]] = []
     pages = sorted(
         ppt2_context["approved_discovery"]["pages"],
@@ -289,6 +293,37 @@ def _meeting_input(extraction: dict[str, Any]) -> dict[str, Any] | None:
         "personal_notes_updated_at": extraction.get("personal_notes_updated_at"),
         "extraction": body,
     }
+
+
+def customer_ppt2_input(ppt2_input: dict[str, Any]) -> dict[str, Any]:
+    """What a PPT #2 deck may show: the frozen input without the owner's personal notes.
+
+    The legacy PPT #2 is a customer document (audit 2026-10-27, BUG-02). The owner's notes and the
+    meeting findings that rest only on them stay in the frozen job input for provenance, but no
+    planner, fixture deck or slide builder receives them - so no notes slide and no notes-only
+    finding can reach a slide. Idempotent.
+    """
+    view = copy.deepcopy(ppt2_input)
+    view["personal_notes"] = None
+    meeting = view.get("meeting_extraction")
+    if isinstance(meeting, dict) and isinstance(meeting.get("extraction"), dict):
+        meeting["extraction"] = _without_notes_only_items(meeting["extraction"])
+    return view
+
+
+def _without_notes_only_items(body: dict[str, Any]) -> dict[str, Any]:
+    """The extraction without the findings that rest only on the owner's personal notes."""
+    sources = body.get("item_sources")
+    if not isinstance(sources, dict):
+        return body
+    for key in MEETING_SECTION_KEYS:
+        items, origins = body.get(key), sources.get(key)
+        if not isinstance(items, list) or not isinstance(origins, list) or len(items) != len(origins):
+            continue
+        kept = [(item, origin) for item, origin in zip(items, origins, strict=True) if origin != "personal_notes"]
+        body[key] = [item for item, _origin in kept]
+        sources[key] = [origin for _item, origin in kept]
+    return body
 
 
 def _section_items(ppt2_context: dict[str, Any], key: str) -> list[str]:
