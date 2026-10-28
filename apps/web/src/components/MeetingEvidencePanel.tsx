@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { getAuthOwnerId } from "@/lib/authSession";
 import { PostMeetingPhaseNav, usePostMeeting } from "@/components/PostMeetingShell";
 import { generateMeetingExtraction, listAvailableUseCases, saveSelectedUseCases, uploadTranscript, type AvailableUseCase } from "@/lib/api";
 import { approvedDiscovery2Language, loadPostMeetingDiscovery, needsDiscovery2 } from "@/lib/postMeetingDiscovery";
@@ -14,8 +15,8 @@ import { awaitRunningMasterV2, generateAndAwaitMasterV2, loadMasterV2Status, mas
 import { generateAndAwaitPostMeetingPresentation } from "@/lib/ppt2Generation";
 import {
   blockerText, confirmMeetingReview, excludedFromConfirmation, EXTRACTION_FIELDS, FINDING_SOURCE_LABEL, findingsState, isStaleReviewError,
-  loadPostMeetingReview, MeetingNotesConflict, postMeetingError, prepareMeetingEvidence, reviewHeadline,
-  savePersonalNotesChecked, staleReasonText, validateTranscript, workflowCompleted,
+  loadPostMeetingReview, MeetingNotesConflict, mergedSpeakerText, postMeetingError, prepareMeetingEvidence, readTranscriptChoice,
+  restoreTranscriptSelection, reviewHeadline, savePersonalNotesChecked, saveTranscriptChoice, staleReasonText, validateTranscript, workflowCompleted,
   type ExtractionCategory, type PersonalNotes, type PostMeetingReview,
 } from "@/lib/postMeeting";
 import styles from "./post-meeting.module.css";
@@ -66,14 +67,20 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
     setReview(value);
     // Earlier exclusions stay unticked when a confirmation goes out of date; they count once confirmed again.
     setExcluded(excludedFromConfirmation(value));
+    // The owner's choice wins; after a refresh it is read back, and a newer upload is never
+    // replaced by the older transcript the findings were made from.
     setTranscriptId((current) => {
       if (!initial && value.transcripts.some((item) => item.id === current)) return current;
-      const analysed = value.transcripts.find((item) => item.analysed);
-      const latest = [...value.transcripts].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))[0];
-      return (analysed ?? latest)?.id ?? "";
+      return restoreTranscriptSelection(value.transcripts, readTranscriptChoice(getAuthOwnerId(), opportunityId));
     });
     if (initial) setNotes(value.personal_notes.text ?? "");
-  }, []);
+  }, [opportunityId]);
+
+  /** A transcript the owner picked or uploaded becomes the selection, also after a refresh. */
+  const selectTranscript = useCallback((id: string) => {
+    setTranscriptId(id);
+    saveTranscriptChoice(getAuthOwnerId(), opportunityId, id);
+  }, [opportunityId]);
 
   useEffect(() => {
     if (!live || !accessToken || loaded.current) return;
@@ -152,8 +159,8 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
       const response = await uploadTranscript(token, opportunityId, file);
       signal.throwIfAborted();
       await refresh(token, signal);
-      setTranscriptId(response.transcript.id);
-      setSaved(`${file.name} uploaded.`);
+      selectTranscript(response.transcript.id);
+      setSaved(`${file.name} uploaded and selected.`);
     });
   }
 
@@ -169,8 +176,10 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
 
   async function analyse() {
     if (!review || !transcriptId || notesDirty) return;
+    // Exactly the transcript selected on screen is analysed, never another one.
+    const selected = transcriptId;
     await run("Analysing meeting", async (token, signal) => {
-      await generateMeetingExtraction(token, opportunityId, transcriptId);
+      await generateMeetingExtraction(token, opportunityId, selected);
       signal.throwIfAborted();
       const analysedReview = await refresh(token, signal);
       setSaved(analysedReview.extraction.item_count === 0 ? "Meeting analysed. No findings were found." : "Meeting analysed. Review the findings below.");
@@ -281,13 +290,15 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
   const findingsMessage = {
     "no-transcript": "Upload a transcript to analyse the meeting.",
     "not-analysed": "The meeting has not been analysed yet.",
-    "other-transcript": `These findings come from ${review?.extraction.transcript_file_name ?? "a transcript that was removed"}, not from the transcript selected above. Analyse the selected transcript to replace them.`,
+    "other-transcript": `These findings come from ${review?.extraction.transcript_file_name ?? "a transcript that was removed"}, not from the selected transcript${transcript ? ` ${transcript.file_name}` : ""}, so they may be out of date. Analyse the selected transcript to replace them.`,
     "notes-unsaved": "You have unsaved notes. Save them, then analyse again so the findings include them.",
     stale: "These findings are out of date.",
     current: review && review.extraction.item_count === 0
       ? "The analysis ran on the selected transcript and the saved notes, and found no findings."
       : "Findings match the selected transcript and the saved notes.",
   }[state];
+  // The analysed transcript lost speaker changes when it was read: its findings may not match it.
+  const speakerWarning = state === "current" || state === "stale" ? mergedSpeakerText(transcript) : null;
   const adoptNotes = (value: PersonalNotes, keepTyped: boolean) => {
     setReview((current) => current ? { ...current, personal_notes: { status: value.text ? "available" : "missing", text: value.text, updated_at: value.updated_at } } : current);
     if (!keepTyped) setNotes(value.text ?? "");
@@ -387,11 +398,16 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
             {live && review?.transcripts.length ? <ul className={styles.transcriptList} data-testid="transcript-list">{review.transcripts.map((item) => <li key={item.id} className={item.id === transcriptId ? styles.transcriptSelected : undefined}>
               <label className={styles.check}>
                 {review.transcripts.length > 1
-                  ? <input type="radio" name="transcript" checked={item.id === transcriptId} disabled={editingDisabled} onChange={() => setTranscriptId(item.id)} />
+                  ? <input type="radio" name="transcript" checked={item.id === transcriptId} disabled={editingDisabled} onChange={() => selectTranscript(item.id)} />
                   : <span className={styles.transcriptIcon} aria-hidden="true">✓</span>}
                 <span><strong>{item.file_name}</strong><small>Uploaded {when(item.created_at)} · {item.turn_count} speaker turns</small></span>
-                <em className={styles.transcriptBadge}>{item.analysed ? "Analysed" : item.id === transcriptId ? "Selected" : "Uploaded"}</em>
+                <span className={styles.transcriptBadges}>
+                  {item.id === transcriptId ? <em className={styles.transcriptBadge} data-testid="transcript-selected">Selected</em> : null}
+                  {item.analysed ? <em className={`${styles.transcriptBadge} ${styles.transcriptBadgeMuted}`} data-testid="transcript-analysed">Current findings</em> : null}
+                  {item.id !== transcriptId && !item.analysed ? <em className={`${styles.transcriptBadge} ${styles.transcriptBadgeMuted}`}>Uploaded</em> : null}
+                </span>
               </label>
+              {mergedSpeakerText(item) ? <p className={styles.transcriptWarning} role="note" data-testid="merged-speakers">{mergedSpeakerText(item)}</p> : null}
             </li>)}</ul> : null}
           </div>
 
@@ -422,9 +438,11 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
               {confirmedCurrent ? "Confirmed by you" : state === "current" ? "Analysis · not confirmed" : "Out of date"}</span> : null}
           </div>
           <p className={styles.meetingIntro}>The analysis sorts what it finds in the selected transcript and your saved notes into seven categories. Findings are an interpretation of the sources until you confirm them.</p>
-          <p className={state === "current" && found > 0 ? styles.notice : styles.error} role="status" data-testid="findings-status">{findingsMessage}{state === "stale" ? ` ${review.extraction.stale_reasons.map(staleReasonText).join(" ")}` : ""}</p>
+          <p className={state === "current" && found > 0 && !speakerWarning ? styles.notice : styles.error} role="status" data-testid="findings-status">{speakerWarning
+            ? `Analysed, but the findings may not match the selected transcript. ${speakerWarning}`
+            : findingsMessage}{state === "stale" ? ` ${review.extraction.stale_reasons.map(staleReasonText).join(" ")}` : ""}</p>
           <div className={styles.actions}>
-            <button className="btn btn-secondary" disabled={editingDisabled || !transcript || notesDirty} onClick={() => void analyse()}>{review.extraction.status === "missing" ? "Analyse meeting" : "Analyse again"}</button>
+            <button className="btn btn-secondary" disabled={editingDisabled || !transcript || notesDirty} onClick={() => void analyse()}>{review.extraction.status === "missing" ? "Analyse meeting" : state === "other-transcript" ? "Analyse selected transcript" : "Analyse again"}</button>
             {review.extraction.generated_at ? <small>Last analysed {when(review.extraction.generated_at)}{review.extraction.execution_mode === "fixture" ? " · rule-based test extractor" : review.extraction.execution_mode === "live" ? " · AI model" : ""}</small> : null}
             {analysed ? <strong className={styles.findingTotals} data-testid="findings-totals">{found - excludedNow} included · {excludedNow} excluded</strong> : null}
           </div>
@@ -508,7 +526,7 @@ export function MeetingEvidencePanel({ opportunityId }: { opportunityId: string 
               : v2Generating ? <button className="btn btn-primary" data-testid="generate-v2" disabled>Generating Master Presentation V2...</button>
               : !transcript ? <button className="btn btn-primary" disabled={editingDisabled} onClick={() => { setInputTab("transcript"); fileInput.current?.click(); }}>Upload transcript</button>
               : notesDirty ? <button className="btn btn-primary" disabled={editingDisabled || Boolean(conflictingNotes)} onClick={() => void saveNotes()}>Save notes</button>
-              : state !== "current" ? <button className="btn btn-primary" disabled={editingDisabled} onClick={() => void analyse()}>{review.extraction.status === "missing" ? "Analyse meeting" : "Analyse again"}</button>
+              : state !== "current" ? <button className="btn btn-primary" disabled={editingDisabled} onClick={() => void analyse()}>{review.extraction.status === "missing" ? "Analyse meeting" : state === "other-transcript" ? "Analyse selected transcript" : "Analyse again"}</button>
               : found === 0 ? <button className="btn btn-primary" data-testid="no-findings-action" disabled={editingDisabled} onClick={() => { setInputTab("transcript"); fileInput.current?.click(); }}>Upload another transcript</button>
               : !confirmedCurrent && found === excludedNow ? <button className="btn btn-primary" data-testid="confirm-blocked" disabled>Confirm meeting information</button>
               : !confirmedCurrent ? <button className="btn btn-primary" disabled={editingDisabled} onClick={() => void confirm()}>{busy === "Confirming findings" ? "Confirming..." : "Confirm meeting information"}</button>

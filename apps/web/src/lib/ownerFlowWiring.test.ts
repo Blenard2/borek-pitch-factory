@@ -25,7 +25,8 @@ test("meeting input reaches transcript, notes, analysis, review and confirmation
   assert.match(source("./postMeeting.ts"), /savePersonalNotes/);
   assert.match(source("./postMeeting.ts"), /generateMeetingExtraction/);
   assert.match(meeting, /savePersonalNotesChecked/);
-  assert.match(meeting, /generateMeetingExtraction\(token, opportunityId, transcriptId\)/);
+  // The transcript selected on screen when "Analyse" is pressed is the one analysed.
+  assert.match(meeting, /const selected = transcriptId;[\s\S]*?generateMeetingExtraction\(token, opportunityId, selected\)/);
   assert.match(meeting, /confirmMeetingReview\(token, opportunityId, review, excluded, signal\)/);
   assert.match(meeting, /saveSelectedUseCases/);
   assert.match(meeting, /Previous document flow/);

@@ -25,6 +25,11 @@ class Transcript(BaseModel):
     created_at: AwareDatetime | None
     revision: str | None = Field(..., pattern='^[0-9a-f]{64}$')
     turn_count: int = Field(..., ge=0)
+    merged_speaker_changes: int = Field(
+        ...,
+        description='Speaker changes found inside single stored speaker turns. Above 0, statements of different speakers were read as one turn (for example a transcript uploaded before speaker names with umlauts were recognised), so findings may be merged or attributed to the wrong speaker; uploading the file again reads it with the current rules.',
+        ge=0,
+    )
     analysed: bool = Field(
         ..., description='True for the transcript the stored extraction was made from.'
     )

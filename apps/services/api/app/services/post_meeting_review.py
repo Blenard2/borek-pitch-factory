@@ -34,6 +34,7 @@ from app.services.ppt2_context import build_ppt2_context
 from app.services.workflow_status import build_workflow_status
 from services.meeting.discovery2 import basis_hash as discovery2_basis_hash
 from services.meeting.extraction import MeetingExtractionError, classify_item_sources
+from services.transcript.speaker_turns import merged_speaker_changes
 
 CONTRACTS = Path(__file__).resolve().parents[5] / "packages" / "contracts"
 SCHEMA_VERSION = "1.0"
@@ -63,6 +64,9 @@ def build_post_meeting_review(store: Any, *, opportunity_id: UUID, user_id: UUID
             "created_at": _iso(row.get("created_at")),
             "revision": _revision(sources.get(str(row["id"]))),
             "turn_count": len((sources.get(str(row["id"])) or {}).get("sections") or []),
+            # Speaker changes left inside one stored turn (a transcript read before names such as
+            # "Dr. Jürgen Weiß" were recognised): its findings may be merged or attributed wrongly.
+            "merged_speaker_changes": merged_speaker_changes(list((sources.get(str(row["id"])) or {}).get("sections") or [])),
             "analysed": extraction["transcript_id"] == str(row["id"]),
         }
         for row in store.list_transcripts(opportunity_id=opportunity_id, user_id=user_id)

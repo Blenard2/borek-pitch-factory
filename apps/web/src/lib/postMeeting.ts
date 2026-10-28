@@ -141,7 +141,11 @@ export interface ReviewFinding { text: string; source: FindingSource }
 export interface ReviewedFinding extends ReviewFinding { status: "confirmed" | "excluded" }
 export interface ReviewTranscript {
   id: string; file_name: string; processing_status: string; created_at: string | null;
-  turn_count: number; analysed: boolean;
+  turn_count: number;
+  /** Speaker changes left inside single stored turns; above 0 the findings may be merged or misattributed. */
+  merged_speaker_changes?: number;
+  /** True for the transcript the stored findings were made from. */
+  analysed: boolean;
 }
 export interface PostMeetingReview {
   opportunity_id: string;
@@ -276,6 +280,56 @@ export async function confirmMeetingReview(
 export type FindingsState = "no-transcript" | "not-analysed" | "other-transcript" | "notes-unsaved" | "stale" | "current";
 
 /** What the findings on screen represent, given the owner's current selection and unsaved edits. */
+// ---------------------------------------------------------------------------------------------
+// Which transcript is selected. The owner's choice is remembered per signed-in owner and
+// opportunity in this browser, so a refresh never swaps it for an older, already analysed file.
+
+const TRANSCRIPT_CHOICE_PREFIX = "borek.meeting.transcriptChoice";
+
+export function transcriptChoiceKey(ownerId: string, opportunityId: string): string {
+  return `${TRANSCRIPT_CHOICE_PREFIX}:${ownerId}:${opportunityId}`;
+}
+
+type ChoiceStorage = Pick<Storage, "getItem" | "setItem">;
+
+function choiceStorage(): ChoiceStorage | null {
+  try { return typeof window === "undefined" ? null : window.localStorage; } catch { return null; }
+}
+
+export function readTranscriptChoice(ownerId: string | null, opportunityId: string, storage: ChoiceStorage | null = choiceStorage()): string | null {
+  if (!ownerId || !storage) return null;
+  try { return storage.getItem(transcriptChoiceKey(ownerId, opportunityId)); } catch { return null; }
+}
+
+export function saveTranscriptChoice(ownerId: string | null, opportunityId: string, transcriptId: string, storage: ChoiceStorage | null = choiceStorage()): void {
+  if (!ownerId || !storage || !transcriptId) return;
+  try { storage.setItem(transcriptChoiceKey(ownerId, opportunityId), transcriptId); } catch { /* the choice then lasts for this page only */ }
+}
+
+const newestFirst = (a: ReviewTranscript, b: ReviewTranscript) => (b.created_at ?? "").localeCompare(a.created_at ?? "");
+
+/**
+ * The transcript selected when the review loads:
+ * 1. the one the owner chose last, while it still exists;
+ * 2. otherwise the newest transcript uploaded after the one the findings were made from - a
+ *    replacement upload is never hidden behind the older analysed file;
+ * 3. otherwise the analysed transcript, and without findings the newest upload.
+ */
+export function restoreTranscriptSelection(transcripts: ReviewTranscript[], chosenId: string | null): string {
+  if (chosenId && transcripts.some((item) => item.id === chosenId)) return chosenId;
+  const analysed = transcripts.find((item) => item.analysed);
+  const newest = [...transcripts].sort(newestFirst)[0];
+  if (analysed && newest && newest.id !== analysed.id && (newest.created_at ?? "") > (analysed.created_at ?? "")) return newest.id;
+  return (analysed ?? newest)?.id ?? "";
+}
+
+/** Why a transcript's speaker turns cannot be trusted, or null when they can. */
+export function mergedSpeakerText(transcript: ReviewTranscript | undefined): string | null {
+  const count = transcript?.merged_speaker_changes ?? 0;
+  if (!transcript || count <= 0) return null;
+  return `${count} speaker ${count === 1 ? "change was" : "changes were"} not separated when ${transcript.file_name} was read, so statements of different speakers sit in one turn. Findings from it may be merged into one, attributed to the wrong speaker or missing. Upload the file again (an earlier upload is then read with the current rules) or put each speaker on a line of their own, and analyse the new upload.`;
+}
+
 export function findingsState(review: PostMeetingReview, selectedTranscriptId: string, notesDirty: boolean): FindingsState {
   if (!review.transcripts.length || !selectedTranscriptId) return "no-transcript";
   if (review.extraction.status === "missing") return "not-analysed";

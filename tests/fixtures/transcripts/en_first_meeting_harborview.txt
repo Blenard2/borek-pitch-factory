@@ -1,0 +1,10 @@
+First meeting Harborview Components Ltd - quote preparation
+
+00:00:05 Dr. Sarah O'Neill-Hughes: Thanks for joining. Our quotes take five days today.
+00:00:40 Prof. Dr. Øyvind Bjørnstad: Requirement: Quotes must reach the customer within one business day.
+00:01:10 Zoë Brandt: Challenge: Pricing data lives in the ERP, three spreadsheets and email threads.
+00:01:55 Prof. Dr. Øyvind Bjørnstad: Priority: Start with the sales team before customer service.
+00:02:30 Sarah O’Neill-Hughes: Discussed solution: An assistant that drafts the quote from the inquiry and past quotes.
+00:03:05 Zoë Brandt: Decision: We will run a pilot with ten real quotes in December.
+00:03:40 José Núñez: Follow-up: Zoë Brandt sends the pricing export by Friday 6 November.
+Speaker 2: At 10:30 works for me.

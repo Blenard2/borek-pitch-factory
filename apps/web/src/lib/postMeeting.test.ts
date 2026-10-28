@@ -6,6 +6,7 @@ import {
   loadMeetingInputs, loadPostMeetingReview, loadPostMeetingWorkflow, MeetingNotesConflict, parseMeetingExtraction,
   parsePostMeetingReview, prepareMeetingEvidence, reviewHeadline, savePersonalNotesChecked, staleReasonText,
   MAX_TRANSCRIPT_BYTES, validateTranscript, workflowCompleted, type MeetingExtraction, type PersonalNotes, type PostMeetingReview,
+  mergedSpeakerText, readTranscriptChoice, restoreTranscriptSelection, saveTranscriptChoice, transcriptChoiceKey, type ReviewTranscript,
 } from "./postMeeting";
 // Sources are compared as text below. A Windows checkout may hold them with CRLF line ends.
 const readFileSync = (path: URL | string, encoding: "utf8"): string => readFileFromDisk(path, encoding).replace(/\r\n/g, "\n");
@@ -543,4 +544,73 @@ test("an analysis without findings is explained and cannot be confirmed or gener
   assert.ok(source.includes('review.readiness.blockers.filter((code) => code !== "MEETING_REVIEW_NOT_CONFIRMED" || !review.readiness.blockers.includes("MEETING_FINDINGS_EMPTY"))'));
   // Whether V2 can be generated still comes from the API.
   assert.ok(source.includes("const canGenerateV2 = Boolean(review?.readiness.ready_for_v2 && confirmedCurrent);"));
+});
+
+// ------------------------------------------------------------------ audit 2026-10-27: transcript selection and speaker integrity
+
+const upload = (id: string, created_at: string, analysed = false, merged = 0): ReviewTranscript =>
+  ({ id, file_name: `${id}.txt`, processing_status: "pending", created_at, turn_count: 7, merged_speaker_changes: merged, analysed });
+const older = upload("umlaut", "2026-10-27T14:15:43Z", true);
+const newer = upload("ascii", "2026-10-27T14:19:20Z");
+
+test("after a refresh a newer upload stays selected instead of the older analysed transcript", () => {
+  // The audit case: umlaut.txt was analysed, ascii.txt uploaded afterwards, then the page was reloaded.
+  assert.equal(restoreTranscriptSelection([older, newer], null), "ascii");
+  assert.equal(restoreTranscriptSelection([newer, older], null), "ascii", "order of the list does not matter");
+  // Without a newer upload the transcript of the findings stays selected; without findings, the newest one.
+  assert.equal(restoreTranscriptSelection([upload("a", "2026-10-27T10:00:00Z"), upload("b", "2026-10-27T09:00:00Z", true)], null), "a");
+  assert.equal(restoreTranscriptSelection([upload("a", "2026-10-27T08:00:00Z"), upload("b", "2026-10-27T09:00:00Z", true)], null), "b");
+  assert.equal(restoreTranscriptSelection([upload("a", "2026-10-27T08:00:00Z"), upload("b", "2026-10-27T09:00:00Z")], null), "b");
+  assert.equal(restoreTranscriptSelection([], null), "");
+});
+
+test("the owner's deliberate choice is restored while the transcript exists", () => {
+  assert.equal(restoreTranscriptSelection([older, newer], "umlaut"), "umlaut", "choosing the older file again is respected");
+  assert.equal(restoreTranscriptSelection([older, newer], "removed"), "ascii", "a choice that no longer exists falls back");
+  const memory = new Map<string, string>();
+  const storage = { getItem: (key: string) => memory.get(key) ?? null, setItem: (key: string, value: string) => void memory.set(key, value) };
+  saveTranscriptChoice("owner-1", opportunityId, "ascii", storage);
+  assert.equal(readTranscriptChoice("owner-1", opportunityId, storage), "ascii");
+  assert.equal(readTranscriptChoice("owner-2", opportunityId, storage), null, "another signed-in owner does not inherit it");
+  assert.equal(readTranscriptChoice("owner-1", "other-opportunity", storage), null);
+  assert.equal(readTranscriptChoice(null, opportunityId, storage), null);
+  assert.equal(transcriptChoiceKey("owner-1", opportunityId), `borek.meeting.transcriptChoice:owner-1:${opportunityId}`);
+  const broken = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
+  assert.equal(readTranscriptChoice("owner-1", opportunityId, broken), null, "blocked storage never breaks the page");
+  assert.doesNotThrow(() => saveTranscriptChoice("owner-1", opportunityId, "ascii", broken));
+});
+
+test("findings from another transcript are never shown as matching the selected one", () => {
+  const twoUploads = review({ transcripts: [{ ...older, id: "transcript-1" }, { ...newer, id: "transcript-2" }] });
+  assert.equal(findingsState(twoUploads, "transcript-2", false), "other-transcript");
+  assert.equal(findingsState(twoUploads, "transcript-1", false), "current");
+});
+
+test("merged speaker turns are named, so the page never claims the findings match", () => {
+  assert.equal(mergedSpeakerText(upload("clean", "2026-10-27T10:00:00Z")), null);
+  assert.equal(mergedSpeakerText({ ...upload("old", "2026-10-27T10:00:00Z"), merged_speaker_changes: undefined }), null, "an older API without the field");
+  assert.equal(mergedSpeakerText(undefined), null);
+  const one = mergedSpeakerText(upload("meeting_umlaut", "2026-10-27T10:00:00Z", true, 1))!;
+  assert.match(one, /^1 speaker change was not separated when meeting_umlaut\.txt was read/);
+  const five = mergedSpeakerText(upload("meeting_umlaut", "2026-10-27T10:00:00Z", true, 5))!;
+  assert.match(five, /^5 speaker changes were not separated/);
+  assert.match(five, /merged into one, attributed to the wrong speaker or missing\. Upload the file again \(an earlier upload is then read with the current rules\) or put each speaker on a line of their own, and analyse the new upload\.$/);
+});
+
+test("the meeting page analyses exactly the selected transcript and shows which file the findings come from", () => {
+  const panel = readFileSync(new URL("../components/MeetingEvidencePanel.tsx", import.meta.url), "utf8");
+  assert.match(panel, /const selected = transcriptId;\n\s+await run\("Analysing meeting", async \(token, signal\) => \{\n\s+await generateMeetingExtraction\(token, opportunityId, selected\);/);
+  assert.match(panel, /restoreTranscriptSelection\(value\.transcripts, readTranscriptChoice\(getAuthOwnerId\(\), opportunityId\)\)/);
+  assert.match(panel, /onChange=\{\(\) => selectTranscript\(item\.id\)\}/);
+  assert.match(panel, /selectTranscript\(response\.transcript\.id\);/, "an upload becomes the remembered selection");
+  assert.doesNotMatch(panel, /setTranscriptId\(item\.id\)|setTranscriptId\(response\.transcript\.id\)/, "no selection path skips remembering it");
+  // Selected and "current findings" are separate badges, so both can be read at once.
+  assert.match(panel, /data-testid="transcript-selected">Selected</);
+  assert.match(panel, /data-testid="transcript-analysed">Current findings</);
+  assert.match(panel, /state === "other-transcript" \? "Analyse selected transcript" : "Analyse again"/);
+  // A transcript with merged speaker turns never gets the "Findings match" message.
+  assert.match(panel, /const speakerWarning = state === "current" \|\| state === "stale" \? mergedSpeakerText\(transcript\) : null;/);
+  assert.match(panel, /state === "current" && found > 0 && !speakerWarning \? styles\.notice : styles\.error/);
+  assert.match(panel, /`Analysed, but the findings may not match the selected transcript\. \$\{speakerWarning\}`/);
+  assert.match(panel, /data-testid="merged-speakers"/);
 });
