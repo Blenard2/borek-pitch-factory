@@ -295,34 +295,81 @@ def _meeting_input(extraction: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+# Where a meeting finding comes from (meeting_extraction ``item_sources``). Only the first two
+# are customer-safe; a notes-only finding is internal; anything else is unknown.
+CLIENT_FINDING_SOURCES = frozenset({"transcript", "both"})
+NOTES_FINDING_SOURCE = "personal_notes"
+
+
+class Ppt2FindingSourcesError(ValueError):
+    """The meeting findings carry no complete, valid record of their sources.
+
+    Without it, findings from the owner's personal notes cannot be told apart from what was said
+    in the meeting, so PPT #2 is not generated (fail closed, audit 2026-10-27 BUG-02).
+    """
+
+    code = "PPT2_FINDING_SOURCES_UNKNOWN"
+
+    def __init__(self, sections: list[str]) -> None:
+        self.sections = sections
+        names = ", ".join(section.replace("_", " ") for section in sections)
+        super().__init__(
+            f"PPT #2 was not generated: the meeting findings ({names}) have no complete record of whether they come "
+            "from the transcript or from your personal notes, so internal notes could reach the client. Analyse the "
+            "meeting again on the Meeting inputs page, then generate PPT #2. Earlier versions are unchanged."
+        )
+        self.user_message = str(self)
+
+
 def customer_ppt2_input(ppt2_input: dict[str, Any]) -> dict[str, Any]:
     """What a PPT #2 deck may show: the frozen input without the owner's personal notes.
 
     The legacy PPT #2 is a customer document (audit 2026-10-27, BUG-02). The owner's notes and the
     meeting findings that rest only on them stay in the frozen job input for provenance, but no
     planner, fixture deck or slide builder receives them - so no notes slide and no notes-only
-    finding can reach a slide. Idempotent.
+    finding can reach a slide. Fails closed: findings whose source is missing, mismatched or not
+    a known source raise ``Ppt2FindingSourcesError`` instead of being shown. The frozen input is
+    never changed. Idempotent.
     """
     view = copy.deepcopy(ppt2_input)
     view["personal_notes"] = None
     meeting = view.get("meeting_extraction")
-    if isinstance(meeting, dict) and isinstance(meeting.get("extraction"), dict):
+    if isinstance(meeting, dict) and meeting.get("extraction") is not None:
+        if not isinstance(meeting["extraction"], dict):
+            raise Ppt2FindingSourcesError(list(MEETING_SECTION_KEYS))
         meeting["extraction"] = _without_notes_only_items(meeting["extraction"])
     return view
 
 
 def _without_notes_only_items(body: dict[str, Any]) -> dict[str, Any]:
-    """The extraction without the findings that rest only on the owner's personal notes."""
+    """The extraction with only the findings verified as said in the meeting.
+
+    A section with findings needs a source per finding (``item_sources``, same length, known
+    values). Notes-only findings are dropped; a section without such a record is refused.
+    """
     sources = body.get("item_sources")
-    if not isinstance(sources, dict):
-        return body
+    unverified: list[str] = []
+    kept_sources: dict[str, list[str]] = {}
     for key in MEETING_SECTION_KEYS:
-        items, origins = body.get(key), sources.get(key)
-        if not isinstance(items, list) or not isinstance(origins, list) or len(items) != len(origins):
+        items = body.get(key)
+        if items is None or items == []:
+            kept_sources[key] = []
             continue
-        kept = [(item, origin) for item, origin in zip(items, origins, strict=True) if origin != "personal_notes"]
+        origins = sources.get(key) if isinstance(sources, dict) else None
+        if (
+            not isinstance(items, list)
+            or not isinstance(origins, list)
+            or len(origins) != len(items)
+            or any(origin not in CLIENT_FINDING_SOURCES | {NOTES_FINDING_SOURCE} for origin in origins)
+        ):
+            unverified.append(key)
+            continue
+        kept = [(item, origin) for item, origin in zip(items, origins, strict=True) if origin in CLIENT_FINDING_SOURCES]
         body[key] = [item for item, _origin in kept]
-        sources[key] = [origin for _item, origin in kept]
+        kept_sources[key] = [origin for _item, origin in kept]
+    if unverified:
+        raise Ppt2FindingSourcesError(unverified)
+    body["item_sources"] = kept_sources
     return body
 
 

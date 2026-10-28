@@ -15,7 +15,6 @@ from services.framework.discovery_analysis.fixture import load_library
 from services.presentation.borek_deck.fixture import deterministic_post_meeting_deck
 from services.presentation.post_meeting import (
     DISCOVERY_PAGE_KEYS,
-    _without_notes_only_items,
     customer_ppt2_input,
     deterministic_post_meeting_plan,
     planning_input_from_ppt2_context,
@@ -123,9 +122,3 @@ def test_legacy_ppt2_never_shows_the_owners_notes() -> None:
     assert all(slide["frameworkReferences"] != ["notes"] for slide in plan["slides"])
     deck = deterministic_post_meeting_deck(frozen)
     assert "COO" not in json.dumps(deck) and "Our notes" not in json.dumps(deck)
-
-
-def test_an_extraction_without_sources_is_left_as_it_is() -> None:
-    body = {"requirements": ["A"], "item_sources": {"requirements": ["transcript", "personal_notes"]}}
-    assert _without_notes_only_items(body) == body, "mismatched lengths are not guessed at"
-    assert _without_notes_only_items({"requirements": ["A"]}) == {"requirements": ["A"]}

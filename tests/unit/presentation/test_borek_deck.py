@@ -70,6 +70,10 @@ def _ppt2_context() -> dict[str, Any]:
                 "discussed_solutions": [],
                 "decisions": [],
                 "follow_ups": [],
+                "item_sources": {
+                    "requirements": ["transcript"], "challenges": [], "priorities": [], "opportunities": [],
+                    "discussed_solutions": [], "decisions": [], "follow_ups": [],
+                },
             },
         },
         "selected_use_cases": {

@@ -53,6 +53,10 @@ def _context() -> dict:
                 "discussed_solutions": [],
                 "decisions": [],
                 "follow_ups": [],
+                "item_sources": {
+                    "requirements": ["transcript"], "challenges": [], "priorities": [], "opportunities": [],
+                    "discussed_solutions": [], "decisions": [], "follow_ups": [],
+                },
             },
         },
         "selected_use_cases": {
@@ -118,6 +122,7 @@ def test_planner_receives_distinct_sources_and_allows_more_than_eight_slides() -
 def test_slide_text_comes_from_each_source_and_pricing_is_not_banned() -> None:
     source = _context()
     source["meeting_extraction"]["extraction"]["requirements"].append("The budget is EUR 500 per month.")
+    source["meeting_extraction"]["extraction"]["item_sources"]["requirements"].append("both")
     specs = build_post_meeting_slide_specs(deterministic_post_meeting_plan(source), source)
     rendered = __import__("json").dumps(specs)
     assert specs[0]["title"] == "Harbor Mills"
