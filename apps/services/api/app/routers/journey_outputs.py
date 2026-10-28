@@ -245,6 +245,9 @@ class Discovery2ItemEdit(BaseModel):
 
     id: str | None = Field(default=None, max_length=80)
     text: str = Field(max_length=4000)
+    # Only for an item from the owner's personal notes: share it with the client (true) or keep
+    # it internal (false). Omitted: unchanged.
+    share_with_client: bool | None = None
 
 
 class Discovery2SectionEdit(BaseModel):
@@ -1130,8 +1133,10 @@ def get_email_export(
         media_type="message/rfc822",
         headers={
             "Content-Disposition": f'attachment; filename="{ascii_name}"',
+            "X-Email-Draft-Id": exported["draft_id"],
             "X-Email-Draft-Revision": str(exported["revision"]),
             "X-Email-Attachment-Count": str(len(exported["attachments"])),
+            **({"X-Email-Presentation-Version-Id": exported["presentation_version_id"]} if exported["presentation_version_id"] else {}),
             "Cache-Control": "no-store",
         },
     )

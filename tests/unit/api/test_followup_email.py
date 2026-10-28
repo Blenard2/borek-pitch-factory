@@ -411,8 +411,12 @@ def test_attachments_are_the_approved_files_of_the_finalized_version(client: Tes
     assert message["To"] == "Dana Weber <dana.weber@nordwind.example>" and message["Cc"] == "Tom Keller <tom.keller@nordwind.example>"
     assert message["Subject"] == confirmed["lengths"]["extensive"]["subject"]
     assert message["Message-ID"].endswith("@borek.example>") and message["Date"]
-    assert message["X-Borek-Draft-Id"] == confirmed["id"] and message["X-Borek-Draft-Revision"] == str(confirmed["revision"])
-    assert message["X-Borek-Presentation-Version-Id"] == base["v2"]
+    # Audit 2026-10-27: no internal ids in the message the owner sends to the client; the
+    # application receives them with the download instead.
+    assert not [name for name in message.keys() if name.lower().startswith("x-borek")]
+    assert response.headers["X-Email-Draft-Id"] == confirmed["id"] and response.headers["X-Email-Draft-Revision"] == str(confirmed["revision"])
+    assert response.headers["X-Email-Presentation-Version-Id"] == base["v2"]
+    assert confirmed["id"] not in response.content.decode("ascii", "ignore") and base["v2"] not in response.content.decode("ascii", "ignore")
     assert b"=?utf-8?" in response.content.split(b"\r\n\r\n")[0].lower(), "non-ASCII header text is RFC 2047 encoded"
     body = message.get_body(preferencelist=("plain",))
     assert body.get_content_type() == "text/plain" and body.get_content_charset() == "utf-8"
@@ -434,7 +438,7 @@ def test_attachments_are_the_approved_files_of_the_finalized_version(client: Tes
     assert none["status"] == "draft", "changing the package withdraws the confirmation"
     plain = export(client, opportunity_id, ok(confirm_email(client, opportunity_id, none))["draft"])
     parsed = email.message_from_bytes(plain.content, policy=email.policy.default)
-    assert not parsed.is_multipart() and list(parsed.iter_attachments()) == [] and parsed["X-Borek-Presentation-Version-Id"] is None
+    assert not parsed.is_multipart() and list(parsed.iter_attachments()) == [] and "X-Email-Presentation-Version-Id" not in plain.headers
 
 
 def test_a_missing_approved_file_is_reported_and_never_replaced(client: TestClient) -> None:

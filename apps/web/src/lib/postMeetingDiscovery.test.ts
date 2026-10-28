@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync as readFileFromDisk } from "node:fs";
 import {
-  approvePostMeetingDiscovery, changedSections, editableSections, generatePostMeetingDiscovery, needsDiscovery2, parsePostMeetingDiscovery,
+  approvePostMeetingDiscovery, changedSections, editableSections, generatePostMeetingDiscovery, isInternalOnly, needsDiscovery2, parsePostMeetingDiscovery,
   savePostMeetingDiscovery, type Discovery2Document, type Discovery2Version,
 } from "./postMeetingDiscovery";
 import { downloadEmailAttachment, emailFlagText, parsePostMeetingEmail } from "./postMeetingEmail";
@@ -128,4 +128,33 @@ test("the email names owner-written Discovery 2 points as left out, not as perso
   assert.match(text, /personal notes/);
   assert.match(text, /wrote or reworded in Discovery 2/);
   assert.match(text, /not said in the meeting in this form/);
+});
+
+test("audit BUG-02: a point only from the personal notes is internal until the owner shares it", () => {
+  const note = { ...item("m-opportunities-1", "The COO decides alone."), source: "personal_notes" as const };
+  assert.equal(isInternalOnly(note), true);
+  assert.equal(isInternalOnly({ ...note, share_with_client: false }), true);
+  assert.equal(isInternalOnly({ ...note, share_with_client: true }), false);
+  assert.equal(isInternalOnly({ ...note, source: "both" }), false, "also said in the meeting: a client statement");
+  assert.equal(isInternalOnly(item("m-requirements-1", "Quotes in one day.")), false);
+
+  const document: Discovery2Document = { ...documentFixture, sections: [...documentFixture.sections, { key: "opportunities", title: "Opportunities", items: [note] }] };
+  const edits = editableSections(document);
+  assert.deepEqual(edits.opportunities, [{ id: "m-opportunities-1", text: "The COO decides alone.", share_with_client: false }], "the share choice is editable");
+  assert.deepEqual(edits.requirements, [{ id: "m-requirements-1", text: "Quotes in one day." }], "other items carry no share choice");
+  assert.deepEqual(changedSections(document, edits), [], "nothing changed, nothing to save");
+  edits.opportunities = [{ ...edits.opportunities[0], share_with_client: true }];
+  assert.deepEqual(changedSections(document, edits), [
+    { key: "opportunities", items: [{ id: "m-opportunities-1", text: "The COO decides alone.", share_with_client: true }] },
+  ], "sharing alone is a change that must be saved and approved");
+});
+
+test("audit BUG-02: the Discovery 2 editor shows internal points and offers a deliberate share choice", () => {
+  const panel = readFileSync(new URL("../components/PostMeetingDiscoveryPanel.tsx", import.meta.url), "utf8");
+  assert.ok(panel.includes('isInternalOnly({ source: item.source, share_with_client: entry.share_with_client })'));
+  assert.ok(panel.includes('data-testid="discovery2-internal">Internal · not in customer documents</span>'));
+  assert.ok(panel.includes('{item?.source === "personal_notes" ? <label className={styles.shareChoice}>'));
+  assert.ok(panel.includes('data-testid="discovery2-share" checked={entry.share_with_client === true} disabled={readOnly}'));
+  assert.ok(panel.includes('data-testid="discovery2-internal-count"'));
+  assert.ok(panel.includes("Download customer Word file (.docx)"));
 });

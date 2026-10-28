@@ -7,6 +7,7 @@ Discovery generation uses it; approved Discovery versions are never touched.
 
 from __future__ import annotations
 
+import json
 from uuid import UUID, uuid4
 
 import pytest
@@ -134,7 +135,9 @@ def test_recovery_after_a_failed_website_analysis_uses_the_saved_information(cli
     assert research["company_profile"] == {"text": CONTEXT, "origin": "USER_INPUT"}
     assert {"label": "Additional information", "value": CONTEXT, "origin": "USER_INPUT", "source_refs": []} in research["known_facts"]
     overview = second["analysis"]["framing"]["chapters"]["overview"]["paragraphs"][0]
-    assert overview == library["chapters"]["overview"]["profile_provided"].format(text=CONTEXT)
+    # Steers the analysis, recorded as the profile, but never printed (audit 2026-10-27, BUG-02).
+    assert overview == library["chapters"]["overview"]["profile_unknown_named"].format(client=second["intake_context"]["client_name"])
+    assert CONTEXT not in json.dumps([page["content"] for page in second["page_manifest"]], ensure_ascii=False)
     priority = lambda paper: [area["id"] for area in paper["analysis"]["areas"] if area["priority"]]  # noqa: E731
     assert priority(first) == ["order_service"], "before: only the meeting purpose"
     assert priority(second) == ["sales_quoting", "order_service", "finance_controlling"], "the saved wording steers the analysis"

@@ -142,7 +142,11 @@
         "source": { "enum": ["discovery1", "transcript", "personal_notes", "both", "owner"] },
         "evidence": { "type": ["string", "null"], "description": "The verbatim transcript or notes quote a meeting item rests on." },
         "discovery1_ref": { "type": ["string", "null"], "description": "The Discovery 1 element a carried-forward or updated item refers to." },
-        "edited": { "type": "boolean", "description": "The owner changed the generated wording." }
+        "edited": { "type": "boolean", "description": "The owner changed the generated wording." },
+        "share_with_client": {
+          "type": "boolean",
+          "description": "Only for items whose source is personal_notes: true when the owner deliberately shared the point with the client. Without it, such an item is internal and no customer document (Word export, Master Presentation V2) shows it."
+        }
       }
     }
   }

@@ -14,6 +14,7 @@ from services.presentation.post_meeting import (
     MEETING_SECTION_KEYS,
     NOTES_LAYOUT,
     USE_CASE_LAYOUT,
+    customer_ppt2_input,
 )
 
 _SKIP_CONTENT_KEYS = frozenset({"origin", "status", "schema_version"})
@@ -23,7 +24,8 @@ def build_post_meeting_slide_specs(
     plan_json: dict[str, Any],
     ppt2_context: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Ground each planned PPT #2 slide in the frozen context."""
+    """Ground each planned PPT #2 slide in the frozen context, without the owner's notes (BUG-02)."""
+    ppt2_context = customer_ppt2_input(ppt2_context)
     specs: list[dict[str, Any]] = []
     for planned in plan_json.get("slides") or []:
         references = [str(item) for item in planned.get("frameworkReferences") or []]

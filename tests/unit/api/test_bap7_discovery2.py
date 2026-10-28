@@ -396,10 +396,13 @@ def test_the_discovery_documents_download_as_word_files(client: TestClient) -> N
     assert response.status_code == 200 and response.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.wordprocessingml")
     word = Document(io.BytesIO(response.content))
     text = "\n".join(paragraph.text for paragraph in word.paragraphs)
-    assert "Discovery 2" in text and "Quotes must go out within one day." in text
-    assert "Carried forward from Discovery 1" in text and "New from the meeting" in text
-    cells = [cell.text for table in word.tables for row in table.rows for cell in row.cells]
-    assert any("deterministic test generator" in cell for cell in cells), "fixture output is labelled as such, never as AI"
+    assert "Discovery after our first conversation" in text and "Quotes must go out within one day." in text
+    # A customer document (audit 2026-10-27, BUG-05): where a point comes from is said in the
+    # client's terms; origin tags, the sources table and the generator stay in the application.
+    assert "From our conversation" in text and "Please correct us" in text
+    for internal in ("Carried forward from Discovery 1", "New from the meeting", "deterministic test generator", "source:"):
+        assert internal not in text, internal
+    assert word.tables == [], "no sources table with ids, revisions and file names"
     first = get(client, f"/opportunities/{opportunity_id}/discovery-paper/versions/{base['approved']}/download/docx")
     assert first.status_code == 200
     thesis = ok(get(client, f"/opportunities/{opportunity_id}/discovery-paper/approved"))["paper_json"]["analysis"]["research"]["core_thesis"]["text"]
@@ -530,8 +533,13 @@ def test_v2_does_not_call_findings_quotes_and_keeps_owner_points_apart(client: T
     generated = generate_discovery2(client, opportunity_id, headers())
     requirement = next(item for item in section(generated["document"], "requirements")["items"] if item["origin"] == "meeting")
     added = "The sales lead wants to see a first draft within a week."
+    # The observation from the notes is internal until the owner shares it (audit 2026-10-27).
+    opportunities = section(generated["document"], "opportunities")["items"]
     ok(edit(client, opportunity_id, generated["current_version"], [
         {"key": "requirements", "items": [{"id": requirement["id"], "text": requirement["text"]}, {"text": added}]},
+        {"key": "opportunities", "items": [
+            {"id": item["id"], "text": item["text"], **({"share_with_client": True} if item["text"] == OBSERVATION else {})} for item in opportunities
+        ]},
     ]))
     ok(approve(client, opportunity_id, d2(client, opportunity_id)["current_version"]))
     plan, texts = _v2_plan(client, opportunity_id, presentation_id)
@@ -602,13 +610,14 @@ def test_all_four_generated_documents_are_available_to_the_follow_up_email(clien
     unknown = patch_email(client, opportunity_id, draft["id"], {"expected_revision": chosen["revision"], "attachments": {"zip": True}})
     assert unknown.status_code == 422
     done = ok(confirm_email(client, opportunity_id, chosen))["draft"]
-    message = email.message_from_bytes(export(client, opportunity_id, done).content, policy=email.policy.default)
+    exported = export(client, opportunity_id, done)
+    message = email.message_from_bytes(exported.content, policy=email.policy.default)
     files = {part.get_filename(): part for part in message.iter_attachments()}
     assert len(files) == 6
     discovery2_file = files[items["discovery2_docx"]["file_name"]]
     assert discovery2_file.get_content_type() == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    assert "Discovery 2" in "\n".join(p.text for p in Document(io.BytesIO(discovery2_file.get_content())).paragraphs)
-    assert message["X-Borek-Presentation-Version-Id"] == base["v2"]
+    assert "Discovery after our first conversation" in "\n".join(p.text for p in Document(io.BytesIO(discovery2_file.get_content())).paragraphs)
+    assert exported.headers["X-Email-Presentation-Version-Id"] == base["v2"] and message["X-Borek-Presentation-Version-Id"] is None
 
 
 def test_a_discovery_document_alone_is_never_announced_as_the_attached_presentation(client: TestClient) -> None:

@@ -20,7 +20,7 @@ from app.config import settings
 from app.schemas.jobs import JobStatus
 from app.schemas.presentations import LAYOUT_REGISTRY, VALID_LAYOUT_IDS
 from app.services import job_service
-from app.services.api_errors import bad_request, not_found
+from app.services.api_errors import bad_request, conflict, not_found
 from app.services.data import DataStore
 from app.services.journey_stage import require_startable_journey_stage
 from app.services.renderer_client import render_borek_deck_assets, render_deck_assets
@@ -958,6 +958,7 @@ def enqueue_post_meeting_presentation_generate(
     from services.presentation.borek_deck.planner import plan_post_meeting_deck
     from services.presentation.planner import PresentationPlanValidationError
     from services.presentation.post_meeting import (
+        Ppt2FindingSourcesError,
         planning_input_from_ppt2_context,
         ppt2_generation_manifest,
     )
@@ -991,6 +992,9 @@ def enqueue_post_meeting_presentation_generate(
         )
     except PresentationPlanValidationError as exc:
         raise bad_request("PPT2_PLAN_INVALID", str(exc)) from exc
+    except Ppt2FindingSourcesError as exc:
+        # Fail closed: nothing is planned, stored or rendered; earlier versions are unchanged.
+        raise conflict(exc.code, exc.user_message) from exc
     framework = _framework_for_plan_storage(
         store,
         opportunity_id=opportunity_id,

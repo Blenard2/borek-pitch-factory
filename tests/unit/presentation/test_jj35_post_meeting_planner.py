@@ -53,6 +53,10 @@ def _context() -> dict:
                 "discussed_solutions": [],
                 "decisions": [],
                 "follow_ups": [],
+                "item_sources": {
+                    "requirements": ["transcript"], "challenges": [], "priorities": [], "opportunities": [],
+                    "discussed_solutions": [], "decisions": [], "follow_ups": [],
+                },
             },
         },
         "selected_use_cases": {
@@ -97,18 +101,19 @@ def test_planner_receives_distinct_sources_and_allows_more_than_eight_slides() -
     plan = plan_post_meeting_from_context(source, planner=planner)
     seen = planner.seen
     assert seen["source_priority"] == source["source_priority"]
-    assert seen["personal_notes"]["text"] == NOTE
+    # Audit 2026-10-27 (BUG-02): the owner's notes are internal; the planner never receives them.
+    assert seen["personal_notes"] is None and NOTE not in str(seen)
     assert seen["meeting_extraction"]["extraction"]["requirements"] == [REQUIREMENT]
     assert seen["selected_use_cases"]["use_case_ids"] == source["selected_use_cases"]["use_case_ids"]
     assert seen["approved_discovery"]["pages"][0]["content"]["client_name"] == "Harbor Mills"
     assert seen["warnings"] == [{"code": "MEETING_EXTRACTION_NOTES_STALE"}]
     dumped = plan.model_dump(mode="json")
-    assert len(dumped["slides"]) == 10
+    assert len(dumped["slides"]) == 9
     families = [slide["frameworkReferences"][0].split(".", 1)[0] for slide in dumped["slides"]]
     assert families[:7] == ["discovery"] * 7
-    assert "notes" in dumped["slides"][7]["frameworkReferences"]
-    assert dumped["slides"][8]["frameworkReferences"] == ["meeting.requirements"]
-    assert dumped["slides"][9]["frameworkReferences"] == [
+    assert all("notes" not in slide["frameworkReferences"] for slide in dumped["slides"])
+    assert dumped["slides"][7]["frameworkReferences"] == ["meeting.requirements"]
+    assert dumped["slides"][8]["frameworkReferences"] == [
         "use_case.reference.warehouse.delivery-pattern",
         "use_case.reference.invoice-3way.delivery-pattern",
     ]
@@ -116,21 +121,22 @@ def test_planner_receives_distinct_sources_and_allows_more_than_eight_slides() -
 
 def test_slide_text_comes_from_each_source_and_pricing_is_not_banned() -> None:
     source = _context()
+    source["meeting_extraction"]["extraction"]["requirements"].append("The budget is EUR 500 per month.")
+    source["meeting_extraction"]["extraction"]["item_sources"]["requirements"].append("both")
     specs = build_post_meeting_slide_specs(deterministic_post_meeting_plan(source), source)
     rendered = __import__("json").dumps(specs)
     assert specs[0]["title"] == "Harbor Mills"
     assert specs[0]["sourceChapterIds"] == ["discovery.cover"]
-    notes = next(spec for spec in specs if spec["layoutId"] == "OPEN_QUESTIONS_01")
-    assert notes["sourceChapterIds"] == ["notes"]
-    assert "Revision A owner observation" in rendered
-    assert "EUR 500" in rendered
+    # The owner's notes are internal (audit 2026-10-27, BUG-02): no notes slide, no notes text.
+    assert not [spec for spec in specs if spec["sourceChapterIds"] == ["notes"]]
+    assert "Revision A owner observation" not in rendered
+    assert "EUR 500" in rendered, "pricing said in the meeting is not banned"
     extraction = next(spec for spec in specs if spec["layoutId"] == "REQUIREMENTS_MATRIX_01")
     assert extraction["sourceChapterIds"] == ["meeting.requirements"]
     assert REQUIREMENT in rendered
     use_cases = next(spec for spec in specs if spec["layoutId"] == "ARCHITECTURE_01")
     assert use_cases["components"][0]["description"] == "Warehouse pattern statement"
     assert use_cases["components"][1]["description"] == "Invoice pattern statement"
-    assert "Harbor Mills" not in notes["left"]["items"][0]
 
 
 def test_missing_optional_sources_still_plan_and_manifest_has_no_bodies() -> None:

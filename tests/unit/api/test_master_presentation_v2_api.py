@@ -179,7 +179,8 @@ def test_v2_is_a_new_version_of_the_same_presentation_with_a_post_meeting_append
     assert manifest["approved_discovery_version_id"] == base["approved"]
     assert manifest["transcript_id"] == base["transcript"] and manifest["transcript_revision"] == ready["v2_sources"]["transcript_revision"]
     assert manifest["review_fingerprint"] == ready["review_fingerprint"]
-    assert (manifest["confirmed_finding_count"], manifest["excluded_finding_count"]) == (6, 1)
+    # The notes-only observation is internal (audit 2026-10-27): withheld, and counted for traceability.
+    assert (manifest["confirmed_finding_count"], manifest["excluded_finding_count"], manifest["internal_finding_count"]) == (5, 1, 1)
     assert "Quotes must" not in json.dumps(manifest), "the manifest carries identities and checksums, not content"
 
     listed = versions(client, presentation_id)
@@ -207,11 +208,12 @@ def test_v2_is_a_new_version_of_the_same_presentation_with_a_post_meeting_append
         assert said in flat, said
     assert EXCLUDED not in " ".join(text for slide in v2_texts for text in slide), "an excluded finding is never used"
     assert "trade fair" not in " ".join(flat)
-    # The owner's observation appears once, on its own page, never among the client statements.
-    holders = [slide for slide in appendix if OBSERVATION in slide]
-    assert len(holders) == 1 and any("NOT CLIENT STATEMENTS" in text.upper() for text in holders[0])
+    # The owner's observation rests only on the personal notes and was not shared with the client:
+    # it is on no slide, and there is no "noted for ourselves" page.
+    assert all(OBSERVATION not in slide for slide in v2_texts)
+    assert "noted for ourselves" not in " ".join(flat).lower()
     client_pages = [slide for slide in appendix if any(text.upper().startswith("FROM THE MEETING") for text in slide)]
-    assert client_pages and all(OBSERVATION not in slide for slide in client_pages)
+    assert client_pages
 
     # Deck Center: latest is V2; each version is served with its own identity and slides.
     latest = ok(get(client, f"/presentations/{presentation_id}/deck"))
@@ -386,7 +388,8 @@ def test_a_running_job_is_reused_and_the_worker_renders_the_frozen_sources(clien
     assert frozen["transcript"]["transcript_id"] == base["transcript"]
     assert frozen["excluded_findings"] == [EXCLUDED]
     assert [item["text"] for item in frozen["findings"]["follow_ups"]] == []
-    assert {"text": OBSERVATION, "source": "personal_notes"} in frozen["findings"]["opportunities"]
+    assert all(item["text"] != OBSERVATION for item in frozen["findings"]["opportunities"])
+    assert {"category": "opportunities", "text": OBSERVATION} in frozen["internal_findings"]
 
     # While the job waits, every live source changes. A different V2 cannot start meanwhile.
     ok(client.put(f"/opportunities/{opportunity_id}/personal-notes", headers=headers(), json={"text": "Decision: Cancel everything."}))

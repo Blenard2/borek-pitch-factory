@@ -230,15 +230,17 @@ def _apply_website_research(
         unknown_business = load_library(language)["research"]["always_unknown"][0]
         research["unknown_facts"] = [item for item in research["unknown_facts"] if item != unknown_business]
     # BAP-10: once research succeeded, no "no research was performed" wording is left. The
-    # profile comes from the website - its description, else what it lists - unless the user
-    # described the company; the scope note names the website as a source.
+    # printed profile comes from the website - its description, else what it lists; the scope
+    # note names the website as a source. A profile the user described stays the recorded
+    # (internal) profile, but the printed paragraph is the website's: the user's text is never
+    # printed (audit 2026-10-27, BUG-02).
     listed = site.facts[:MAX_WEBSITE_FACTS]
+    profile = website_profile_text(listed, language)
     if research["company_profile"]["origin"] == "UNKNOWN":
-        profile = website_profile_text(listed, language)
         research["company_profile"] = {"text": profile, "origin": "SOURCE_FACT"}
-        paragraph = researched_profile_paragraph(profile, context["client_name"] or "", language)
-        if paragraph:
-            draft["framing"]["chapters"]["overview"]["paragraphs"][0] = paragraph
+    paragraph = researched_profile_paragraph(profile, context["client_name"] or "", language)
+    if paragraph:
+        draft["framing"]["chapters"]["overview"]["paragraphs"][0] = paragraph
     document = draft["framing"]["document"]
     if document["scope_note"] == load_library(language)["in_short"]["scope_context"]:
         document["scope_note"] = researched_scope(language)

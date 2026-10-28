@@ -237,7 +237,7 @@ def test_the_german_word_file_has_german_labels_and_letters() -> None:
     content = render_discovery1_docx(paper, {"version_number": 2, "status": "approved", "approved_at": "2026-10-26T10:00:00Z"})
     xml = zipfile.ZipFile(io.BytesIO(content)).read("word/document.xml").decode("utf-8")
     styles = zipfile.ZipFile(io.BytesIO(content)).read("word/styles.xml").decode("utf-8")
-    for label in ("Kernthese", "Opportunities nach Bereich", "Ziel-Workflows", "Menschliche Entscheidung", "Version 2 · freigegeben"):
+    for label in ("Kernthese", "Opportunities nach Bereich", "Ziel-Workflows", "Menschliche Entscheidung", "Version 2 · 26. Oktober 2026"):
         assert label in xml, label
     assert all(letter in xml for letter in "äöüß") and "Großkunden" in xml
     assert 'w:val="de-DE"' in styles, "German spelling and hyphenation"

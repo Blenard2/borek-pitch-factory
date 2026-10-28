@@ -141,6 +141,8 @@ def content_from_snapshot(snapshot: dict[str, Any], language: str = "en") -> dic
     if not (heard or decisions or discussed or actions):
         raise NoConfirmedContent("The finalized package contains no confirmed statement from the meeting.")
     owner_only = _texts(findings, (*HEARD_CATEGORIES, *DISCUSSED_CATEGORIES, "decisions", "follow_ups"), OWNER_SOURCES)
+    # Notes the owner kept internal never reach the findings (audit 2026-10-27); they are left out too.
+    owner_only += [str(item.get("text") or "") for item in snapshot.get("internal_findings") or []]
     flags: list[str] = []
     if (snapshot.get("meeting_extraction") or {}).get("execution_mode") != "live":
         flags.append(FLAG_FIXTURE_EXTRACTION)

@@ -2,7 +2,7 @@
 
 No process commentary, no talk about inputs, research or how the document was produced, and no
 "the client" - while website facts stay attributed to the website with their sources, the user's
-own text stays recognisable as background, and benchmarks and hypotheses stay labelled as such.
+own text stays internal (never printed), and benchmarks and hypotheses stay labelled as such.
 """
 
 from __future__ import annotations
@@ -91,10 +91,12 @@ def test_sources_of_the_company_information_stay_distinguishable() -> None:
     background = next(page for page in researched["page_manifest"] if page["id"] == "company-background-1")
     assert background["content"]["lead"].startswith("What Hansa Präzisionsteile publishes about itself on its website, quoted")
     assert all(row["source_url"].startswith("https://www.hansa-praezision.test/") for row in background["content"]["rows"])
-    # User-provided: recognisable as the background given for this conversation.
+    # User-provided: the salesperson's own note is internal (audit 2026-10-27, BUG-02). It is kept as
+    # the recorded profile for review, but the printed paragraph is the neutral, customer-facing one.
     context = SCENARIOS["context_only"]()
-    assert profile(context) == "Background to this conversation: Family-owned electrical engineering group with four locations."
-    assert context["analysis"]["research"]["company_profile"]["origin"] == "USER_INPUT"
+    assert profile(context) == OVERVIEW["profile_unknown_named"].format(client="Wahl & CO")
+    assert "Family-owned electrical engineering group" not in printed(context)
+    assert context["analysis"]["research"]["company_profile"] == {"text": "Family-owned electrical engineering group with four locations.", "origin": "USER_INPUT"}
     # Hypotheses and benchmarks stay labelled.
     for paper in (researched, context):
         text = printed(paper)
@@ -186,5 +188,5 @@ def test_the_live_rules_ask_for_customer_ready_prose() -> None:
         assert "The reader is the company's management" in prompt
         assert "Do not call the company 'the client'" in prompt
         assert "never write notes, placeholders or planning comments" in prompt
-    assert live.PROMPT_VERSION == "discovery-analysis:v4"
+    assert live.PROMPT_VERSION == "discovery-analysis:v5"
     assert not re.search(r"keep the wording generic", live.SYSTEM_PROMPT)

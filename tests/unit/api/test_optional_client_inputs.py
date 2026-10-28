@@ -198,7 +198,9 @@ def test_populated_client_still_flows_and_keeps_its_data(client: TestClient) -> 
     }
     assert {fact["origin"] for fact in facts.values()} == {"USER_INPUT"}
     assert "Warehouse slotting review" in paper["analysis"]["research"]["core_thesis"]["text"]
-    assert "Family-owned distributor in Hamburg." in page(paper, "ch-overview")["paragraphs"][0]
+    # Kept as the recorded profile, never printed: the intake note is internal (audit 2026-10-27, BUG-02).
+    assert "Family-owned distributor in Hamburg." in paper["analysis"]["research"]["company_profile"]["text"]
+    assert "Family-owned distributor in Hamburg." not in page(paper, "ch-overview")["paragraphs"][0]
     assert client.post(f"/opportunities/{opportunity_id}/discovery-paper/approve", headers=headers()).status_code == 200
     outputs = client.post(f"/opportunities/{opportunity_id}/stage1-outputs/generate", headers=headers())
     assert outputs.status_code == 200, outputs.text

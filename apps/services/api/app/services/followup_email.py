@@ -1124,8 +1124,9 @@ def export_eml(store: Any, *, opportunity_id: UUID, user_id: UUID, draft_id: UUI
     message["Message-ID"] = make_msgid(domain=str(sender["email"]).rpartition("@")[2] or "localhost")
     # Mail programs open a message marked like this as a draft to be sent by the user.
     message["X-Unsent"] = "1"
-    message["X-Borek-Draft-Id"] = str(stored["id"])
-    message["X-Borek-Draft-Revision"] = str(current)
+    # No internal ids in the message: the owner sends this file to the client from their own mail
+    # program, which may keep custom headers (audit 2026-10-27). The draft, its revision and the
+    # attached versions are returned to the application with the export instead.
     message.set_content(str(text["body"]) + "\n", subtype="plain", charset="utf-8", cte="quoted-printable")
     attached = []
     selected = [item for item in attachments_for(store, stored=stored, user_id=user_id, opportunity_id=opportunity_id, read_uploads=True) if item["selected"]]
@@ -1151,8 +1152,6 @@ def export_eml(store: Any, *, opportunity_id: UUID, user_id: UUID, draft_id: UUI
             }
         )
     presentations = [item["presentation_version_id"] for item in attached if item["artifact"] == "master_presentation_v2"]
-    if presentations:
-        message["X-Borek-Presentation-Version-Id"] = presentations[0]
     project = str((opportunity.get("followup_statics") or {}).get("project_name") or "follow-up")
     content = message.as_bytes()
     # The estimate decided the selection; the exported message itself is the final check.
@@ -1162,5 +1161,7 @@ def export_eml(store: Any, *, opportunity_id: UUID, user_id: UUID, draft_id: UUI
         "file_name": f"{_safe_name(project)} - follow-up email.eml",
         "content": content,
         "revision": current,
+        "draft_id": str(stored["id"]),
+        "presentation_version_id": presentations[0] if presentations else None,
         "attachments": attached,
     }

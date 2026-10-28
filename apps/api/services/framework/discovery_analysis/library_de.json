@@ -400,7 +400,6 @@
       "map_lead": "{count} Opportunities entlang der Wertschöpfungskette – jede in Teil 2 mit Lösung, Funktionsweise, Ergebnis und Discovery-Fragen vertieft.",
       "business_case_lead": "Branchenübliche Wirkungskorridore vergleichbarer Unternehmen, geordnet nach Payback-Horizont.",
       "business_case_footnote": "Branchen-Benchmarks als Arbeitshypothesen – im Baseline-Workshop gegen reale Kennzahlen zu validieren, keine Zusagen. KI entwirft, prüft und orchestriert; Menschen behalten jede Freigabe und Abnahme. Anbindung an die bestehende Systemlandschaft über Schnittstellen, keine Migration.",
-      "profile_provided": "Hintergrund zu diesem Gespräch: {text}",
       "profile_researched": "Von der Website von {client} (Quellen in der Tabelle zum Unternehmenshintergrund): {text}",
       "profile_researched_unnamed": "Von der Website des Unternehmens (Quellen in der Tabelle zum Unternehmenshintergrund): {text}",
       "background_nav": "Unternehmenshintergrund",

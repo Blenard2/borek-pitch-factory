@@ -13,8 +13,10 @@ in its kicker and explained in its notes:
 
     client     said in the first meeting (supported by the transcript) and confirmed by the owner;
                it may summarise what was said, so it is never called a quote
-    owner      an observation from the owner's personal notes, or a point the owner wrote or
-               reworded when reviewing Discovery 2 - never shown as a client statement
+    owner      an observation from the owner's personal notes that the owner deliberately shared
+               with the client in Discovery 2, or a point the owner wrote or reworded when
+               reviewing Discovery 2 - never shown as a client statement. Notes the owner did not
+               share never reach the snapshot (``v2.build_snapshot``), so no slide can show them.
     reference  an approved Borek reference use case
     borek      a Borek recommendation, taken from the approved Discovery analysis
     open       a question the approved Discovery 2 lists as still open
@@ -47,7 +49,8 @@ from services.presentation.master_deck.appendix import (
 )
 from services.presentation.master_deck.layouts import LAYOUT_IDS, implemented_layouts, measured_height
 
-PLANNER_VERSION = "master-presentation-v2:v2"
+# v3: notes-only findings are internal unless shared with the client; no "noted for ourselves" slide.
+PLANNER_VERSION = "master-presentation-v2:v3"
 PLANNER_LAYOUTS: tuple[str, ...] = ("L06", "L08", "L07")
 CATEGORIES = ("requirements", "challenges", "priorities", "opportunities", "discussed_solutions", "decisions", "follow_ups")
 CATEGORY_LABEL = {
@@ -143,8 +146,8 @@ V2_TEXT: dict[str, dict[str, Any]] = {
         "add_lead": "Our own observations after the meeting and approved Borek references. None of this was said by {named}.",
         "observations_prefix": "Our observations",
         "kicker_observations": "Our observations · Not client statements",
-        "noted_title": "What we noted for ourselves",
-        "noted_lead": "Observations by the Borek team after the meeting. They are our reading, not statements by {named}.",
+        "noted_title": "Our observations after the meeting",
+        "noted_lead": "Points the Borek team noted after the meeting and would like to verify with you. They are our reading, not statements by {named}.",
         "not_transcript_title": "Not from the transcript",
         "not_transcript_text": "None of these points was said in this form during the meeting.",
         "kicker_references": "Borek references · Not client statements",
@@ -231,8 +234,8 @@ V2_TEXT: dict[str, dict[str, Any]] = {
         "add_lead": "Unsere eigenen Beobachtungen nach dem Gespräch und freigegebene Borek-Referenzen. Nichts davon hat {named} gesagt.",
         "observations_prefix": "Unsere Beobachtungen",
         "kicker_observations": "Unsere Beobachtungen · Keine Aussagen des Kunden",
-        "noted_title": "Was wir für uns festgehalten haben",
-        "noted_lead": "Beobachtungen des Borek-Teams nach dem Gespräch – unsere Lesart, nicht das, was {named} gesagt hat.",
+        "noted_title": "Unsere Beobachtungen nach dem Gespräch",
+        "noted_lead": "Punkte, die das Borek-Team nach dem Gespräch festgehalten hat und gern mit Ihnen prüfen möchte – unsere Lesart, nicht das, was {named} gesagt hat.",
         "not_transcript_title": "Nicht aus dem Transkript",
         "not_transcript_text": "Keiner dieser Punkte wurde in dieser Form im Gespräch gesagt.",
         "kicker_references": "Borek-Referenzen · Keine Aussagen des Kunden",

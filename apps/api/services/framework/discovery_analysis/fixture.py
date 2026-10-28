@@ -83,14 +83,14 @@ def build_fixture_analysis(context: dict[str, Any], optional_parts: dict[str, bo
     labels = fact_labels(language)
     provided = [(label, context[key]) for key, label in labels if context[key]]
 
-    profile_text = _fit_sentences(additional, LIMITS["chapter_paragraph"] - len(chapters["overview"]["profile_provided"]))
-    # Without a company description the paragraph says what the content is based on - patterns of
-    # comparable organisations - in customer-facing words, naming the company when it is known.
-    profile_paragraph = (
-        chapters["overview"]["profile_provided"].format(text=profile_text)
-        if profile_text
-        else _named(chapters["overview"]["profile_unknown_named"], chapters["overview"]["profile_unknown"], client, LIMITS["chapter_paragraph"])
-    )
+    # The user's "Additional information" is the salesperson's internal note: it orders the areas
+    # and is kept as the USER_INPUT company profile for review, but it is never printed. Audit
+    # 2026-10-27 (BUG-02): it was quoted verbatim as "Background to this conversation: ...".
+    profile_text = _fit_sentences(additional, LIMITS["chapter_paragraph"])
+    # The paragraph says what the content is based on - patterns of comparable organisations - in
+    # customer-facing words, naming the company when it is known. Website research replaces it
+    # with what the company publishes about itself (pipeline).
+    profile_paragraph = _named(chapters["overview"]["profile_unknown_named"], chapters["overview"]["profile_unknown"], client, LIMITS["chapter_paragraph"])
     if client:
         scope = _named(in_short["scope_named"], in_short["scope_context"], client, LIMITS["scope_note"])
     elif provided:
